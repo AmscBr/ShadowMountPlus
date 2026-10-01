@@ -359,8 +359,14 @@ static bool compute_tree_signature(const char *root, const char *relative_root,
     return false;
 
   bool ok = true;
-  struct dirent *entry;
-  while ((entry = readdir(d)) != NULL) {
+  for (;;) {
+    errno = 0;
+    struct dirent *entry = readdir(d);
+    if (!entry) {
+      if (errno != 0)
+        ok = false;
+      break;
+    }
     if (entry->d_name[0] == '.' &&
         (entry->d_name[1] == '\0' ||
          (entry->d_name[1] == '.' && entry->d_name[2] == '\0'))) {
@@ -447,8 +453,14 @@ static bool compute_emulator_files_signature(
     return errno == ENOENT;
 
   bool ok = true;
-  struct dirent *entry;
-  while ((entry = readdir(d)) != NULL) {
+  for (;;) {
+    errno = 0;
+    struct dirent *entry = readdir(d);
+    if (!entry) {
+      if (errno != 0)
+        ok = false;
+      break;
+    }
     if (entry->d_name[0] == '.' &&
         (entry->d_name[1] == '\0' ||
          (entry->d_name[1] == '.' && entry->d_name[2] == '\0'))) {
@@ -470,11 +482,22 @@ static bool compute_emulator_files_signature(
 
     struct stat emulator_st;
     struct stat source_st;
-    if (stat(emulator_file, &emulator_st) != 0 ||
-        !S_ISREG(emulator_st.st_mode)) {
+    if (stat(emulator_file, &emulator_st) != 0) {
+      if (errno == ENOENT || errno == ENOTDIR)
+        continue;
+      ok = false;
+      break;
+    }
+    if (!S_ISREG(emulator_st.st_mode)) {
       continue;
     }
-    if (stat(source_file, &source_st) != 0 || !S_ISREG(source_st.st_mode))
+    if (stat(source_file, &source_st) != 0) {
+      if (errno == ENOENT || errno == ENOTDIR)
+        continue;
+      ok = false;
+      break;
+    }
+    if (!S_ISREG(source_st.st_mode))
       continue;
     int shadowed = directory_entry_exists(higher_priority_path, entry->d_name);
     if (shadowed < 0) {
@@ -718,8 +741,14 @@ static bool copy_emulator_files_to_cache(const char *emulators_path,
     return errno == ENOENT;
 
   bool ok = true;
-  struct dirent *entry;
-  while ((entry = readdir(d)) != NULL) {
+  for (;;) {
+    errno = 0;
+    struct dirent *entry = readdir(d);
+    if (!entry) {
+      if (errno != 0)
+        ok = false;
+      break;
+    }
     if (entry->d_name[0] == '.' &&
         (entry->d_name[1] == '\0' ||
          (entry->d_name[1] == '.' && entry->d_name[2] == '\0'))) {
@@ -745,11 +774,22 @@ static bool copy_emulator_files_to_cache(const char *emulators_path,
 
     struct stat emulator_st;
     struct stat source_st;
-    if (stat(emulator_file, &emulator_st) != 0 ||
-        !S_ISREG(emulator_st.st_mode)) {
+    if (stat(emulator_file, &emulator_st) != 0) {
+      if (errno == ENOENT || errno == ENOTDIR)
+        continue;
+      ok = false;
+      break;
+    }
+    if (!S_ISREG(emulator_st.st_mode)) {
       continue;
     }
-    if (stat(source_file, &source_st) != 0 || !S_ISREG(source_st.st_mode))
+    if (stat(source_file, &source_st) != 0) {
+      if (errno == ENOENT || errno == ENOTDIR)
+        continue;
+      ok = false;
+      break;
+    }
+    if (!S_ISREG(source_st.st_mode))
       continue;
     int shadowed = directory_entry_exists(higher_priority_path, entry->d_name);
     if (shadowed < 0) {
