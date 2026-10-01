@@ -49,7 +49,8 @@
  * only when their direct source path is under /data or /user. Other direct
  * sources use the version 1.6 profiles: type 0 for exFAT, type 7 for UFS and
  * the sector-size mapping unit for standalone PFS. The outer .ffpfsc container
- * and its nested .ffpfs/pfs_image.dat images always use optimized profiles.
+ * and its nested .ffpfs/pfs_image.dat images use the version 1.6 sector-size
+ * mapping unit regardless of the container's source path.
  *
  * ShadowMount deliberately uses type 5 with single/save attach flags for UFS
  * images so a standalone .ffpkg on BFS can use sdimg batching. Type 7 with

@@ -105,7 +105,8 @@ get_image_mount_profile(const runtime_config_t *cfg, const char *file_path,
       fs_type == IMAGE_FS_UFS || fs_type == IMAGE_FS_EXFAT ||
       (fs_type == IMAGE_FS_PFS &&
        !pfs_path_is_nested_inner(file_path, fs_type));
-  bool legacy = path_selected_profile && !optimized_source;
+  bool legacy = pfs_path_uses_nested_profile(file_path, fs_type) ||
+                (path_selected_profile && !optimized_source);
 
   return (image_mount_profile_t){
       .legacy = legacy,

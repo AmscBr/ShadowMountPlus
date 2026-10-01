@@ -238,7 +238,7 @@ PFSC container layout requirement (`.ffpfsc`):
 - Do not place game files directly in the container root.
 - Place supported nested image files inside the container; ShadowMountPlus mounts those nested images and scans them for the game.
 - A nested `pfs_image.dat` file inside a PFSC container is treated as a PFS image.
-- `.ffpfsc` always uses the optimized nested outer PFS profile (`img_type=0x02`). A standalone `.ffpfs` source uses the optimized profile only under `/data/...` or `/user/...`; other standalone sources use the version 1.6 parameters. Nested `.ffpfs`/`pfs_image.dat` images always use the optimized inner profile with `img_type=0x82`. Signature verification remains disabled for unsigned images; set `nested_pfs_index_cache=1` to request the PFSC compressed-offset cache before attaching nested images.
+- `.ffpfsc` and its nested `.ffpfs`/`pfs_image.dat` images use the version 1.6 LVD mapping unit, equal to the logical sector size (4096 bytes by default). The outer selector remains `img_type=0x02`, and the inner selector remains `img_type=0x82`. A standalone `.ffpfs` source uses the optimized profile only under `/data/...` or `/user/...`; other standalone sources use the version 1.6 parameters. Signature verification remains disabled for unsigned images; set `nested_pfs_index_cache=1` to request the PFSC compressed-offset cache before attaching nested images.
 
 ## Compressed PFS containers (`.ffpfsc`)
 
