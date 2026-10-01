@@ -23,6 +23,7 @@ typedef struct {
 } sm_scan_tree_callbacks_t;
 
 // Walk a managed scan subtree using the shared scan-depth and path filtering rules.
+// Return false for an incomplete walk, including directory I/O failures.
 bool sm_scan_tree_walk(const char *scan_root, const char *dir_path,
                        unsigned int depth_from_root,
                        unsigned int remaining_depth,

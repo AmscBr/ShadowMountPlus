@@ -629,7 +629,9 @@ static void collect_scan_candidates_from_manual_root(
       .on_image_file = pfsc_container_root ? collect_candidate_image_visit
                                            : NULL,
   };
-  (void)sm_scan_tree_walk(scan_path, scan_path, 0u, scan_depth, &callbacks, &ctx);
+  if (!sm_scan_tree_walk(scan_path, scan_path, 0u, scan_depth, &callbacks, &ctx) &&
+      unstable_found_out)
+    *unstable_found_out = true;
 }
 
 static void collect_scan_candidates_from_manual_path(
@@ -1074,7 +1076,9 @@ static void collect_scan_candidates_from_root(
       .on_directory = collect_candidate_directory_visit,
       .on_image_file = collect_candidate_image_visit,
   };
-  (void)sm_scan_tree_walk(scan_path, scan_path, 0u, scan_depth, &callbacks, &ctx);
+  if (!sm_scan_tree_walk(scan_path, scan_path, 0u, scan_depth, &callbacks, &ctx) &&
+      unstable_found_out)
+    *unstable_found_out = true;
 }
 
 static void collect_scan_candidates_from_manual_list(

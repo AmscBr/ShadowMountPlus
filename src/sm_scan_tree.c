@@ -8,7 +8,7 @@
 #include "sm_paths.h"
 #include "sm_runtime.h"
 
-static void classify_scan_tree_entry(const char *full_path, unsigned char d_type,
+static bool classify_scan_tree_entry(const char *full_path, unsigned char d_type,
                                      bool *is_dir_out, bool *is_regular_out) {
   bool is_dir = false;
   bool is_regular = false;
@@ -22,11 +22,14 @@ static void classify_scan_tree_entry(const char *full_path, unsigned char d_type
     if (lstat(full_path, &st) == 0) {
       is_dir = S_ISDIR(st.st_mode);
       is_regular = S_ISREG(st.st_mode);
+    } else if (errno != ENOENT && errno != ENOTDIR) {
+      return false;
     }
   }
 
   *is_dir_out = is_dir;
   *is_regular_out = is_regular;
+  return true;
 }
 
 static bool is_distinct_configured_scan_root(const char *current_scan_root,
@@ -71,7 +74,7 @@ bool sm_scan_tree_walk(const char *scan_root, const char *dir_path,
 
   DIR *d = opendir(dir_path);
   if (!d)
-    return true;
+    return errno == ENOENT || errno == ENOTDIR;
 
   bool scan_root_is_pfsc_mount_base =
       is_pfsc_image_mount_base_or_child(scan_root);
@@ -82,8 +85,14 @@ bool sm_scan_tree_walk(const char *scan_root, const char *dir_path,
       (!path_matches_root_or_child(scan_root, IMAGE_MOUNT_BASE) ||
        scan_root_is_pfsc_mount_base);
 
-  struct dirent *entry;
-  while ((entry = readdir(d)) != NULL) {
+  int read_error = 0;
+  for (;;) {
+    errno = 0;
+    struct dirent *entry = readdir(d);
+    if (!entry) {
+      read_error = errno;
+      break;
+    }
     if (should_stop_requested() || runtime_sleep_mode_active()) {
       closedir(d);
       return true;
@@ -103,7 +112,11 @@ bool sm_scan_tree_walk(const char *scan_root, const char *dir_path,
 
     bool is_dir = false;
     bool is_regular = false;
-    classify_scan_tree_entry(full_path, entry->d_type, &is_dir, &is_regular);
+    if (!classify_scan_tree_entry(full_path, entry->d_type, &is_dir,
+                                  &is_regular)) {
+      read_error = errno;
+      break;
+    }
 
     if (allow_image_file_visits && is_regular &&
         is_supported_image_file_path(full_path, entry->d_name)) {
@@ -124,6 +137,9 @@ bool sm_scan_tree_walk(const char *scan_root, const char *dir_path,
     }
   }
 
-  closedir(d);
-  return true;
+  if (closedir(d) != 0 && read_error == 0)
+    read_error = errno;
+  if (read_error != 0)
+    errno = read_error;
+  return read_error == 0;
 }
