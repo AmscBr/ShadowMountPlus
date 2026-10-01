@@ -590,6 +590,7 @@ int main(void) {
   if (restarted_previous_instance)
     log_debug("[RESTART] Previous instance stopped, continuing startup");
   load_runtime_config();
+  const runtime_config_t startup_cfg = runtime_config();
   sm_notifications_init();
   stop_conflicting_backpork();
   sm_mdbg_init();
@@ -601,7 +602,8 @@ int main(void) {
     log_debug("  [SHELLCORE] lifecycle hooks unavailable; stock behavior kept");
     notify_system_l10n(SM_L10N_SHELLCORE_HOOKS_FAILED);
   }
-  sm_shell_icon_install_if_missing();
+  if (startup_cfg.api_enabled)
+    sm_shell_icon_install_if_missing();
   if (!refresh_game_lifecycle_watcher())
     log_debug("  [GAME] lifecycle watcher unavailable");
   // Publish the initial AppFocus only after its lifecycle/kstuff consumers.
@@ -617,7 +619,6 @@ int main(void) {
     log_debug("  [MOUNT] remount_system_ex failed: %s", strerror(errno));
   }
 
-  const runtime_config_t startup_cfg = runtime_config();
   if (startup_cfg.api_enabled) {
     char web_address[MAX_API_BIND_ADDRESS];
     resolve_web_interface_address(startup_cfg.api_bind_address, web_address,
