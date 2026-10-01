@@ -877,8 +877,10 @@ static bool lookup_image_sector_override_in_file(const char *path,
     found = true;
   }
 
-  fclose(f);
-  if (!found)
+  bool read_failed = ferror(f) != 0;
+  if (fclose(f) != 0)
+    read_failed = true;
+  if (read_failed || !found)
     return false;
 
   *sector_size_out = last_sector_size;
@@ -901,6 +903,10 @@ static bool upsert_kstuff_delay_override_in_file(const char *path,
     return false;
 
   FILE *in = fopen(path, "r");
+  if (!in && errno != ENOENT) {
+    log_debug("  [CFG] autotune open failed: %s (%s)", path, strerror(errno));
+    return false;
+  }
   FILE *out = fopen(temp_path, "w");
   if (!out) {
     log_debug("  [CFG] autotune temp open failed: %s (%s)", temp_path,
@@ -944,8 +950,12 @@ static bool upsert_kstuff_delay_override_in_file(const char *path,
       }
     }
 
-    fclose(in);
+    if (ferror(in))
+      goto write_failed;
+    int close_result = fclose(in);
     in = NULL;
+    if (close_result != 0)
+      goto write_failed;
   }
 
   if (!found &&
@@ -998,6 +1008,10 @@ static bool upsert_image_sector_override_in_file(const char *path,
     return false;
 
   FILE *in = fopen(path, "r");
+  if (!in && errno != ENOENT) {
+    log_debug("  [CFG] autotune open failed: %s (%s)", path, strerror(errno));
+    return false;
+  }
   FILE *out = fopen(temp_path, "w");
   if (!out) {
     log_debug("  [CFG] autotune temp open failed: %s (%s)", temp_path,
@@ -1047,8 +1061,12 @@ static bool upsert_image_sector_override_in_file(const char *path,
       }
     }
 
-    fclose(in);
+    if (ferror(in))
+      goto write_failed;
+    int close_result = fclose(in);
     in = NULL;
+    if (close_result != 0)
+      goto write_failed;
   }
 
   if (!found &&
@@ -1749,7 +1767,15 @@ static config_load_status_t load_runtime_config_state(runtime_config_state_t *st
     }
   }
 
-  fclose(f);
+  int read_error = ferror(f) ? (errno != 0 ? errno : EIO) : 0;
+  if (fclose(f) != 0 && read_error == 0)
+    read_error = errno;
+  if (read_error != 0) {
+    log_debug("  [CFG] read failed: %s (%s)", CONFIG_FILE,
+              strerror(read_error));
+    errno = read_error;
+    return CONFIG_LOAD_ERROR;
+  }
 
   if (has_custom_scanpaths && state->scan_path_count == 0) {
     log_debug("  [CFG] no valid scanpath entries, using defaults");
@@ -1840,8 +1866,12 @@ static config_load_status_t load_runtime_config_state(runtime_config_state_t *st
 bool load_runtime_config(void) {
   ensure_runtime_config_ready();
   pthread_mutex_lock(&g_runtime_load_mutex);
-  bool loaded =
-      load_runtime_config_state(&g_runtime_parse_state) == CONFIG_LOAD_OK;
+  config_load_status_t status = load_runtime_config_state(&g_runtime_parse_state);
+  if (status == CONFIG_LOAD_ERROR) {
+    pthread_mutex_unlock(&g_runtime_load_mutex);
+    return false;
+  }
+  bool loaded = status == CONFIG_LOAD_OK;
   pthread_mutex_lock(&g_runtime_state_mutex);
   memcpy(&g_runtime_state, &g_runtime_parse_state, sizeof(g_runtime_state));
   pthread_mutex_unlock(&g_runtime_state_mutex);
