@@ -30,6 +30,10 @@ runtime_config_t runtime_config(void);
 int get_scan_path_count(void);
 // Copy a scan root; return false and an empty path if the index is invalid.
 bool get_scan_path(int index, char path_out[MAX_PATH]);
+// Backport lookup uses scan roots followed by the permanent internal fallback.
+// These paths do not add roots to normal game scanning.
+int get_backport_scan_path_count(void);
+bool get_backport_scan_path(int index, char path_out[MAX_PATH]);
 // Return only scan roots explicitly configured through scanpath entries.
 int get_custom_scan_path_count(void);
 bool get_custom_scan_path(int index, char path_out[MAX_PATH]);

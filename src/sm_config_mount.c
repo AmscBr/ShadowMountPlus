@@ -372,6 +372,25 @@ bool get_scan_path(int index, char path_out[MAX_PATH]) {
   return valid;
 }
 
+int get_backport_scan_path_count(void) {
+  return get_scan_path_count() + 1;
+}
+
+bool get_backport_scan_path(int index, char path_out[MAX_PATH]) {
+  ensure_runtime_config_ready();
+  path_out[0] = '\0';
+  pthread_mutex_lock(&g_runtime_state_mutex);
+  bool valid = index >= 0 && index <= g_runtime_state.scan_path_count;
+  if (valid) {
+    const char *path = index == g_runtime_state.scan_path_count
+                           ? DEFAULT_BACKPORT_SCAN_PATH
+                           : g_runtime_state.scan_path_storage[index];
+    (void)strlcpy(path_out, path, MAX_PATH);
+  }
+  pthread_mutex_unlock(&g_runtime_state_mutex);
+  return valid;
+}
+
 int get_custom_scan_path_count(void) {
   ensure_runtime_config_ready();
   pthread_mutex_lock(&g_runtime_state_mutex);

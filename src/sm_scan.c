@@ -776,9 +776,9 @@ bool resolve_backport_path_for_title(const char *title_id,
     return true;
   }
 
-  for (int i = 0; i < get_scan_path_count(); i++) {
+  for (int i = 0; i < get_backport_scan_path_count(); i++) {
     char scan_path[MAX_PATH];
-    if (!get_scan_path(i, scan_path))
+    if (!get_backport_scan_path(i, scan_path))
       continue;
     if (owning_scan_path && strcmp(scan_path, owning_scan_path) == 0)
       continue;
@@ -1012,6 +1012,9 @@ static bool repair_backport_path_permissions(
 }
 
 static void repair_backport_permissions_for_scan_root(const char *scan_path) {
+  if (should_stop_requested() || runtime_sleep_mode_active())
+    return;
+
   char backports_root[MAX_PATH];
   if (!build_backports_root_path(scan_path, backports_root))
     return;
@@ -1049,7 +1052,9 @@ static void collect_scan_candidates_from_root(
   if (should_stop_requested() || runtime_sleep_mode_active())
     return;
 
-  repair_backport_permissions_for_scan_root(scan_path);
+  // The permanent internal backport root is repaired once per scan below.
+  if (strcmp(scan_path, DEFAULT_BACKPORT_SCAN_PATH) != 0)
+    repair_backport_permissions_for_scan_root(scan_path);
   if (should_stop_requested() || runtime_sleep_mode_active())
     return;
 
@@ -1145,6 +1150,7 @@ int collect_scan_candidates_for_scan_root(const char *scan_root,
       .titles_ready = app_db_titles_ready,
       .blocked_ppsa_titles_ready = blocked_ppsa_titles_ready,
   };
+  repair_backport_permissions_for_scan_root(DEFAULT_BACKPORT_SCAN_PATH);
   collect_scan_candidates_from_root(scan_root, candidates, max_candidates,
                                     &candidate_count, &app_db,
                                     g_scan_workspace.discovered_param_roots,
@@ -1182,6 +1188,7 @@ int collect_scan_candidates(scan_candidate_t *candidates, int max_candidates,
       .titles_ready = app_db_titles_ready,
       .blocked_ppsa_titles_ready = blocked_ppsa_titles_ready,
   };
+  repair_backport_permissions_for_scan_root(DEFAULT_BACKPORT_SCAN_PATH);
   for (int i = 0; i < get_scan_path_count(); i++) {
     if (should_stop_requested() || runtime_sleep_mode_active())
       break;

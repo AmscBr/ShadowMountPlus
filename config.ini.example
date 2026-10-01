@@ -206,6 +206,7 @@
 
 # Optional custom scan roots (can be repeated):
 # If at least one scanpath=... is present, only these paths are used.
+# /data/homebrew/backports remains available as a backport fallback.
 # "/mnt/shadowmnt/pfsc" and "/mnt/shadowmnt" are always added automatically.
 # Default: use built-in scan path list
 # scanpath=/data/homebrew
