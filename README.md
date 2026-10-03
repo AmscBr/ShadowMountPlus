@@ -138,7 +138,7 @@ Supported notification languages:
 | Ukrainian | `uk-UA` |
 | Vietnamese | `vi-VN` |
 
-The public API routes and JSON schemas are documented in [docs/socket-api.md](docs/socket-api.md)
+The public API routes and JSON schemas are documented in [docs/api.md](docs/api.md)
 and available as an [OpenAPI manifest](docs/openapi.yaml).
 
 Per-image mode override behavior:

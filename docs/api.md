@@ -60,6 +60,7 @@ device.
 | `/api/v1/kernel-log` | `{"max_bytes":131072}` | Read a bounded tail of the SDK kernel-log stream used by crash detection |
 | `/api/v1/games` | `{"include_size":false}` | Detailed game snapshot; optional physical source-size calculation |
 | `/api/v1/games/info` | `{"title_id":"PPSA12345"}` | Detailed app.db and source information for one game; size is always calculated |
+| `/api/v1/games/fakelib` | `{"title_id":"PPSA12345","enabled":false}` | Persist the PS5 game's fakelib policy for its next launch |
 | `/api/v1/games/icon?title_id=PPSA12345[&size=thumb]` | GET | Stream the full PNG or a cached 128x128 thumbnail |
 | `/api/v1/games/mount` | `{"title_id":"PPSA12345","mode":"ro"}` | Mount a managed game, optionally overriding its image mode with `ro`/`rw` |
 | `/api/v1/games/unmount` | `{"title_id":"PPSA12345"}` | Unmount a managed game |
@@ -171,6 +172,28 @@ final phase is non-cancellable. Source deletion is rejected when one image is
 shared by several titles.
 Changing the API bind address or port restarts only the HTTP listener; an
 active storage job continues and remains available through the new listener.
+
+The game list combines discovered folder/image sources with installed PS4 and
+PS5 PKGs from `app.db`, identified by an existing `app.pkg`. Title IDs appear
+once; managed folder/image sources retain their normal actions. Installed PKGs
+have `source_type: "pkg"`, `installed_pkg: true`, `managed: false` and
+`mounted: false`. Their `path` points to `app.pkg`; `runtime_path` is empty.
+They support information, icons and uninstall, plus fakelib configuration for
+PS5. Mount/unmount and source copy/move/delete/unpack reject PKGs with HTTP 403
+and `EPERM`. PKG size uses the installed size in `app.db`, falling back to the
+package file size; folder/image measurement remains unchanged.
+
+Game responses also provide `can_uninstall`, `can_manage_source`,
+`can_toggle_fakelib`, `fakelib_enabled` and `fakelib_effective_enabled`.
+The fakelib route accepts only known PS5 games, including PKGs, images and
+folders. `PPSA` identifies PS5; `LAPY`/`FAKE` homebrew uses its `app.db` platform.
+Disabling adds the title to `fakelib_exclude`; enabling removes
+all matching entries. Unrelated config lines, other exclusions and global
+settings are preserved. The response includes `saved: true` and
+`applies_on_next_launch: true`. Existing mounts stay until game exit.
+`fakelib_enabled` is the per-title policy; `fakelib_effective_enabled` also
+respects the global `backport_fakelib` switch. Reaching the 128-title exclusion
+limit fails without modifying the file.
 
 Mount mutations remain conservative. They return HTTP 409 with `status` set to
 `EBUSY` while a game is active, while ShellCore owns another prepared title,

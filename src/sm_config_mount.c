@@ -1967,6 +1967,139 @@ bool reload_runtime_config_if_changed(bool *reloaded_out) {
   return true;
 }
 
+bool sm_config_set_title_fakelib_enabled(const char *title_id, bool enabled) {
+  char normalized[MAX_TITLE_ID];
+  if (!normalize_title_id_value(title_id, normalized) ||
+      !is_supported_game_title_id(normalized)) {
+    errno = EINVAL;
+    return false;
+  }
+  ensure_runtime_config_ready();
+  pthread_mutex_lock(&g_config_file_mutex);
+  (void)mkdir(LOG_DIR, 0777);
+  FILE *in = fopen(CONFIG_FILE, "r");
+  if (!in && errno != ENOENT) {
+    int saved_errno = config_io_error();
+    pthread_mutex_unlock(&g_config_file_mutex);
+    errno = saved_errno;
+    return false;
+  }
+  char temp_path[MAX_PATH];
+  int written = snprintf(temp_path, sizeof(temp_path), "%s.fakelib.XXXXXX",
+                          CONFIG_FILE);
+  int temp_fd = written > 0 && (size_t)written < sizeof(temp_path)
+                    ? mkstemp(temp_path) : -1;
+  FILE *out = NULL;
+  if (temp_fd >= 0) {
+    struct stat st;
+    if (!in || (fstat(fileno(in), &st) == 0 &&
+                fchmod(temp_fd, st.st_mode & 0777) == 0)) {
+      out = fdopen(temp_fd, "w");
+    }
+  }
+  if (!out) {
+    int saved_errno = written <= 0 || (size_t)written >= sizeof(temp_path)
+                          ? ENAMETOOLONG : config_io_error();
+    if (temp_fd >= 0) {
+      close(temp_fd);
+      (void)unlink(temp_path);
+    }
+    if (in)
+      fclose(in);
+    pthread_mutex_unlock(&g_config_file_mutex);
+    errno = saved_errno;
+    return false;
+  }
+
+  char title_ids[MAX_FAKELIB_EXCLUDE_RULES][MAX_TITLE_ID] = {{0}};
+  uint32_t count = 0;
+  int saved_errno = 0;
+  int last_written = '\n';
+  char line[MAX_PATH + 256u];
+  while (in && fgets(line, sizeof(line), in)) {
+    bool truncated = strchr(line, '\n') == NULL && !feof(in);
+    char parsed[sizeof(line)];
+    (void)strlcpy(parsed, line, sizeof(parsed));
+    char *key = NULL;
+    char *value = NULL;
+    char parsed_title[MAX_TITLE_ID];
+    bool rule = parse_ini_line(parsed, &key, &value) &&
+                strcasecmp(key, "fakelib_exclude") == 0 &&
+                normalize_title_id_value(value, parsed_title) &&
+                is_supported_game_title_id(parsed_title);
+    bool skip = rule && strcmp(parsed_title, normalized) == 0;
+    if (rule && !skip && count < MAX_FAKELIB_EXCLUDE_RULES) {
+      bool duplicate = false;
+      for (uint32_t i = 0; i < count; ++i)
+        duplicate |= strcmp(title_ids[i], parsed_title) == 0;
+      if (!duplicate)
+        (void)strlcpy(title_ids[count++], parsed_title, MAX_TITLE_ID);
+    }
+    if (!skip && fputs(line, out) == EOF) {
+      saved_errno = config_io_error();
+      break;
+    }
+    if (!skip && line[0] != '\0')
+      last_written = (unsigned char)line[strlen(line) - 1u];
+    if (!truncated)
+      continue;
+    int ch;
+    while ((ch = fgetc(in)) != EOF) {
+      if (!skip && fputc(ch, out) == EOF && saved_errno == 0)
+        saved_errno = config_io_error();
+      if (!skip)
+        last_written = ch;
+      if (ch == '\n')
+        break;
+    }
+    if (saved_errno != 0)
+      break;
+  }
+  if (in && ferror(in) && saved_errno == 0)
+    saved_errno = config_io_error();
+  if (!enabled && count == MAX_FAKELIB_EXCLUDE_RULES && saved_errno == 0)
+    saved_errno = ENOSPC;
+  if (saved_errno == 0 && last_written != '\n' && fputc('\n', out) == EOF)
+    saved_errno = config_io_error();
+  if (!enabled && saved_errno == 0) {
+    if (fprintf(out, "fakelib_exclude=%s\n", normalized) < 0)
+      saved_errno = config_io_error();
+    else
+      (void)strlcpy(title_ids[count++], normalized, MAX_TITLE_ID);
+  }
+  if (fflush(out) != 0 && saved_errno == 0)
+    saved_errno = config_io_error();
+  if (saved_errno == 0 && fsync(fileno(out)) != 0)
+    saved_errno = config_io_error();
+  if (fclose(out) != 0 && saved_errno == 0)
+    saved_errno = config_io_error();
+  if (in && fclose(in) != 0 && saved_errno == 0)
+    saved_errno = config_io_error();
+  if (saved_errno == 0 && rename(temp_path, CONFIG_FILE) != 0)
+    saved_errno = config_io_error();
+  if (saved_errno == 0) {
+    // Publish just this policy. Leave the file stamp for the scanner so it
+    // still applies any other config edits through its normal reload path.
+    pthread_mutex_lock(&g_runtime_load_mutex);
+    pthread_mutex_lock(&g_runtime_state_mutex);
+    g_runtime_state.cfg.fakelib_exclude_title_count = count;
+    memcpy(g_runtime_state.cfg.fakelib_exclude_title_ids, title_ids,
+            sizeof(title_ids));
+    pthread_mutex_unlock(&g_runtime_state_mutex);
+    pthread_mutex_unlock(&g_runtime_load_mutex);
+  } else {
+    (void)unlink(temp_path);
+  }
+  pthread_mutex_unlock(&g_config_file_mutex);
+  if (saved_errno != 0) {
+    errno = saved_errno;
+    return false;
+  }
+  log_debug("  [CFG] fakelib for %s %s; applies on next launch", normalized,
+            enabled ? "enabled" : "disabled");
+  return true;
+}
+
 bool sm_config_write_web_settings(bool debug_enabled, bool quiet_mode,
                                   bool update_emulators_enabled,
                                   bool auto_update_ampr_enabled,

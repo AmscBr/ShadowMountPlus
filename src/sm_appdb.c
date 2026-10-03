@@ -612,7 +612,7 @@ bool app_db_game_info_snapshot(sm_app_db_game_info_t **entries_out,
 
   static const char sql[] =
       "SELECT titleId, contentId, titleName, lastAccessTime, installTime, "
-      "icon0Info, platform, size, AppInfoJson FROM tbl_contentinfo "
+      "icon0Info, platform, size, AppInfoJson, metaDataPath FROM tbl_contentinfo "
       "WHERE titleId != '' ORDER BY titleId COLLATE BINARY;";
   sqlite3_stmt *stmt = NULL;
   rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
@@ -667,6 +667,8 @@ bool app_db_game_info_snapshot(sm_app_db_game_info_t **entries_out,
       entry->installed_size =
           installed_size > 0 ? (uint64_t)installed_size : 0;
       apply_app_info_timestamps(stmt, 8, entry);
+      copy_sqlite_text(stmt, 9, entry->metadata_path,
+                       sizeof(entry->metadata_path));
       continue;
     }
     if (rc == SQLITE_DONE) {

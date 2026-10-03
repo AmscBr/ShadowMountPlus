@@ -609,6 +609,8 @@ static void handle_version(struct MHD_Connection *fd) {
       !append_json_string(capabilities, "storage_space") ||
       !append_json_string(capabilities, "list_images") ||
       !append_json_string(capabilities, "list_games") ||
+      !append_json_string(capabilities, "installed_pkg_games") ||
+      !append_json_string(capabilities, "game_fakelib_settings") ||
       !append_json_string(capabilities, "game_info") ||
       !append_json_string(capabilities, "game_icon") ||
       !append_json_string(capabilities, "mount_game") ||
@@ -972,24 +974,106 @@ static bool resolve_game_icon_path(const char *title_id,
          copy_regular_file_path(candidate, out);
 }
 
+static bool resolve_installed_pkg_game(
+    const char *title_id, const sm_app_db_game_info_t *metadata,
+    sm_game_cache_snapshot_entry_t *entry) {
+  if (!is_supported_game_title_id(title_id)) {
+    errno = EINVAL;
+    return false;
+  }
+  char managed_path[MAX_PATH];
+  if (read_mount_link(title_id, managed_path, sizeof(managed_path)) ||
+      read_mount_image_link(title_id, managed_path, sizeof(managed_path))) {
+    errno = ENOENT;
+    return false;
+  }
+
+  static const char *const roots[] = {
+      APP_BASE, "/mnt/ext0/user/app", "/mnt/ext0/ps5/user/app",
+      "/mnt/ext1/user/app", "/mnt/ext1/ps5/user/app"};
+  char package_path[MAX_PATH];
+  for (size_t i = 0; i <= sizeof(roots) / sizeof(roots[0]); ++i) {
+    if (i == 0) {
+      const char *path = metadata ? metadata->metadata_path : NULL;
+      size_t length = path ? strlen(path) : 0;
+      static const char suffix[] = "/sce_sys";
+      if (length <= sizeof(suffix) - 1u ||
+          strcmp(path + length - (sizeof(suffix) - 1u), suffix) != 0)
+        continue;
+      int written = snprintf(package_path, sizeof(package_path),
+                              "%.*s/app.pkg",
+                              (int)(length - (sizeof(suffix) - 1u)), path);
+      if (written <= 0 || (size_t)written >= sizeof(package_path))
+        continue;
+    } else {
+      int written = snprintf(package_path, sizeof(package_path),
+                              "%s/%s/app.pkg", roots[i - 1u], title_id);
+      if (written <= 0 || (size_t)written >= sizeof(package_path))
+        continue;
+    }
+    struct stat st;
+    if (stat(package_path, &st) != 0 || !S_ISREG(st.st_mode))
+      continue;
+    memset(entry, 0, sizeof(*entry));
+    (void)strlcpy(entry->path, package_path, sizeof(entry->path));
+    (void)strlcpy(entry->title_id, title_id, sizeof(entry->title_id));
+    (void)strlcpy(entry->title_name,
+                  metadata ? metadata->title_name : title_id,
+                  sizeof(entry->title_name));
+    return true;
+  }
+  errno = ENOENT;
+  return false;
+}
+
+static bool find_installed_pkg_game(const char *title_id,
+                                     sm_game_cache_snapshot_entry_t *entry) {
+  char managed_path[MAX_PATH];
+  if (read_mount_link(title_id, managed_path, sizeof(managed_path)) ||
+      read_mount_image_link(title_id, managed_path, sizeof(managed_path))) {
+    errno = ENOENT;
+    return false;
+  }
+  if (resolve_installed_pkg_game(title_id, NULL, entry))
+    return true;
+  sm_app_db_game_info_t *metadata = NULL;
+  size_t count = 0;
+  if (!app_db_game_info_snapshot(&metadata, &count))
+    return false;
+  const sm_app_db_game_info_t *info = app_db_find_game_info(metadata, count,
+                                                          title_id);
+  bool found = info && resolve_installed_pkg_game(title_id, info, entry);
+  free(metadata);
+  if (!found)
+    errno = ENOENT;
+  return found;
+}
+
 static struct json_object *game_to_json(
     const sm_game_cache_snapshot_entry_t *source,
-    const sm_app_db_game_info_t *metadata, bool include_size,
+    const sm_app_db_game_info_t *metadata, const runtime_config_t *cfg,
+    bool installed_pkg, bool include_size,
     bool thumbnail_icon) {
   struct json_object *item = json_object_new_object();
   if (!item)
     return NULL;
 
   game_source_info_t source_info;
-  if (!resolve_game_source(source, &source_info)) {
+  if (installed_pkg) {
+    memset(&source_info, 0, sizeof(source_info));
+    (void)strlcpy(source_info.physical_path, source->path,
+                  sizeof(source_info.physical_path));
+    source_info.source_type = "pkg";
+    source_info.image_type = "";
+  } else if (!resolve_game_source(source, &source_info)) {
     json_object_put(item);
     return NULL;
   }
 
   char managed_path[MAX_PATH];
-  bool installed = is_installed(source->title_id);
-  bool mounted = is_data_mounted(source->title_id);
-  bool managed =
+  bool installed = installed_pkg || is_installed(source->title_id);
+  bool mounted = !installed_pkg && is_data_mounted(source->title_id);
+  bool managed = !installed_pkg &&
       read_mount_link(source->title_id, managed_path, sizeof(managed_path));
   bool source_available = path_exists(source_info.physical_path);
   const char *title_name =
@@ -998,6 +1082,15 @@ static struct json_object *game_to_json(
   const char *content_id = metadata ? metadata->content_id : "";
   const char *last_access_time = metadata ? metadata->last_access_time : "";
   const char *install_time = metadata ? metadata->install_time : "";
+  const char *platform = game_platform_name(source->title_id, metadata);
+  bool can_toggle_fakelib = strcmp(platform, "ps5") == 0;
+  bool fakelib_enabled = true;
+  for (uint32_t i = 0; i < cfg->fakelib_exclude_title_count; ++i) {
+    if (strcmp(cfg->fakelib_exclude_title_ids[i], source->title_id) == 0) {
+      fakelib_enabled = false;
+      break;
+    }
+  }
   char icon_url[SM_API_ROUTE_SIZE + MAX_TITLE_ID + 32u];
   char icon_path[MAX_PATH];
   icon_url[0] = '\0';
@@ -1018,8 +1111,7 @@ static struct json_object *game_to_json(
       !add_json_string(item, "runtime_path", source_info.runtime_path) ||
       !add_json_string(item, "source_type", source_info.source_type) ||
       !add_json_string(item, "image_type", source_info.image_type) ||
-      !add_json_string(item, "platform",
-                       game_platform_name(source->title_id, metadata)) ||
+      !add_json_string(item, "platform", platform) ||
       !add_json_string(item, "title_id", source->title_id) ||
       !add_json_string(item, "content_id", content_id) ||
       !add_json_string(item, "title_name", title_name) ||
@@ -1036,13 +1128,27 @@ static struct json_object *game_to_json(
     json_object_put(item);
     return NULL;
   }
+  if (!add_json_bool(item, "installed_pkg", installed_pkg) ||
+      !add_json_bool(item, "can_uninstall", installed) ||
+      !add_json_bool(item, "can_manage_source", !installed_pkg) ||
+      !add_json_bool(item, "can_toggle_fakelib", can_toggle_fakelib) ||
+      !add_json_bool(item, "fakelib_enabled", fakelib_enabled) ||
+      !add_json_bool(item, "fakelib_effective_enabled",
+                     fakelib_enabled && cfg->backport_fakelib_enabled)) {
+    json_object_put(item);
+    return NULL;
+  }
 
   if (include_size) {
     uint64_t size = 0;
     uint64_t file_count = 0;
-    int size_status = sm_storage_measure_path_progress(
-        source_info.physical_path, &size, &file_count,
-        api_listener_stop_requested, NULL);
+    int size_status = 0;
+    if (installed_pkg && metadata && metadata->installed_size > 0)
+      size = metadata->installed_size;
+    else
+      size_status = sm_storage_measure_path_progress(
+          source_info.physical_path, &size, &file_count,
+          api_listener_stop_requested, NULL);
     int size_error = size_status == 0 ? 0 : (errno != 0 ? errno : EIO);
     if (!add_json_int(item, "size_status", size_error) ||
         (size_status == 0 &&
@@ -1052,6 +1158,16 @@ static struct json_object *game_to_json(
     }
   }
   return item;
+}
+
+static bool game_snapshot_contains_title(
+    const sm_game_cache_snapshot_entry_t *snapshot, size_t count,
+    const char *title_id) {
+  for (size_t i = 0; i < count; ++i) {
+    if (strcmp(snapshot[i].title_id, title_id) == 0)
+      return true;
+  }
+  return false;
 }
 
 typedef struct json_object *(*snapshot_to_json_fn)(const void *entry);
@@ -1156,6 +1272,7 @@ static void handle_games(struct MHD_Connection *fd,
 
   bool built = true;
   bool cancelled = false;
+  const runtime_config_t cfg = runtime_config();
   for (size_t i = 0; i < count; ++i) {
     if (api_listener_stop_requested(NULL)) {
       cancelled = true;
@@ -1163,13 +1280,36 @@ static void handle_games(struct MHD_Connection *fd,
     }
     const sm_app_db_game_info_t *game_metadata = app_db_find_game_info(
         metadata, metadata_count, snapshot[i].title_id);
-    struct json_object *game =
-        game_to_json(&snapshot[i], game_metadata, include_size, true);
+    sm_game_cache_snapshot_entry_t package;
+    bool installed_pkg = resolve_installed_pkg_game(snapshot[i].title_id,
+                                                    game_metadata, &package);
+    struct json_object *game = game_to_json(
+        installed_pkg ? &package : &snapshot[i], game_metadata, &cfg,
+        installed_pkg, include_size, true);
     if (!game || json_object_array_add(games, game) != 0) {
       if (game)
         json_object_put(game);
       built = false;
       break;
+    }
+  }
+  for (size_t i = 0; built && !cancelled && i < metadata_count; ++i) {
+    if (api_listener_stop_requested(NULL)) {
+      cancelled = true;
+      break;
+    }
+    if (game_snapshot_contains_title(snapshot, count, metadata[i].title_id) ||
+        (i > 0 && strcmp(metadata[i - 1u].title_id, metadata[i].title_id) == 0))
+      continue;
+    sm_game_cache_snapshot_entry_t package;
+    if (!resolve_installed_pkg_game(metadata[i].title_id, &metadata[i], &package))
+      continue;
+    struct json_object *game = game_to_json(&package, &metadata[i], &cfg, true,
+                                           include_size, true);
+    if (!game || json_object_array_add(games, game) != 0) {
+      if (game)
+        json_object_put(game);
+      built = false;
     }
   }
   free(metadata);
@@ -1186,7 +1326,7 @@ static void handle_games(struct MHD_Connection *fd,
     send_out_of_memory_response(fd);
     return;
   }
-  if (!add_json_int(response, "count", (int64_t)count) ||
+  if (!add_json_int(response, "count", (int64_t)json_object_array_length(games)) ||
       !add_json_bool(response, "size_included", include_size)) {
     json_object_put(games);
     json_object_put(response);
@@ -1235,14 +1375,6 @@ static void handle_game_info(struct MHD_Connection *connection,
   (void)MHD_set_connection_option(connection, MHD_CONNECTION_OPTION_TIMEOUT,
                                   0u);
 
-  sm_game_cache_snapshot_entry_t game_entry;
-  if (!find_game_snapshot_by_title(title_id, &game_entry)) {
-    int status = errno != 0 ? errno : ENOENT;
-    send_error_response(connection, operation_http_status(status), status,
-                        strerror(status));
-    return;
-  }
-
   sm_app_db_game_info_t *metadata = NULL;
   size_t metadata_count = 0;
   if (!app_db_game_info_snapshot(&metadata, &metadata_count)) {
@@ -1253,8 +1385,20 @@ static void handle_game_info(struct MHD_Connection *connection,
   }
   const sm_app_db_game_info_t *game_metadata =
       app_db_find_game_info(metadata, metadata_count, title_id);
+  sm_game_cache_snapshot_entry_t game_entry;
+  bool installed_pkg = game_metadata &&
+                       resolve_installed_pkg_game(title_id, game_metadata,
+                                                   &game_entry);
+  if (!installed_pkg && !find_game_snapshot_by_title(title_id, &game_entry)) {
+    int status = errno != 0 ? errno : ENOENT;
+    free(metadata);
+    send_error_response(connection, operation_http_status(status), status,
+                        strerror(status));
+    return;
+  }
+  const runtime_config_t cfg = runtime_config();
   struct json_object *response =
-      game_to_json(&game_entry, game_metadata, true, false);
+      game_to_json(&game_entry, game_metadata, &cfg, installed_pkg, true, false);
   free(metadata);
   if (!response) {
     send_out_of_memory_response(connection);
@@ -1399,6 +1543,19 @@ static void handle_mount_operation(struct MHD_Connection *fd,
   if (!title_id) {
     send_error_response(fd, 400, EINVAL,
                         "title_id must be a valid PS4 or PS5 title ID");
+    return;
+  }
+
+  sm_game_cache_snapshot_entry_t package;
+  if (find_installed_pkg_game(title_id, &package)) {
+    send_error_response(fd, 403, EPERM,
+                        "installed PKGs only support information and uninstall");
+    return;
+  }
+  if (errno != ENOENT) {
+    int status = errno != 0 ? errno : EIO;
+    send_error_response(fd, operation_http_status(status), status,
+                        strerror(status));
     return;
   }
 
@@ -1899,13 +2056,17 @@ static int request_game_uninstall(const char *title_id) {
       sm_game_lifecycle_has_active_game() ||
       sm_install_has_pending_work())
     return EBUSY;
-  if (!is_installed(title_id))
+  sm_game_cache_snapshot_entry_t package;
+  bool installed_pkg = find_installed_pkg_game(title_id, &package);
+  if (!installed_pkg && errno != ENOENT)
+    return errno != 0 ? errno : EIO;
+  if (!installed_pkg && !is_installed(title_id))
     return ENOENT;
 
   bool title_prepared = sm_shellcore_service_title_is_prepared(title_id);
   if (sm_shellcore_service_has_prepared_mount() && !title_prepared)
     return EBUSY;
-  if (title_prepared || is_data_mounted(title_id)) {
+  if (!installed_pkg && (title_prepared || is_data_mounted(title_id))) {
     int release_status = sm_shellcore_unmount_title_runtime(title_id);
     if (release_status != 0)
       return release_status;
@@ -1966,6 +2127,64 @@ static void handle_uninstall(struct MHD_Connection *fd,
   json_object_put(response);
 }
 
+static void handle_game_fakelib(struct MHD_Connection *connection,
+                                 struct json_object *request) {
+  const char *title_id = get_title_id(request);
+  bool enabled = false;
+  if (!title_id || !get_required_bool(request, "enabled", &enabled)) {
+    send_error_response(connection, 400, EINVAL,
+                        "title_id must be a PS5 title ID and enabled a boolean");
+    return;
+  }
+  if (strncmp(title_id, "PPSA", 4u) != 0) {
+    sm_app_db_game_info_t *metadata = NULL;
+    size_t count = 0;
+    if (!app_db_game_info_snapshot(&metadata, &count)) {
+      int status = errno != 0 ? errno : EIO;
+      send_error_response(connection, operation_http_status(status), status,
+                          strerror(status));
+      return;
+    }
+    const sm_app_db_game_info_t *info = app_db_find_game_info(metadata, count,
+                                                            title_id);
+    bool ps5 = strcmp(game_platform_name(title_id, info), "ps5") == 0;
+    free(metadata);
+    if (!ps5) {
+      send_error_response(connection, 400, EINVAL,
+                          "fakelib settings are only available for PS5 games");
+      return;
+    }
+  }
+  sm_game_cache_snapshot_entry_t entry;
+  if (!find_game_snapshot_by_title(title_id, &entry) &&
+      (errno != ENOENT || !find_installed_pkg_game(title_id, &entry))) {
+    int status = errno != 0 ? errno : ENOENT;
+    send_error_response(connection, operation_http_status(status), status,
+                        strerror(status));
+    return;
+  }
+  if (!sm_config_set_title_fakelib_enabled(title_id, enabled)) {
+    int status = errno != 0 ? errno : EIO;
+    send_error_response(connection, operation_http_status(status), status,
+                        strerror(status));
+    return;
+  }
+  struct json_object *response = new_status_response(0);
+  if (!response || !add_json_string(response, "title_id", title_id) ||
+      !add_json_bool(response, "fakelib_enabled", enabled) ||
+      !add_json_bool(response, "fakelib_effective_enabled",
+                     enabled && runtime_config().backport_fakelib_enabled) ||
+      !add_json_bool(response, "saved", true) ||
+      !add_json_bool(response, "applies_on_next_launch", true)) {
+    if (response)
+      json_object_put(response);
+    send_out_of_memory_response(connection);
+    return;
+  }
+  (void)send_json_object(connection, 200, response);
+  json_object_put(response);
+}
+
 static void dispatch_request(struct MHD_Connection *connection,
                              const char *route,
                              struct json_object *json) {
@@ -1979,6 +2198,8 @@ static void dispatch_request(struct MHD_Connection *connection,
     handle_games(connection, json);
   } else if (strcmp(route, SM_API_ROUTE_GAME_INFO) == 0) {
     handle_game_info(connection, json);
+  } else if (strcmp(route, SM_API_ROUTE_GAME_FAKELIB) == 0) {
+    handle_game_fakelib(connection, json);
   } else if (strcmp(route, SM_API_ROUTE_MOUNT) == 0) {
     handle_mount_operation(connection, json, true);
   } else if (strcmp(route, SM_API_ROUTE_UNMOUNT) == 0) {
@@ -2838,6 +3059,19 @@ static void handle_game_storage_operation(
   if (!title_id) {
     send_error_response(connection, 400, EINVAL,
                         "title_id must be a valid PS4 or PS5 title ID");
+    return;
+  }
+
+  sm_game_cache_snapshot_entry_t package;
+  if (find_installed_pkg_game(title_id, &package)) {
+    send_error_response(connection, 403, EPERM,
+                        "installed PKG sources cannot be copied, moved or deleted");
+    return;
+  }
+  if (errno != ENOENT) {
+    int status = errno != 0 ? errno : EIO;
+    send_error_response(connection, operation_http_status(status), status,
+                        strerror(status));
     return;
   }
 

@@ -325,7 +325,7 @@ paths:
           $ref: "#/components/responses/Preflight"
     post:
       operationId: getGameInfo
-      summary: Get detailed metadata and source size for one managed game
+      summary: Get detailed metadata and size for a folder, image or installed PKG
       tags: [Games]
       requestBody:
         $ref: "#/components/requestBodies/TitleRequest"
@@ -340,6 +340,64 @@ paths:
           $ref: "#/components/responses/Busy"
         "500":
           $ref: "#/components/responses/InternalError"
+
+  /api/v1/games/fakelib:
+    options:
+      operationId: preflightGameFakelib
+      summary: CORS preflight
+      tags: [Games]
+      responses:
+        "204":
+          $ref: "#/components/responses/Preflight"
+    post:
+      operationId: setGameFakelib
+      summary: Enable or disable fakelib for a PS5 game on its next launch
+      tags: [Games]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title_id, enabled]
+              properties:
+                title_id:
+                  $ref: "#/components/schemas/TitleId"
+                  description: Must identify a PS5 game; homebrew uses its app.db platform.
+                enabled:
+                  type: boolean
+      responses:
+        "200":
+          description: Per-title policy saved; existing mounts are preserved
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, title_id, fakelib_enabled, fakelib_effective_enabled, saved, applies_on_next_launch]
+                properties:
+                  status:
+                    type: integer
+                    const: 0
+                  title_id:
+                    $ref: "#/components/schemas/TitleId"
+                  fakelib_enabled:
+                    type: boolean
+                  fakelib_effective_enabled:
+                    type: boolean
+                  saved:
+                    type: boolean
+                    const: true
+                  applies_on_next_launch:
+                    type: boolean
+                    const: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "507":
+          description: Exclusion list is full; configuration was not changed
 
   /api/v1/games/icon:
     get:
@@ -1132,7 +1190,7 @@ components:
   schemas:
     TitleId:
       type: string
-      pattern: "^(CUSA|PPSA|FAKE)[0-9]{5}$"
+      pattern: "^(CUSA|PPSA|LAPY|FAKE)[0-9]{5}$"
       examples: [PPSA12345]
 
     TitleRequest:
@@ -1522,16 +1580,22 @@ components:
         - mounted
         - image_backed
         - source_available
+        - installed_pkg
+        - can_uninstall
+        - can_manage_source
+        - can_toggle_fakelib
+        - fakelib_enabled
+        - fakelib_effective_enabled
       properties:
         path:
           type: string
-          description: Physical game folder or outer backing-image path.
+          description: Physical game folder, outer backing-image path or installed app.pkg.
         runtime_path:
           type: string
-          description: Runtime game directory used by ShadowMount.
+          description: Runtime game directory used by ShadowMount; empty for installed PKGs.
         source_type:
           type: string
-          enum: [folder, image]
+          enum: [folder, image, pkg]
         image_type:
           type: string
           enum: ["", ufs, exfatfs, pfs, pfsc, unknown]
@@ -1567,6 +1631,22 @@ components:
           type: boolean
         source_available:
           type: boolean
+        installed_pkg:
+          type: boolean
+        can_uninstall:
+          type: boolean
+        can_manage_source:
+          type: boolean
+          description: False for installed PKGs; source mutations are forbidden.
+        can_toggle_fakelib:
+          type: boolean
+          description: True for PS5 games in PKGs, images and folders.
+        fakelib_enabled:
+          type: boolean
+          description: Per-title policy; changes apply on the next launch.
+        fakelib_effective_enabled:
+          type: boolean
+          description: Per-title policy combined with the global backport_fakelib switch.
         size_status:
           type: integer
           minimum: 0
@@ -1575,7 +1655,7 @@ components:
           type: integer
           format: int64
           minimum: 0
-          description: Image file size or sum of files in the game folder.
+          description: Image file size, sum of folder files or installed PKG size from app.db (package file size when unavailable).
         status:
           type: integer
           const: 0

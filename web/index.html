@@ -168,7 +168,7 @@
 
     .stats {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(5, minmax(0, 1fr));
       gap: 12px;
       margin: 14px 0;
     }
@@ -429,6 +429,7 @@
         <option value="all" data-i18n="allGames">All games</option>
         <option value="folder" data-i18n="folders">Folders</option>
         <option value="image" data-i18n="images">Images</option>
+        <option value="pkg">PKG</option>
         <option value="ps4">PS4</option>
         <option value="ps5">PS5</option>
       </select>
@@ -441,6 +442,7 @@
       <div class="stat"><span class="subtle" data-i18n="totalGames">Total games</span><strong class="stat-value" id="totalGames">—</strong></div>
       <div class="stat"><span class="subtle" data-i18n="images">Images</span><strong class="stat-value" id="imageGames">—</strong></div>
       <div class="stat"><span class="subtle" data-i18n="folders">Folders</span><strong class="stat-value" id="folderGames">—</strong></div>
+      <div class="stat"><span class="subtle">PKG</span><strong class="stat-value" id="pkgGames">—</strong></div>
       <div class="stat"><span class="subtle" data-i18n="mounted">Mounted</span><strong class="stat-value" id="mountedGames">—</strong></div>
     </section>
 
@@ -591,6 +593,7 @@
       const state = {
         games: [],
         selected: null,
+        detailRequest: null,
         activity: [],
         busy: false,
         storageJob: null,
@@ -942,6 +945,20 @@
         "ru-RU": ["Б", "КиБ", "МиБ", "ГиБ", "ТиБ"]
       };
       const supportedLanguages = Object.keys(translations);
+      Object.assign(translations["en-US"], {
+        mountFakelib: "Mount fakelib for this game",
+        fakelibNextLaunch: "Changes apply on the next game launch.",
+        fakelibGloballyDisabled: "Fakelib is disabled globally in config.ini.",
+        fakelibSaved: "Fakelib setting for {title} saved; applies on the next launch",
+        uninstallPkgConfirm: "Uninstall {game}?\n\nThe installed PKG game will be removed."
+      });
+      Object.assign(translations["ru-RU"], {
+        mountFakelib: "Монтировать fakelib для этой игры",
+        fakelibNextLaunch: "Изменения применяются при следующем запуске игры.",
+        fakelibGloballyDisabled: "Fakelib отключён глобально в config.ini.",
+        fakelibSaved: "Настройка fakelib для {title} сохранена; применяется при следующем запуске",
+        uninstallPkgConfirm: "Деинсталлировать {game}?\n\nУстановленная игра PKG будет удалена."
+      });
       const defaultLanguage = "en-US";
       function resolveLanguage(language) {
         const normalized = String(language || "").replace("_", "-").toLowerCase();
@@ -1089,7 +1106,7 @@
       }
 
       function appendRuntimeActions(actions, game) {
-        if (!game.image_backed) return null;
+        if (game.installed_pkg || !game.image_backed) return null;
         if (game.mounted) {
           const unmount = actionButton(t("disconnect"), () => titleRuntime(game, "unmount"));
           actions.append(unmount);
@@ -1118,7 +1135,7 @@
         body.append(heading);
         const badges = node("div", "badges");
         badges.append(badge(game.platform || t("unknown")));
-        badges.append(badge(game.image_backed ? (game.image_type || t("image")) : t("folder"), game.image_backed ? "image" : ""));
+        badges.append(badge(game.source_type === "pkg" ? "PKG" : game.image_backed ? (game.image_type || t("image")) : t("folder"), game.image_backed ? "image" : ""));
         if (game.mounted) badges.append(badge(t("mounted"), "live"));
         body.append(badges);
         const path = node("div", "game-path", game.path || t("sourceUnavailable"));
@@ -1141,8 +1158,9 @@
         const filter = $("filter").value;
         return state.games.filter((game) => {
           const matchesFilter = filter === "all" ||
-            (filter === "folder" && !game.image_backed) ||
+            (filter === "folder" && game.source_type === "folder") ||
             (filter === "image" && game.image_backed) ||
+            (filter === "pkg" && game.source_type === "pkg") ||
             game.platform === filter;
           if (!matchesFilter) return false;
           if (!query) return true;
@@ -1167,7 +1185,8 @@
         const imageCount = state.games.filter((game) => game.image_backed).length;
         $("totalGames").textContent = state.games.length;
         $("imageGames").textContent = imageCount;
-        $("folderGames").textContent = state.games.length - imageCount;
+        $("folderGames").textContent = state.games.filter((game) => game.source_type === "folder").length;
+        $("pkgGames").textContent = state.games.filter((game) => game.source_type === "pkg").length;
         $("mountedGames").textContent = state.games.filter((game) => game.mounted).length;
       }
 
@@ -1637,11 +1656,29 @@
         detailRow(grid, t("installed"), game.install_time);
         detailRow(grid, t("lastLaunch"), game.last_access_time);
         content.append(grid);
+        if (game.can_toggle_fakelib) {
+          const policy = node("div", "transfer-details");
+          const label = node("label", "check");
+          const checkbox = node("input");
+          checkbox.type = "checkbox";
+          checkbox.checked = game.fakelib_enabled;
+          label.append(checkbox, node("span", "", t("mountFakelib")));
+          checkbox.addEventListener("change", () => setGameFakelib(game, checkbox));
+          policy.append(label, node("div", "subtle", t("fakelibNextLaunch")));
+          if (game.fakelib_enabled && !game.fakelib_effective_enabled) {
+            policy.append(node("div", "subtle", t("fakelibGloballyDisabled")));
+          }
+          content.append(policy);
+        }
         details.append(content);
 
         const actions = $("modalActions");
         actions.replaceChildren();
         const runtimeAction = appendRuntimeActions(actions, game);
+        if (game.can_uninstall !== false) {
+          actions.append(actionButton(t("uninstall"), () => uninstallGame(game), "danger"));
+        }
+        if (game.installed_pkg || game.can_manage_source === false) return;
         const storageBusy = Boolean(state.storageJob && state.storageJob.active);
         const copy = actionButton(t("copy"), () => storageOperation(game, "copy"));
         const move = actionButton(t("move"), () => storageOperation(game, "move"));
@@ -1661,25 +1698,31 @@
         }
         actions.append(copy, move);
         if (unpack) actions.append(unpack);
-        actions.append(actionButton(t("uninstall"), () => uninstallGame(game), "danger"));
         actions.append(remove);
         if (focusRuntimeAction && runtimeAction) runtimeAction.focus();
       }
 
       async function showDetails(titleId) {
+        const request = {};
+        state.detailRequest = request;
+        state.selected = null;
         $("modal").hidden = false;
         $("modalTitle").textContent = t("loading");
         $("modalSubtitle").textContent = titleId;
         $("details").replaceChildren(node("div", "empty", t("loadingSource")));
         $("modalActions").replaceChildren();
         try {
-          renderDetails(await api("/games/info", { title_id: titleId }), true);
+          const game = await api("/games/info", { title_id: titleId });
+          if (state.detailRequest === request) renderDetails(game, true);
         } catch (error) {
-          $("details").replaceChildren(node("div", "empty", errorMessage(error)));
+          if (state.detailRequest === request) {
+            $("details").replaceChildren(node("div", "empty", errorMessage(error)));
+          }
         }
       }
 
       function closeModal() {
+        state.detailRequest = null;
         $("modal").hidden = true;
         state.selected = null;
       }
@@ -1766,8 +1809,35 @@
         }
       }
 
+      async function setGameFakelib(game, checkbox) {
+        const enabled = checkbox.checked;
+        checkbox.disabled = true;
+        try {
+          const result = await api("/games/fakelib", { title_id: game.title_id, enabled });
+          Object.assign(game, {
+            fakelib_enabled: result.fakelib_enabled,
+            fakelib_effective_enabled: result.fakelib_effective_enabled
+          });
+          const listed = state.games.find((item) => item.title_id === game.title_id);
+          if (listed) Object.assign(listed, {
+            fakelib_enabled: result.fakelib_enabled,
+            fakelib_effective_enabled: result.fakelib_effective_enabled
+          });
+          if (state.selected === game && !$("modal").hidden) renderDetails(game);
+          const message = t("fakelibSaved", { title: game.title_id });
+          logActivity(message);
+          toast(message);
+        } catch (error) {
+          checkbox.checked = game.fakelib_enabled;
+          logActivity(errorMessage(error), "error");
+          toast(errorMessage(error), true);
+        } finally {
+          checkbox.disabled = false;
+        }
+      }
+
       function uninstallGame(game) {
-        if (!confirm(t("uninstallConfirm", { game: gameLabel(game) }))) return;
+        if (!confirm(t(game.installed_pkg ? "uninstallPkgConfirm" : "uninstallConfirm", { game: gameLabel(game) }))) return;
         runMutation(t("uninstallAccepted", { title: game.title_id }), () => api("/games/uninstall", { title_id: game.title_id }), true);
       }
 
