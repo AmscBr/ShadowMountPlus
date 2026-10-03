@@ -1323,6 +1323,79 @@ static bool cleanup_fakelib_mount(void) {
   return true;
 }
 
+static bool cleanup_ppr_backport_fakelib(const char *title_id,
+                                       const char *sandbox_app0_path) {
+  char backport_path[MAX_PATH];
+  char expected_path[MAX_PATH];
+  (void)snprintf(expected_path, sizeof(expected_path),
+                 DEFAULT_BACKPORT_SCAN_PATH "/backports/%s", title_id);
+  if (!resolve_backport_path_for_title(title_id, NULL, backport_path) ||
+      strcmp(backport_path, expected_path) != 0) {
+    return true;
+  }
+
+  struct statfs fs;
+  if (statfs(sandbox_app0_path, &fs) != 0 ||
+      strcmp(fs.f_fstypename, "nsfs") != 0 ||
+      strcmp(fs.f_mntonname, sandbox_app0_path) != 0) {
+    return true;
+  }
+  char package_path[MAX_PATH];
+  (void)snprintf(package_path, sizeof(package_path),
+                 "/mnt/sandbox/pfsmnt/%s-app0", title_id);
+  if (statfs(package_path, &fs) != 0 ||
+      strcmp(fs.f_fstypename, "ppr_pfs") != 0 ||
+      strcmp(fs.f_mntonname, package_path) != 0) {
+    return true;
+  }
+
+  int backport_fd = open(backport_path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+  if (backport_fd < 0) {
+    int saved_errno = errno;
+    if (saved_errno == ENOENT)
+      return true;
+    log_debug("  [FAKELIB] cannot open PPR backport %s: %s",
+              backport_path, strerror(saved_errno));
+    errno = saved_errno;
+    return false;
+  }
+  int fakelib_fd = openat(backport_fd, "fakelib",
+                          O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+  int saved_errno = errno;
+  close(backport_fd);
+  if (fakelib_fd < 0) {
+    errno = saved_errno;
+    if (errno == ENOENT)
+      return true;
+    log_debug("  [FAKELIB] cannot open PPR fakelib %s/fakelib: %s",
+              backport_path, strerror(saved_errno));
+    errno = saved_errno;
+    return false;
+  }
+
+  static const char *const filenames[] = {
+      "libSceAmpr.sprx", "libScePlayGo.sprx", "libkernel.sprx"};
+  size_t removed = 0;
+  for (size_t i = 0; i < sizeof(filenames) / sizeof(filenames[0]); ++i) {
+    if (unlinkat(fakelib_fd, filenames[i], 0) == 0) {
+      removed++;
+    } else if (errno != ENOENT) {
+      saved_errno = errno;
+      close(fakelib_fd);
+      log_debug("  [FAKELIB] cannot remove PPR library %s/fakelib/%s: %s",
+                backport_path, filenames[i], strerror(saved_errno));
+      errno = saved_errno;
+      return false;
+    }
+  }
+  close(fakelib_fd);
+  if (removed > 0) {
+    log_debug("  [FAKELIB] removed %zu PPR libraries from %s/fakelib",
+              removed, backport_path);
+  }
+  return true;
+}
+
 static bool mount_fakelib_for_game_locked(pid_t pid, const char *title_id,
                                           bool notify_user) {
   if (!title_id || !is_supported_game_title_id(title_id)) {
@@ -1375,6 +1448,12 @@ static bool mount_fakelib_for_game_locked(pid_t pid, const char *title_id,
     // app0. Prefer the external backport source directly and never add files
     // from emulators_path for installed packages.
     pthread_mutex_lock(&g_fakelib_cache_mutex);
+    if (!cleanup_ppr_backport_fakelib(title_id, sandbox_app0_path)) {
+      int saved_errno = errno;
+      pthread_mutex_unlock(&g_fakelib_cache_mutex);
+      errno = saved_errno;
+      return false;
+    }
     prepare_title_cache(title_id, sandbox_app0_path, true, false);
     pthread_mutex_unlock(&g_fakelib_cache_mutex);
   }
