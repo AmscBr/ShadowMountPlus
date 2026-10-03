@@ -236,20 +236,24 @@ void runtime_mount_state_unlock(void) {
   pthread_mutex_unlock(&g_runtime_mount_state_mutex);
 }
 
-void request_scan_now(const char *reason) {
-  request_scan_now_with_options(reason, false);
+bool request_scan_now(const char *reason) {
+  return request_scan_now_with_options(reason, false);
 }
 
-void request_scan_now_with_options(const char *reason, bool reset_attempts) {
+bool request_scan_now_with_options(const char *reason, bool reset_attempts) {
   const char *resolved_reason =
       (reason && reason[0] != '\0') ? reason : "unknown scan source";
   if (runtime_sleep_mode_active())
-    return;
+    return false;
 
   char log_reason[sizeof(g_scan_now.reason)];
   bool should_log = false;
 
   pthread_mutex_lock(&g_scan_now.reason_mutex);
+  if (runtime_sleep_mode_active()) {
+    pthread_mutex_unlock(&g_scan_now.reason_mutex);
+    return false;
+  }
   if (g_scan_now.reason[0] == '\0') {
     (void)strlcpy(g_scan_now.reason, resolved_reason, sizeof(g_scan_now.reason));
     (void)strlcpy(log_reason, g_scan_now.reason, sizeof(log_reason));
@@ -262,6 +266,7 @@ void request_scan_now_with_options(const char *reason, bool reset_attempts) {
   if (should_log)
     log_debug("[SCAN] immediate scan requested by %s", log_reason);
   sm_scanner_wake();
+  return true;
 }
 
 bool consume_scan_now_request(char *reason_out, size_t reason_out_size,

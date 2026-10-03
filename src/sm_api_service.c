@@ -120,6 +120,7 @@ typedef struct {
   uint64_t finished_us;
   size_t affected_titles;
   int result_status;
+  char result_error_reason[32];
   bool scan_queued;
 } storage_job_t;
 
@@ -145,6 +146,7 @@ typedef struct {
   uint64_t finished_us;
   size_t affected_titles;
   int result_status;
+  char result_error_reason[32];
   bool scan_queued;
 } storage_job_snapshot_t;
 
@@ -1602,10 +1604,66 @@ static void handle_mount_operation(struct MHD_Connection *fd,
   json_object_put(response);
 }
 
+static const char *operation_error_message(int status, const char *reason) {
+  static const struct {
+    const char *reason;
+    const char *message;
+  } messages[] = {
+      {"rest_mode", "console is entering or in rest mode"},
+      {"game_active", "a game is active or awaiting exit; close the game and try again"},
+      {"install_pending", "game installation is pending; wait for it to finish"},
+      {"runtime_prepared", "a title has a prepared runtime mount; close or unmount it first"},
+      {"scanner_busy", "scanner or another storage operation is busy; try again when it finishes"},
+      {"runtime_busy", "title runtime is being prepared or released; try again when it finishes"},
+      {"title_unmount_busy", "title runtime could not be released; its mount or sandbox is still busy"},
+      {"image_unmount_busy", "backing image could not be released; its mount is still busy"},
+      {"unpack_mounted", "image runtime is already mounted or prepared; unmount it before unpacking"},
+      {"storage_busy", "a storage operation is already running; wait for it to finish"},
+      {"storage_unavailable", "storage service is stopping or unavailable"},
+  };
+  if (reason && reason[0] != '\0') {
+    for (size_t i = 0; i < sizeof(messages) / sizeof(messages[0]); ++i) {
+      if (strcmp(reason, messages[i].reason) == 0)
+        return messages[i].message;
+    }
+  }
+  return strerror(status);
+}
+
+static void send_operation_error_response(struct MHD_Connection *connection,
+                                           int status, const char *reason) {
+  struct json_object *response = new_status_response(status);
+  if (!response ||
+      !add_json_string(response, "error", operation_error_message(status, reason)) ||
+      !add_json_string(response, "error_reason", reason ? reason : "")) {
+    if (response)
+      json_object_put(response);
+    send_out_of_memory_response(connection);
+    return;
+  }
+  (void)send_json_object(connection, operation_http_status(status), response);
+  json_object_put(response);
+}
+
+static bool add_scan_queue_fields(struct json_object *response, bool queued) {
+  const char *reason = "";
+  if (queued) {
+    if (runtime_sleep_mode_active())
+      reason = "rest_mode";
+    else if (sm_game_lifecycle_has_active_game())
+      reason = "game_active";
+    else if (sm_shellcore_service_has_prepared_mount())
+      reason = "runtime_prepared";
+  }
+  return add_json_bool(response, "scan_queued", queued) &&
+         add_json_bool(response, "scan_deferred", reason[0] != '\0') &&
+         add_json_string(response, "scan_deferred_reason", reason);
+}
+
 static void handle_scan(struct MHD_Connection *fd,
                         struct json_object *request) {
   if (runtime_sleep_mode_active()) {
-    send_error_response(fd, 409, EBUSY, strerror(EBUSY));
+    send_operation_error_response(fd, EBUSY, "rest_mode");
     return;
   }
 
@@ -1616,7 +1674,10 @@ static void handle_scan(struct MHD_Connection *fd,
     return;
   }
 
-  request_scan_now_with_options("HTTP API request", reset_attempts);
+  if (!request_scan_now_with_options("HTTP API request", reset_attempts)) {
+    send_operation_error_response(fd, EBUSY, "rest_mode");
+    return;
+  }
 
   struct json_object *response = new_status_response(0);
   if (!response) {
@@ -1624,6 +1685,7 @@ static void handle_scan(struct MHD_Connection *fd,
     return;
   }
   if (!add_json_bool(response, "queued", true) ||
+      !add_scan_queue_fields(response, true) ||
       !add_json_bool(response, "reset_attempts", reset_attempts)) {
     json_object_put(response);
     send_out_of_memory_response(fd);
@@ -2051,10 +2113,43 @@ static void handle_kernel_log(struct MHD_Connection *connection,
                          "total_bytes");
 }
 
-static int request_game_uninstall(const char *title_id) {
-  if (runtime_sleep_mode_active() ||
-      sm_game_lifecycle_has_active_game() ||
-      sm_install_has_pending_work())
+static const char *runtime_mutation_block_reason(void) {
+  if (runtime_sleep_mode_active())
+    return "rest_mode";
+  if (sm_game_lifecycle_has_active_game())
+    return "game_active";
+  if (sm_install_has_pending_work())
+    return "install_pending";
+  return NULL;
+}
+
+static int resolve_storage_source(const char *title_id,
+                                   game_storage_operation_t operation,
+                                   game_source_info_t *source_info,
+                                   const char **error_out) {
+  *error_out = NULL;
+  sm_game_cache_snapshot_entry_t entry;
+  if (!find_game_snapshot_by_title(title_id, &entry))
+    return errno != 0 ? errno : ENOENT;
+  if (!resolve_game_source(&entry, source_info))
+    return ENOENT;
+
+  struct stat st;
+  if (lstat(source_info->physical_path, &st) == 0)
+    return 0;
+  int status = errno != 0 ? errno : EIO;
+  if (operation == GAME_STORAGE_DELETE &&
+      (status == ENOENT || status == ENOTDIR))
+    *error_out = "source_missing";
+  return status;
+}
+
+static int request_game_uninstall(const char *title_id,
+                                  const char **error_out,
+                                  bool *scan_queued_out) {
+  *scan_queued_out = false;
+  *error_out = runtime_mutation_block_reason();
+  if (*error_out)
     return EBUSY;
   sm_game_cache_snapshot_entry_t package;
   bool installed_pkg = find_installed_pkg_game(title_id, &package);
@@ -2064,12 +2159,26 @@ static int request_game_uninstall(const char *title_id) {
     return ENOENT;
 
   bool title_prepared = sm_shellcore_service_title_is_prepared(title_id);
-  if (sm_shellcore_service_has_prepared_mount() && !title_prepared)
+  if (sm_shellcore_service_has_prepared_mount() && !title_prepared) {
+    *error_out = "runtime_prepared";
     return EBUSY;
+  }
   if (!installed_pkg && (title_prepared || is_data_mounted(title_id))) {
     int release_status = sm_shellcore_unmount_title_runtime(title_id);
-    if (release_status != 0)
+    if (release_status != 0) {
+      if (release_status == EBUSY)
+        *error_out = "title_unmount_busy";
       return release_status;
+    }
+  }
+
+  bool source_missing = false;
+  if (!installed_pkg) {
+    game_source_info_t info;
+    const char *source_error = NULL;
+    (void)resolve_storage_source(title_id, GAME_STORAGE_DELETE, &info,
+                                 &source_error);
+    source_missing = source_error && strcmp(source_error, "source_missing") == 0;
   }
 
   int platform_status = sceAppInstUtilAppUnInstall(title_id);
@@ -2081,6 +2190,8 @@ static int request_game_uninstall(const char *title_id) {
 
   invalidate_app_db_title_cache();
   reset_title_attempts(title_id, NULL, NULL);
+  if (source_missing)
+    *scan_queued_out = request_scan_now("HTTP API missing source uninstall requested");
   log_debug("  [API] uninstall requested: title=%s", title_id);
   return 0;
 }
@@ -2095,20 +2206,23 @@ static void handle_uninstall(struct MHD_Connection *fd,
   }
 
   if (!sm_scanner_try_begin_external_mutation()) {
-    send_error_response(fd, 409, EBUSY, strerror(EBUSY));
+    send_operation_error_response(fd, EBUSY, "scanner_busy");
     return;
   }
   if (!sm_shellcore_try_begin_external_mutation()) {
     sm_scanner_end_external_mutation();
-    send_error_response(fd, 409, EBUSY, strerror(EBUSY));
+    send_operation_error_response(fd, EBUSY, "runtime_busy");
     return;
   }
-  int status = request_game_uninstall(title_id);
+  const char *error = NULL;
+  bool scan_queued = false;
+  int status = request_game_uninstall(title_id, &error, &scan_queued);
   sm_shellcore_end_external_mutation();
   sm_scanner_end_external_mutation();
   if (status != 0) {
-    send_error_response(fd, operation_http_status(status), status,
-                        strerror(status));
+    log_debug("  [API] uninstall blocked or failed: title=%s status=%d reason=%s",
+              title_id, status, operation_error_message(status, error));
+    send_operation_error_response(fd, status, error);
     return;
   }
 
@@ -2118,6 +2232,7 @@ static void handle_uninstall(struct MHD_Connection *fd,
     return;
   }
   if (!add_json_string(response, "title_id", title_id) ||
+      !add_scan_queue_fields(response, scan_queued) ||
       !add_json_bool(response, "uninstall_requested", true)) {
     json_object_put(response);
     send_out_of_memory_response(fd);
@@ -2347,11 +2462,14 @@ static int count_titles_for_source(const char *physical_path,
 
 static int release_storage_source_runtime(const char *physical_path,
                                           const char *title_id,
-                                          size_t *affected_out) {
+                                          size_t *affected_out,
+                                          const char **error_out) {
   *affected_out = 0;
-  if (runtime_sleep_mode_active() || sm_game_lifecycle_has_active_game() ||
-      sm_install_has_pending_work() ||
-      sm_shellcore_service_has_prepared_mount()) {
+  *error_out = runtime_mutation_block_reason();
+  if (*error_out)
+    return EBUSY;
+  if (sm_shellcore_service_has_prepared_mount()) {
+    *error_out = "runtime_prepared";
     return EBUSY;
   }
 
@@ -2372,6 +2490,8 @@ static int release_storage_source_runtime(const char *physical_path,
     if (is_data_mounted(snapshot[i].title_id) &&
         !unmount_title_runtime_layers(snapshot[i].title_id)) {
       status = errno == EBUSY ? EBUSY : EIO;
+      if (status == EBUSY)
+        *error_out = "title_unmount_busy";
       break;
     }
   }
@@ -2390,8 +2510,11 @@ static int release_storage_source_runtime(const char *physical_path,
   if (read_mount_image_chain(title_id, image_chain, &image_count)) {
     for (size_t layer = image_count; layer > 0; --layer) {
       if (!release_runtime_image_mount(image_chain[layer - 1u])) {
+        int status = errno == EBUSY ? EBUSY : EIO;
+        if (status == EBUSY)
+          *error_out = "image_unmount_busy";
         runtime_mount_state_unlock();
-        return errno == EBUSY ? EBUSY : EIO;
+        return status;
       }
     }
   }
@@ -2502,6 +2625,8 @@ static void copy_storage_job_snapshot_locked(
   snapshot->finished_us = g_storage_job.finished_us;
   snapshot->affected_titles = g_storage_job.affected_titles;
   snapshot->result_status = g_storage_job.result_status;
+  (void)strlcpy(snapshot->result_error_reason, g_storage_job.result_error_reason,
+                sizeof(snapshot->result_error_reason));
   snapshot->scan_queued = g_storage_job.scan_queued;
 }
 
@@ -2604,7 +2729,10 @@ static bool add_storage_job_fields(struct json_object *response,
          add_json_string(response, "result_error",
                          snapshot->result_status == 0
                              ? ""
-                             : strerror(snapshot->result_status)) &&
+                             : operation_error_message(snapshot->result_status,
+                                                       snapshot->result_error_reason)) &&
+         add_json_string(response, "result_error_reason",
+                         snapshot->result_error_reason) &&
          add_json_bool(response, "scan_queued", snapshot->scan_queued);
 }
 
@@ -2664,7 +2792,7 @@ static bool begin_storage_job_finalizing(void *ctx) {
 }
 
 static void finish_storage_job(uint64_t job_id, int status,
-                               bool scan_queued) {
+                               bool scan_queued, const char *error) {
   pthread_mutex_lock(&g_storage_job.mutex);
   if (g_storage_job.id == job_id) {
     if (status == 0) {
@@ -2677,11 +2805,30 @@ static void finish_storage_job(uint64_t job_id, int status,
       g_storage_job.state = STORAGE_JOB_FAILED;
     }
     g_storage_job.result_status = status;
+    (void)strlcpy(g_storage_job.result_error_reason,
+                  status == 0 || !error ? "" : error,
+                  sizeof(g_storage_job.result_error_reason));
     g_storage_job.scan_queued = scan_queued;
     g_storage_job.finished_us = monotonic_time_us();
     pthread_cond_broadcast(&g_storage_job.cond);
   }
   pthread_mutex_unlock(&g_storage_job.mutex);
+}
+
+static int storage_operation_result_status(game_storage_operation_t operation,
+                                            const char *source, int result) {
+  if (result == 0)
+    return 0;
+  int status = errno != 0 ? errno : EIO;
+  if (operation == GAME_STORAGE_DELETE &&
+      (status == ENOENT || status == ENOTDIR)) {
+    struct stat st;
+    // FTP or disconnected storage may remove the root after preflight. Only
+    // an absent root is harmless; a missing child in an existing tree is not.
+    if (lstat(source, &st) != 0 && (errno == ENOENT || errno == ENOTDIR))
+      return 0;
+  }
+  return status;
 }
 
 static void *storage_job_thread_main(void *arg) {
@@ -2707,6 +2854,7 @@ static void *storage_job_thread_main(void *arg) {
   uint64_t total_bytes = 0;
   uint64_t total_files = 0;
   int status = 0;
+  const char *error = NULL;
   bool scanner_mutation = false;
   bool shellcore_mutation = false;
   bool unpack_mounted = false;
@@ -2719,6 +2867,7 @@ static void *storage_job_thread_main(void *arg) {
     status = ECANCELED;
   } else if (!sm_scanner_try_begin_external_mutation()) {
     status = EBUSY;
+    error = "scanner_busy";
   } else {
     scanner_mutation = true;
   }
@@ -2731,9 +2880,10 @@ static void *storage_job_thread_main(void *arg) {
     }
   }
   if (status == 0) {
-    if (!sm_shellcore_try_begin_external_mutation())
+    if (!sm_shellcore_try_begin_external_mutation()) {
       status = EBUSY;
-    else
+      error = "runtime_busy";
+    } else
       shellcore_mutation = true;
   }
   if (status == 0 && storage_job_cancelled(job_ctx))
@@ -2751,7 +2901,8 @@ static void *storage_job_thread_main(void *arg) {
   if (status == 0 && operation != GAME_STORAGE_UNPACK) {
     size_t affected = 0;
     recovery_scan_needed = true;
-    status = release_storage_source_runtime(source, title_id, &affected);
+    status = release_storage_source_runtime(source, title_id, &affected,
+                                             &error);
     pthread_mutex_lock(&g_storage_job.mutex);
     if (g_storage_job.id == job_id)
       g_storage_job.affected_titles = affected;
@@ -2782,8 +2933,7 @@ static void *storage_job_thread_main(void *arg) {
                              : sm_storage_measure_path_progress(
                                    measure_source, &total_bytes, &total_files,
                                    storage_job_cancelled, job_ctx);
-    if (measure_result != 0)
-      status = errno != 0 ? errno : EIO;
+    status = storage_operation_result_status(operation, source, measure_result);
   }
 
   if (status == 0) {
@@ -2825,9 +2975,8 @@ static void *storage_job_thread_main(void *arg) {
     if (g_storage_job.transfer_finished_us == 0)
       g_storage_job.transfer_finished_us = monotonic_time_us();
     pthread_mutex_unlock(&g_storage_job.mutex);
-    if (result != 0) {
-      status = errno != 0 ? errno : EIO;
-    } else {
+    status = storage_operation_result_status(operation, source, result);
+    if (status == 0) {
       if (renamed) {
         pthread_mutex_lock(&g_storage_job.mutex);
         g_storage_job.processed_bytes = total_bytes;
@@ -2860,9 +3009,9 @@ static void *storage_job_thread_main(void *arg) {
   if (scanner_mutation)
     sm_scanner_end_external_mutation();
 
-  bool scan_queued = recovery_scan_needed;
-  if (scan_queued) {
-    request_scan_now(
+  bool scan_queued = false;
+  if (recovery_scan_needed) {
+    scan_queued = request_scan_now(
         status != 0
             ? "HTTP API async storage operation recovery"
             : operation == GAME_STORAGE_MOVE
@@ -2873,11 +3022,12 @@ static void *storage_job_thread_main(void *arg) {
                               ? "HTTP API game image unpacked"
                               : "HTTP API async game source deleted");
   }
-  log_debug("  [API] async game source %s %s: job=%llu title=%s status=%d",
+  log_debug("  [API] async game source %s %s: job=%llu title=%s status=%d reason=%s",
             game_storage_operation_name(operation),
             status == 0 ? "complete" : "stopped",
-            (unsigned long long)job_id, title_id, status);
-  finish_storage_job(job_id, status, scan_queued);
+            (unsigned long long)job_id, title_id, status,
+            status == 0 ? "complete" : operation_error_message(status, error));
+  finish_storage_job(job_id, status, scan_queued, error);
   return NULL;
 }
 
@@ -2885,19 +3035,18 @@ static int start_storage_job(const char *title_id,
                              const char *destination_dir,
                              game_storage_operation_t operation,
                              bool delete_source,
-                             storage_job_snapshot_t *accepted_out) {
-  sm_game_cache_snapshot_entry_t game_entry;
-  if (!find_game_snapshot_by_title(title_id, &game_entry))
-    return errno != 0 ? errno : ENOENT;
-
+                             storage_job_snapshot_t *accepted_out,
+                             const char **error_out) {
   game_source_info_t source_info;
-  if (!resolve_game_source(&game_entry, &source_info) ||
-      !path_exists(source_info.physical_path)) {
-    return ENOENT;
-  }
+  int status = resolve_storage_source(title_id, operation, &source_info,
+                                      error_out);
+  if (status != 0)
+    return status;
   if (operation == GAME_STORAGE_UNPACK &&
       (!source_info.image_backed || is_data_mounted(title_id) ||
        sm_shellcore_service_title_is_prepared(title_id))) {
+    if (source_info.image_backed)
+      *error_out = "unpack_mounted";
     return source_info.image_backed ? EBUSY : ENOTSUP;
   }
   char destination[MAX_PATH];
@@ -2915,6 +3064,9 @@ static int start_storage_job(const char *title_id,
 
   pthread_mutex_lock(&g_storage_job.mutex);
   if (!g_storage_job.accepting || storage_job_is_active(g_storage_job.state)) {
+    *error_out = g_storage_job.accepting
+                     ? "storage_busy"
+                     : "storage_unavailable";
     pthread_mutex_unlock(&g_storage_job.mutex);
     return EBUSY;
   }
@@ -2947,6 +3099,7 @@ static int start_storage_job(const char *title_id,
   g_storage_job.finished_us = 0;
   g_storage_job.affected_titles = 0;
   g_storage_job.result_status = 0;
+  g_storage_job.result_error_reason[0] = '\0';
   g_storage_job.scan_queued = false;
   copy_storage_job_snapshot_locked(accepted_out);
   pthread_mutex_unlock(&g_storage_job.mutex);
@@ -2963,7 +3116,7 @@ static int start_storage_job(const char *title_id,
   if (attr_initialized)
     (void)pthread_attr_destroy(&attr);
   if (rc != 0) {
-    finish_storage_job(job_id, rc, false);
+    finish_storage_job(job_id, rc, false, NULL);
     return rc;
   }
   return 0;
@@ -3052,6 +3205,29 @@ static void stop_storage_job(void) {
   pthread_mutex_unlock(&g_storage_job.mutex);
 }
 
+static void send_missing_source_response(struct MHD_Connection *connection,
+                                          const char *title_id) {
+  // Absence can also mean disconnected storage. Reconcile through the scanner
+  // when runtime is safe; do not unlink title state or uninstall here.
+  if (!request_scan_now("HTTP API missing game source reconciliation")) {
+    send_operation_error_response(connection, EBUSY, "rest_mode");
+    return;
+  }
+  struct json_object *response = new_status_response(0);
+  if (!response || !add_json_string(response, "title_id", title_id) ||
+      !add_json_bool(response, "source_missing", true) ||
+      !add_scan_queue_fields(response, true)) {
+    if (response)
+      json_object_put(response);
+    send_out_of_memory_response(connection);
+    return;
+  }
+  log_debug("  [API] source unavailable; reconciliation queued: title=%s",
+            title_id);
+  (void)send_json_object(connection, 200, response);
+  json_object_put(response);
+}
+
 static void handle_game_storage_operation(
     struct MHD_Connection *connection, struct json_object *request,
     game_storage_operation_t operation) {
@@ -3103,14 +3279,20 @@ static void handle_game_storage_operation(
 
   storage_job_snapshot_t accepted;
   memset(&accepted, 0, sizeof(accepted));
+  const char *error = NULL;
   int status = start_storage_job(title_id, destination_dir, operation,
-                                 delete_source, &accepted);
+                                 delete_source, &accepted, &error);
   if (status != 0) {
+    if (operation == GAME_STORAGE_DELETE && error &&
+        strcmp(error, "source_missing") == 0) {
+      send_missing_source_response(connection, title_id);
+      return;
+    }
     log_debug("  [API] async game source %s start failed: title=%s "
-              "status=%d",
-              game_storage_operation_name(operation), title_id, status);
-    send_error_response(connection, operation_http_status(status), status,
-                        strerror(status));
+              "status=%d reason=%s",
+              game_storage_operation_name(operation), title_id, status,
+              operation_error_message(status, error));
+    send_operation_error_response(connection, status, error);
     return;
   }
   log_debug("  [API] async game source %s accepted: job=%llu title=%s",

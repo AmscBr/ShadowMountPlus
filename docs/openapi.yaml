@@ -722,10 +722,17 @@ paths:
     post:
       operationId: deleteGameSource
       summary: Asynchronously delete a game folder or backing image
+      description: A confirmed request for a cached source that is already absent queues safe scanner reconciliation without starting a storage job or directly uninstalling the title. Absence may also mean disconnected storage. Permission and I/O errors remain failures.
       tags: [Storage]
       requestBody:
         $ref: "#/components/requestBodies/StorageDeleteRequest"
       responses:
+        "200":
+          description: Source already absent; library reconciliation queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MissingSourceResponse"
         "202":
           $ref: "#/components/responses/StorageJobAccepted"
         "400":
@@ -1687,7 +1694,7 @@ components:
     StorageJobResponse:
       type: object
       additionalProperties: false
-      required: [status, job_id, operation, state, active, cancellable, cancel_requested, title_id, source_type, source, runtime_source, destination, delete_source, total_bytes, processed_bytes, total_files, processed_files, progress_percent, speed_bytes_per_second, elapsed_ms, affected_titles, result_status, result_error, scan_queued]
+      required: [status, job_id, operation, state, active, cancellable, cancel_requested, title_id, source_type, source, runtime_source, destination, delete_source, total_bytes, processed_bytes, total_files, processed_files, progress_percent, speed_bytes_per_second, elapsed_ms, affected_titles, result_status, result_error, result_error_reason, scan_queued]
       properties:
         status:
           type: integer
@@ -1761,13 +1768,16 @@ components:
           minimum: 0
         result_error:
           type: string
+          description: English error text; localized clients should use result_error_reason when available.
+        result_error_reason:
+          $ref: "#/components/schemas/OperationErrorReason"
         scan_queued:
           type: boolean
 
     ScanResponse:
       type: object
       additionalProperties: false
-      required: [status, queued, reset_attempts]
+      required: [status, queued, reset_attempts, scan_queued, scan_deferred, scan_deferred_reason]
       properties:
         status:
           type: integer
@@ -1777,6 +1787,15 @@ components:
           const: true
         reset_attempts:
           type: boolean
+        scan_queued:
+          type: boolean
+          const: true
+        scan_deferred:
+          type: boolean
+          description: Whether game runtime or rest mode prevents scanning at response time; queue acceptance does not mean scan completion.
+        scan_deferred_reason:
+          type: string
+          enum: ["", game_active, runtime_prepared, rest_mode]
 
     ManualUpdateResponse:
       type: object
@@ -1844,7 +1863,7 @@ components:
     UninstallResponse:
       type: object
       additionalProperties: false
-      required: [status, title_id, uninstall_requested]
+      required: [status, title_id, uninstall_requested, scan_queued, scan_deferred, scan_deferred_reason]
       properties:
         status:
           type: integer
@@ -1854,6 +1873,36 @@ components:
         uninstall_requested:
           type: boolean
           const: true
+        scan_queued:
+          type: boolean
+          description: Full synchronization was queued because the known source was absent before uninstall; retained sources are not immediately rediscovered.
+        scan_deferred:
+          type: boolean
+        scan_deferred_reason:
+          type: string
+          enum: ["", game_active, runtime_prepared, rest_mode]
+
+    MissingSourceResponse:
+      type: object
+      additionalProperties: false
+      required: [status, title_id, source_missing, scan_queued, scan_deferred, scan_deferred_reason]
+      properties:
+        status:
+          type: integer
+          const: 0
+        title_id:
+          $ref: "#/components/schemas/TitleId"
+        source_missing:
+          type: boolean
+          const: true
+        scan_queued:
+          type: boolean
+          const: true
+        scan_deferred:
+          type: boolean
+        scan_deferred_reason:
+          type: string
+          enum: ["", game_active, runtime_prepared, rest_mode]
 
     ErrorResponse:
       type: object
@@ -1866,3 +1915,10 @@ components:
           description: Positive errno value
         error:
           type: string
+        error_reason:
+          $ref: "#/components/schemas/OperationErrorReason"
+
+    OperationErrorReason:
+      type: string
+      description: Stable reason code for localized operation errors; empty for generic errno failures.
+      enum: ["", rest_mode, game_active, install_pending, runtime_prepared, scanner_busy, runtime_busy, title_unmount_busy, image_unmount_busy, unpack_mounted, storage_busy, storage_unavailable]

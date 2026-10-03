@@ -152,12 +152,36 @@ System partitions and game mounts are omitted from that overview. The separate
 destination under a configured non-runtime scan root. They and `delete` return
 HTTP 202 with a `job_id` and continue in one background worker;
 only one of these jobs can be active. A second start returns HTTP 409/`EBUSY`.
-`delete` still requires `confirm=true`. The status response contains the phase,
+`delete` still requires `confirm=true`. If a cached source is already absent
+(`ENOENT` or `ENOTDIR`), it instead returns HTTP 200 with `source_missing=true`
+and `scan_queued=true`, without creating a job or directly uninstalling the title.
+The scanner reconciles stale cache and links when runtime is safe. An absent
+source can also mean disconnected storage; permission and I/O errors remain
+failures. Unknown titles still return HTTP 404.
+The status response contains the phase,
 byte-based percentage, processed/total bytes,
 processed/total files, average processed-byte rate, elapsed time and final
 errno-style result. The initial `measuring` phase discovers the totals and has
 zero percent until they are known. Only the active or most recently finished
 job is retained; an older explicit `job_id` returns HTTP 404.
+
+`scan`, successful `uninstall`, and missing-source delete responses include
+`scan_queued`, `scan_deferred`, and `scan_deferred_reason`. The reason is
+`game_active`, `runtime_prepared`, `rest_mode`, or an empty string. These fields
+describe the runtime at response time; queue acceptance is not scan completion.
+A successful uninstall request queues a full synchronization only when its
+known source was already absent before uninstall. Retained sources do not
+trigger immediate rediscovery; `scan_queued=false` reports this case. Uninstall
+does not exclude or delete the source, so a later scan can still discover it.
+Busy uninstall/storage responses add a stable `error_reason` code; storage jobs
+expose the corresponding `result_error_reason`. The English `error` and
+`result_error` remain available for clients without localized catalogs. Reasons distinguish
+game activity, pending installation, mutation-gate contention, prepared runtime,
+and busy mount release. Close a game fully before retrying; returning to the
+home screen alone does not terminate it.
+If the source root disappears after a delete job is accepted, an absent root is
+treated as already deleted. A missing child in an existing tree, I/O errors,
+permission errors, and cancellation remain failures.
 
 Cancellation is cooperative during `preparing`, `measuring` and `transferring`.
 A partial copy destination is removed. A delete job becomes non-cancellable
