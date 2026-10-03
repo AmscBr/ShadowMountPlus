@@ -143,6 +143,11 @@ available for new files; `used_bytes` is calculated against that value. The
 `/mnt/ext*` and `/mnt/usb*` roots are included as additional destinations. Each
 item adds the selectable `path` to the same filesystem metadata.
 
+The web storage overview uses `mounts` to show the internal `/user` filesystem
+and mounted `/mnt/ext0..1` and `/mnt/usb0..7` disks once per filesystem/source.
+System partitions and game mounts are omitted from that overview. The separate
+`destinations` list supplies folder choices for copying, moving and unpacking.
+
 `copy` and `move` preserve the source basename and require an existing
 destination under a configured non-runtime scan root. They and `delete` return
 HTTP 202 with a `job_id` and continue in one background worker;

@@ -1304,10 +1304,21 @@
         const list = $("storageList");
         try {
           const data = await api("/storage");
-          const mounts = (data.destinations || []).slice().sort((left, right) =>
+          state.storageDestinations = (data.destinations || []).slice().sort((left, right) =>
             String(left.path).localeCompare(String(right.path))
           );
-          state.storageDestinations = mounts;
+          const seen = new Set();
+          const mounts = (data.mounts || []).filter((mount) =>
+            mount.mount_point === "/user" || /^\/mnt\/(?:usb[0-7]|ext[01])$/.test(mount.mount_point)
+          ).sort((left, right) =>
+            (right.mount_point === "/user") - (left.mount_point === "/user") ||
+            left.mount_point.localeCompare(right.mount_point)
+          ).filter((mount) => {
+            const key = JSON.stringify([mount.filesystem, mount.source || mount.mount_point]);
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
           if (!$("destinationModal").hidden) renderDestinationPicker();
           list.replaceChildren();
           if (!mounts.length) {
@@ -1322,8 +1333,8 @@
             const freePercent = 100 - usedPercent;
             const row = node("div", "storage-row");
             const head = node("div", "storage-head");
-            const path = node("span", "storage-path", mount.path);
-            path.title = mount.path;
+            const path = node("span", "storage-path", mount.mount_point);
+            path.title = mount.mount_point;
             head.append(path, badge(mount.filesystem || "FS", "live"));
             row.append(head);
             const meta = node("div", "storage-meta", `${mount.filesystem || t("unknown")} · ${mount.source || "—"}`);
@@ -1335,7 +1346,7 @@
             row.append(space);
             const meter = node("div", "storage-meter");
             meter.setAttribute("role", "progressbar");
-            meter.setAttribute("aria-label", t("storageUsed", { path: mount.path }));
+            meter.setAttribute("aria-label", t("storageUsed", { path: mount.mount_point }));
             meter.setAttribute("aria-valuemin", "0");
             meter.setAttribute("aria-valuemax", "100");
             meter.setAttribute("aria-valuenow", String(Math.round(usedPercent)));
