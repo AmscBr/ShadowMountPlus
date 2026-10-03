@@ -123,6 +123,14 @@
 # Default: 1
 # backport_fakelib=1
 
+# Disable all fakelib overlays for specific games (repeatable, up to 128 titles):
+# Includes fakelib, fakelib2 and global fakelib. No exclusions by default.
+# Reloaded changes apply on the next game launch; active mounts are kept.
+# fakelib_exclude=PPSA12345
+# fakelib_exclude=CUSA12345
+# fakelib_exclude=LAPY12345
+# fakelib_exclude=FAKE12345
+
 # Updates for multiple emulators in the game fakelib:
 # 1/true/yes/on  -> cache the game's fakelib before launch and replace matching
 #                   cached files from emulators_path; fakelib2 and installed

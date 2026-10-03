@@ -75,6 +75,7 @@ Supported keys (all optional):
 - `ufs_backend=lvd|md` (default: `lvd`)
 - `nested_pfs_index_cache=1|0` (request the containing PFS compressed-file index cache before attaching a nested image; default: `0`)
 - `backport_fakelib=1|0` (`1` mounts sandbox `fakelib` overlays for running games; default: `1`)
+- `fakelib_exclude=<TITLE_ID>` (repeatable, up to 128 titles; disables all fakelib overlays for matching PPSA/CUSA/LAPY/FAKE IDs; default: no exclusions)
 - `update_emulators=1|0` (`1` updates matching emulator files for folder/image games; installed PKGs and `fakelib2` are excluded; default: `1`)
 - `emulators_path=<absolute_path>` (folder containing emulator update files; default: `/data/shadowmount/emus`)
 - `auto_update_ampr=1|0` (check for a new `libSceAmpr.sprx` 30 seconds after startup and every four hours; default: `0`)
@@ -193,6 +194,7 @@ Backport overlay behavior:
 - The backport notification adds `Emulators updated` when emulator files are updated for the launched game.
 - If both global and per-game fakelib exist, they are combined in the game cache according to `global_fakelib_priority`, unless the selected backport contains `fakelib2`. Without a per-game fakelib, the global folder is mounted directly.
 - Use repeatable `global_fakelib_exclude=<TITLE_ID>` entries to skip the global fakelib for specific games without disabling per-game fakelib.
+- Use repeatable `fakelib_exclude=<TITLE_ID>` entries to disable per-game `fakelib`, `fakelib2`, global fakelib and cache preparation for specific games. `/data`, `/mnt` and PKG `app0` backports remain enabled. Reloaded exclusions apply on the next launch; existing mounts remain until game exit. Title IDs are case-insensitive and must have a supported prefix followed by five digits; invalid entries and entries beyond the 128-title limit are logged and ignored.
 - `/mnt` and `/data` are always mounted for PS5 (`PPSA*`), PS4 (`CUSA*`) and homebrew (`LAPY*`, `FAKE*`) titles through writable `nullfs` at `/mnt/sandbox/<TITLE_ID>_<index>/mnt` and `/mnt/sandbox/<TITLE_ID>_<index>/data`. Supported IDs have one of these prefixes followed by five digits. These mounts follow the game process lifetime: they are removed on process exit.
 - `backport_fakelib=0` disables the sandbox `fakelib` watcher, including global fakelib and emulator updates.
 - For `backport_fakelib` to work correctly, the standalone `BackPork` payload must be disabled. Running both at the same time will conflict.

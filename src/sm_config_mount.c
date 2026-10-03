@@ -6,6 +6,7 @@
 
 #include "sm_api_protocol.h"
 #include "sm_config_mount.h"
+#include "sm_gameinfo.h"
 #include "sm_types.h"
 #include "sm_limits.h"
 #include "sm_l10n.h"
@@ -80,6 +81,8 @@ static bool set_kstuff_pause_delay_override_rule(runtime_config_state_t *state,
                                                  const char *value);
 static bool add_global_fakelib_exclude_rule(runtime_config_state_t *state,
                                             const char *value);
+static bool add_fakelib_exclude_rule(runtime_config_state_t *state,
+                                      const char *value);
 static bool normalize_image_filename_value(const char *value,
                                            char out[MAX_PATH]);
 static bool normalize_absolute_path_value(const char *value,
@@ -493,6 +496,26 @@ bool is_kstuff_pause_disabled_for_title(const char *title_id) {
   const runtime_config_state_t *state = &g_runtime_state;
   for (int i = 0; i < state->kstuff_no_pause_title_count; ++i) {
     if (strcmp(state->kstuff_no_pause_title_ids[i], normalized) == 0) {
+      pthread_mutex_unlock(&g_runtime_state_mutex);
+      return true;
+    }
+  }
+
+  pthread_mutex_unlock(&g_runtime_state_mutex);
+  return false;
+}
+
+bool is_fakelib_excluded_for_title(const char *title_id) {
+  ensure_runtime_config_ready();
+
+  char normalized[MAX_TITLE_ID];
+  if (!normalize_title_id_value(title_id, normalized))
+    return false;
+
+  pthread_mutex_lock(&g_runtime_state_mutex);
+  const runtime_config_t *cfg = &g_runtime_state.cfg;
+  for (uint32_t i = 0; i < cfg->fakelib_exclude_title_count; ++i) {
+    if (strcmp(cfg->fakelib_exclude_title_ids[i], normalized) == 0) {
       pthread_mutex_unlock(&g_runtime_state_mutex);
       return true;
     }
@@ -1220,6 +1243,27 @@ static bool add_kstuff_no_pause_title_rule(runtime_config_state_t *state,
   return true;
 }
 
+static bool add_fakelib_exclude_rule(runtime_config_state_t *state,
+                                      const char *value) {
+  char normalized[MAX_TITLE_ID];
+  if (!normalize_title_id_value(value, normalized) ||
+      !is_supported_game_title_id(normalized))
+    return false;
+
+  for (uint32_t i = 0; i < state->cfg.fakelib_exclude_title_count; ++i) {
+    if (strcmp(state->cfg.fakelib_exclude_title_ids[i], normalized) == 0)
+      return true;
+  }
+
+  if (state->cfg.fakelib_exclude_title_count >= MAX_FAKELIB_EXCLUDE_RULES)
+    return false;
+
+  uint32_t index = state->cfg.fakelib_exclude_title_count++;
+  (void)strlcpy(state->cfg.fakelib_exclude_title_ids[index], normalized,
+                sizeof(state->cfg.fakelib_exclude_title_ids[index]));
+  return true;
+}
+
 static bool add_global_fakelib_exclude_rule(runtime_config_state_t *state,
                                             const char *value) {
   char normalized[MAX_TITLE_ID];
@@ -1482,6 +1526,15 @@ static config_load_status_t load_runtime_config_state(runtime_config_state_t *st
         continue;
       }
       state->cfg.backport_fakelib_enabled = bval;
+      continue;
+    }
+
+    if (strcasecmp(key, "fakelib_exclude") == 0) {
+      if (!add_fakelib_exclude_rule(state, value)) {
+        log_debug("  [CFG] invalid fakelib exclude rule or limit reached "
+                  "(%u) at line %d: %s=%s",
+                  (unsigned)MAX_FAKELIB_EXCLUDE_RULES, line_no, key, value);
+      }
       continue;
     }
 
@@ -1811,6 +1864,7 @@ static config_load_status_t load_runtime_config_state(runtime_config_state_t *st
             "auto_remove_games_with_dlc=%d auto_remove_missing_delay_s=%u "
             "api=%s:%u scan_depth=%u "
             "legacy_recursive_scan_forced=%d backport_fakelib=%d "
+            "fakelib_exclude=%u "
             "global_fakelib=%d global_fakelib_priority=%s "
             "global_fakelib_path=%s global_fakelib_exclude=%u "
             "update_emulators=%d emulators_path=%s auto_update_ampr=%d "
@@ -1837,6 +1891,7 @@ static config_load_status_t load_runtime_config_state(runtime_config_state_t *st
             state->cfg.scan_depth,
             state->cfg.legacy_recursive_scan_forced ? 1 : 0,
             state->cfg.backport_fakelib_enabled ? 1 : 0,
+            state->cfg.fakelib_exclude_title_count,
             state->cfg.global_fakelib_enabled ? 1 : 0,
             state->cfg.global_fakelib_game_priority ? "game" : "global",
             state->cfg.global_fakelib_path,

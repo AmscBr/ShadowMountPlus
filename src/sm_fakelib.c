@@ -1177,7 +1177,7 @@ static void prepare_title_cache(const char *title_id, const char *game_path,
   if (!is_supported_game_title_id(title_id))
     return;
   const runtime_config_t cfg = runtime_config();
-  if (!cfg.backport_fakelib_enabled)
+  if (!cfg.backport_fakelib_enabled || is_fakelib_excluded_for_title(title_id))
     return;
 
   char game_source_path[MAX_PATH];
@@ -1404,7 +1404,8 @@ static bool mount_fakelib_for_game_locked(pid_t pid, const char *title_id,
   }
 
   char managed_game_path[MAX_PATH] = {0};
-  bool fakelib_enabled = sm_fakelib_game_feature_enabled();
+  bool fakelib_enabled = sm_fakelib_game_feature_enabled() &&
+                         !is_fakelib_excluded_for_title(title_id);
   bool managed_title =
       read_mount_link(title_id, managed_game_path, sizeof(managed_game_path));
   char sandbox_app0_path[MAX_PATH] = {0};
