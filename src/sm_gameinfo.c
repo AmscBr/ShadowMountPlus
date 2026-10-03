@@ -51,6 +51,7 @@ bool is_supported_game_title_id(const char *title_id) {
     return false;
   if (strncmp(title_id, "PPSA", 4u) != 0 &&
       strncmp(title_id, "CUSA", 4u) != 0 &&
+      strncmp(title_id, "LAPY", 4u) != 0 &&
       strncmp(title_id, "FAKE", 4u) != 0) {
     return false;
   }
