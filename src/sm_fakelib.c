@@ -1364,8 +1364,7 @@ static bool cleanup_ppr_backport_fakelib(const char *title_id,
   int saved_errno = errno;
   close(backport_fd);
   if (fakelib_fd < 0) {
-    errno = saved_errno;
-    if (errno == ENOENT)
+    if (saved_errno == ENOENT)
       return true;
     log_debug("  [FAKELIB] cannot open PPR fakelib %s/fakelib: %s",
               backport_path, strerror(saved_errno));
@@ -1377,16 +1376,21 @@ static bool cleanup_ppr_backport_fakelib(const char *title_id,
       "libSceAmpr.sprx", "libScePlayGo.sprx", "libkernel.sprx"};
   size_t removed = 0;
   for (size_t i = 0; i < sizeof(filenames) / sizeof(filenames[0]); ++i) {
-    if (unlinkat(fakelib_fd, filenames[i], 0) == 0) {
+    // Skip absent targets before requesting a write on the backing filesystem.
+    struct stat st;
+    if (fstatat(fakelib_fd, filenames[i], &st, AT_SYMLINK_NOFOLLOW) == 0 &&
+        unlinkat(fakelib_fd, filenames[i], 0) == 0) {
       removed++;
-    } else if (errno != ENOENT) {
-      saved_errno = errno;
-      close(fakelib_fd);
-      log_debug("  [FAKELIB] cannot remove PPR library %s/fakelib/%s: %s",
-                backport_path, filenames[i], strerror(saved_errno));
-      errno = saved_errno;
-      return false;
+      continue;
     }
+    if (errno == ENOENT)
+      continue;
+    saved_errno = errno;
+    close(fakelib_fd);
+    log_debug("  [FAKELIB] cannot clean up PPR library %s/fakelib/%s: %s",
+              backport_path, filenames[i], strerror(saved_errno));
+    errno = saved_errno;
+    return false;
   }
   close(fakelib_fd);
   if (removed > 0) {
