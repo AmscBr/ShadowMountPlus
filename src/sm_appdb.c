@@ -562,20 +562,23 @@ static void copy_sqlite_text(sqlite3_stmt *stmt, int column, char *out,
   (void)strlcpy(out, value ? (const char *)value : "", out_size);
 }
 
-static void copy_json_string(struct json_object *object, const char *key,
+static bool copy_json_string(struct json_object *object, const char *key,
                              char *out, size_t out_size) {
   struct json_object *value = NULL;
   if (!json_object_object_get_ex(object, key, &value) ||
       !json_object_is_type(value, json_type_string)) {
-    return;
+    return false;
   }
   const char *text = json_object_get_string(value);
-  if (text && text[0] != '\0')
-    (void)strlcpy(out, text, out_size);
+  size_t length = (size_t)json_object_get_string_len(value);
+  if (length == 0 || length >= out_size || memchr(text, '\0', length))
+    return false;
+  memcpy(out, text, length + 1u);
+  return true;
 }
 
-static void apply_app_info_timestamps(sqlite3_stmt *stmt, int column,
-                                      sm_app_db_game_info_t *entry) {
+static void apply_app_info_metadata(sqlite3_stmt *stmt, int column,
+                                    sm_app_db_game_info_t *entry) {
   // ShellCore updates these JSON values while the top-level timestamp columns
   // can remain at their initial install values.
   const unsigned char *text = sqlite3_column_text(stmt, column);
@@ -584,12 +587,17 @@ static void apply_app_info_timestamps(sqlite3_stmt *stmt, int column,
 
   struct json_object *app_info =
       json_tokener_parse((const char *)text);
-  if (!app_info)
+  if (!json_object_is_type(app_info, json_type_object)) {
+    json_object_put(app_info);
     return;
+  }
   copy_json_string(app_info, "#_last_access_time", entry->last_access_time,
                    sizeof(entry->last_access_time));
   copy_json_string(app_info, "#_install_time", entry->install_time,
                    sizeof(entry->install_time));
+  if (!copy_json_string(app_info, "CONTENT_VERSION", entry->version,
+                        sizeof(entry->version)))
+    copy_json_string(app_info, "APP_VER", entry->version, sizeof(entry->version));
   json_object_put(app_info);
 }
 
@@ -666,7 +674,7 @@ bool app_db_game_info_snapshot(sm_app_db_game_info_t **entries_out,
       sqlite3_int64 installed_size = sqlite3_column_int64(stmt, 7);
       entry->installed_size =
           installed_size > 0 ? (uint64_t)installed_size : 0;
-      apply_app_info_timestamps(stmt, 8, entry);
+      apply_app_info_metadata(stmt, 8, entry);
       copy_sqlite_text(stmt, 9, entry->metadata_path,
                        sizeof(entry->metadata_path));
       continue;

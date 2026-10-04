@@ -123,7 +123,9 @@ Image items expose `path`, `mount_point`, `size`, modification time, `unit_id`,
 combine ShadowMount's game cache with `tbl_contentinfo` from app.db. They expose
 the physical `path`, `runtime_path`, `source_type` (`folder` or `image`), image
 filesystem type, PS4/PS5 platform, title/content IDs, name, last-launch and
-install timestamps, relative `icon_url`, app.db size, and runtime state.
+install timestamps, game `version`, relative `icon_url`, app.db size, and runtime state.
+`version` comes from `AppInfoJson` (`CONTENT_VERSION`, falling back to `APP_VER`)
+and is an empty string when unavailable.
 The timestamp values from `AppInfoJson` (`#_last_access_time` and
 `#_install_time`) take precedence over the stale top-level columns when they
 are present.

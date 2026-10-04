@@ -1113,6 +1113,7 @@ static struct json_object *game_to_json(
       !add_json_string(item, "title_id", source->title_id) ||
       !add_json_string(item, "content_id", content_id) ||
       !add_json_string(item, "title_name", title_name) ||
+      !add_json_string(item, "version", metadata ? metadata->version : "") ||
       !add_json_string(item, "last_access_time", last_access_time) ||
       !add_json_string(item, "install_time", install_time) ||
       !add_json_string(item, "icon_url", icon_url) ||

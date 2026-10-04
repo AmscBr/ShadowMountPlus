@@ -13,6 +13,7 @@ typedef struct {
   char title_id[MAX_TITLE_ID];
   char content_id[MAX_CONTENT_ID];
   char title_name[MAX_TITLE_NAME];
+  char version[MAX_GAME_VERSION];
   char last_access_time[MAX_APP_DB_TIMESTAMP];
   char install_time[MAX_APP_DB_TIMESTAMP];
   char icon_path[MAX_PATH];

@@ -1578,6 +1578,7 @@ components:
         - title_id
         - content_id
         - title_name
+        - version
         - last_access_time
         - install_time
         - icon_url
@@ -1615,6 +1616,9 @@ components:
           type: string
         title_name:
           type: string
+        version:
+          type: string
+          description: AppInfoJson CONTENT_VERSION (PS5) or APP_VER (PS4), or an empty string when unavailable.
         last_access_time:
           type: string
           description: AppInfoJson #_last_access_time value, falling back to app.db lastAccessTime, or an empty string.
