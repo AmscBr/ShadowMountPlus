@@ -932,48 +932,44 @@ static bool copy_regular_file_path(const char *path, char out[MAX_PATH]) {
 static bool resolve_game_icon_path(const char *title_id,
                                    const char *recorded_path,
                                    char out[MAX_PATH]) {
-  char appmeta_root[MAX_PATH];
-  char app_sce_sys_root[MAX_PATH];
-  char candidate[MAX_PATH];
-  int appmeta_written = snprintf(appmeta_root, sizeof(appmeta_root), "%s/%s",
-                                 APPMETA_BASE, title_id);
-  int app_written = snprintf(app_sce_sys_root, sizeof(app_sce_sys_root),
-                             "%s/%s/sce_sys", APP_BASE, title_id);
-  if (appmeta_written < 0 ||
-      (size_t)appmeta_written >= sizeof(appmeta_root) || app_written < 0 ||
-      (size_t)app_written >= sizeof(app_sce_sys_root)) {
-    return false;
+  static const char *const storage_prefixes[] = {
+      "", "/mnt/ext0", "/mnt/ext0/ps5", "/mnt/ext1", "/mnt/ext1/ps5"};
+  static const struct {
+    const char *base;
+    const char *suffix;
+  } icon_dirs[] = {
+      {APP_BASE, ""}, {APPMETA_BASE, ""}, {APP_BASE, "/sce_sys"}};
+  char recorded_icon[MAX_PATH] = {0};
+  if (recorded_path) {
+    size_t length = strcspn(recorded_path, "?");
+    if (length < sizeof(recorded_icon))
+      memcpy(recorded_icon, recorded_path, length);
   }
 
-  int written = snprintf(candidate, sizeof(candidate), "%s/%s/icon0.png",
-                         APP_BASE, title_id);
-  if (written > 0 && (size_t)written < sizeof(candidate) &&
-      copy_regular_file_path(candidate, out)) {
-    return true;
-  }
-  written = snprintf(candidate, sizeof(candidate), "%s/icon0.png",
-                     appmeta_root);
-  if (written > 0 && (size_t)written < sizeof(candidate) &&
-      copy_regular_file_path(candidate, out)) {
-    return true;
-  }
+  for (size_t i = 0;
+       i < sizeof(storage_prefixes) / sizeof(storage_prefixes[0]); ++i) {
+    for (size_t j = 0; j < sizeof(icon_dirs) / sizeof(icon_dirs[0]); ++j) {
+      char root[MAX_PATH];
+      int written = snprintf(root, sizeof(root), "%s%s/%s%s",
+                             storage_prefixes[i], icon_dirs[j].base,
+                             title_id, icon_dirs[j].suffix);
+      if (written <= 0 || (size_t)written >= sizeof(root))
+        continue;
 
-  if (recorded_path && recorded_path[0] != '\0') {
-    (void)strlcpy(candidate, recorded_path, sizeof(candidate));
-    char *query = strchr(candidate, '?');
-    if (query)
-      *query = '\0';
-    if ((path_matches_root_or_child(candidate, appmeta_root) ||
-         path_matches_root_or_child(candidate, app_sce_sys_root)) &&
-        copy_regular_file_path(candidate, out)) {
-      return true;
+      char candidate[MAX_PATH];
+      written = snprintf(candidate, sizeof(candidate), "%s/icon0.png", root);
+      if (written > 0 && (size_t)written < sizeof(candidate) &&
+          copy_regular_file_path(candidate, out)) {
+        return true;
+      }
+      // Recorded icons belong to appmeta or sce_sys, never the app root.
+      if (j != 0 && path_matches_root_or_child(recorded_icon, root) &&
+          copy_regular_file_path(recorded_icon, out)) {
+        return true;
+      }
     }
   }
-
-  written = snprintf(candidate, sizeof(candidate), "%s/icon0.png",
-                     app_sce_sys_root);
-  return written > 0 && (size_t)written < sizeof(candidate) &&
-         copy_regular_file_path(candidate, out);
+  return false;
 }
 
 static bool resolve_installed_pkg_game(
