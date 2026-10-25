@@ -134,6 +134,11 @@ combine ShadowMount's game cache with `tbl_contentinfo` from app.db. They expose
 the physical `path`, `runtime_path`, `source_type` (`folder` or `image`), image
 filesystem type, PS4/PS5 platform, title/content IDs, name, last-launch and
 install timestamps, game `version`, relative `icon_url`, app.db size, and runtime state.
+`backport_path` contains the directory found by the shared backport resolver,
+or an empty string when absent. It respects configured roots, the internal
+fallback and title-prefix matching. This reports presence independently of
+fakelib policy or whether an overlay is currently mounted. The library shows
+a Backport badge and details display the resolved path.
 Icon requests without `size` return the original PNG. `size=thumb` retains the
 legacy PNG variant capped at 128 pixels. `size=card` and `size=cover` are capped
 at 256 and 512 pixels: opaque icons use JPEG quality 90 with 4:4:4 sampling;
@@ -384,3 +389,161 @@ snapshots. It also runs 16 parallel version requests while one client holds an
 incomplete request open, then selects the first safe managed game for a
 mount/unmount cycle. The mutation test is skipped if there is no candidate or
 the runtime is busy.
+
+
+### PKG installation and browser streaming
+
+`pkg_install` and `pkg_browser_stream` capabilities advertise the package tab.
+`POST /api/v1/packages` accepts `{"path":"/data/pkgs","offset":0}` and returns
+`path`, `parent`, available `roots`, `entries`, `offset` and `truncated`.
+An empty path lists available roots. Each page contains up to 256 folders/PKGs;
+advance `offset` by 256 when `truncated` is true. Browsing is non-recursive and
+restricted to internal `/data`, mounted `/mnt/usb0..7` and `/mnt/ext0..1`.
+`/data/pkgs` remains a shortcut. Symlinks and installed content trees are excluded. Valid package entries expose
+`title_id`, `title_name`, `content_id`, `version`, `kind` (base/patch/dlc) and
+`size_bytes`. Invalid packages remain visible with `installable=false`.
+Valid entries also include `installed` (base packages installed as native PKGs), `base_installed`,
+`base_queued`, `has_icon` and `icon_revision`. A folder/image registration counts
+as `base_installed` but not `installed`: its base PKG can be installed or queued,
+and the UI labels that action Replace. Native PKG bases are labelled Installed,
+patches with an installed base as Update, and missing dependencies
+as No base game. Direct patch/DLC installation requires the base to be installed.
+`GET /api/v1/packages/icon?path=...&v=...` extracts the embedded icon0.png from a
+permitted PKG. The image is limited to 4 MiB, with file bounds and PNG signature
+checks; packages without artwork use a placeholder.
+
+`POST /api/v1/files` supplies the path picker for scan roots, individual game
+sources and storage destinations. It accepts `path` (empty for drives), `offset`
+and `include_files` (boolean, default false). The response has the same listing
+envelope as `/packages`: `roots`, `path`, `parent`, `offset`, `truncated` and
+`entries` containing `name`, `path`, `directory`, `size_bytes` and
+`installable=false`. It returns directories only unless files are requested,
+never reads package metadata, and uses the same drive restrictions and 256-entry
+pagination. Selecting a path only fills the input; it does not save settings,
+add a source or start a storage operation.
+
+The Installation view also recognises backport directories named
+`^(PPSA|CUSA)[0-9]{5}.*`, containing a real `fakelib` subdirectory and no
+`sce_sys/keystone` entry. Such directory rows expose `backport=true`,
+`backport_installed` and their nine-character `title_id`. Installed-game metadata
+is matched by Title ID from one app.db snapshot per listing: `title_name`,
+`version` and the versioned `icon_url`. Missing games return empty metadata;
+the UI shows a controller placeholder and a localised Unknown game label.
+`sdk_version` comes from the backport's own `eboot.bin` process parameter
+(plain ELF or readable, uncompressed SELF), independently of the installed
+game. The probe reads bounded headers and 24 parameter bytes, not the full
+executable. Missing, malformed, encrypted or compressed data returns zero and
+the UI omits the SDK label. PKG SDK parsing still uses param.json/param.sfo.
+`POST /api/v1/backports/install` accepts `{"path":"/mnt/usb0/PPSA12345 Game"}`
+and copies the whole directory to `/data/homebrew/backports/<original name>`.
+It returns HTTP 202 with the shared storage-job response (`operation=copy`,
+`source_type=backport`). It uses the existing cancellation, progress and mutation
+gates. The list labels these folders as backports and offers Replace backport
+when the same destination already exists. A complete copy is staged beside the
+destination before replacement; failed/cancelled copies leave the installed
+version intact. The short final rename step closes cancellation and rolls back
+the previous directory if publishing the new one fails. The source is preserved.
+Installing a destination over itself or an ancestor is rejected.
+No game registration is required.
+
+`POST /api/v1/backports/delete` accepts the same `path` and removes exactly the
+selected backport directory, including its contents. It does not substitute the
+corresponding internal installation path. The directory must still satisfy the
+backport rules at request time and when the worker starts. The shared job uses
+`operation=delete`, `source_type=backport` and an empty destination; progress is
+shown in the common background-operation popup and the list refreshes when done.
+The existing mutation gates and active-game protections apply. Cancellation is
+available during preparation/measurement; recursive deletion is irreversible
+once it starts. The UI confirms the full selected path before submitting.
+
+`POST /api/v1/packages/queue` accepts `action` (`status`, `add`, `remove`, `clear`
+or `start`), and `path` for add/remove. The payload owns up to 32 pending local
+packages. A queued or currently installing base permits enqueueing its patches
+and DLC, which still require an installed base when their turn begins. Duplicate
+packages and bases already installed as PKGs cannot be queued. Removing a queued base
+also removes its dependents if the base is not installed. Clear removes pending
+items; cancellation stops the current batch and clears its remaining items.
+The same happens on a batch failure. No files are deleted or retried.
+Starting returns HTTP 202 with StorageJobResponse; other actions return HTTP 200
+with `queue_running`, `queue_completed`, `queue_total` and pending `entries`.
+The queue runs sequentially in the existing storage worker, keeps its mutation
+gates through the batch, survives browser closure and scans once after any
+successful installs. It is kept in memory until payload shutdown.
+Storage status adds `queue_count`, `queue_completed`, `queue_total`,
+`queue_running` and the current `package_kind`; its job ID covers the batch.
+
+`POST /api/v1/packages/install` accepts `{"path":"/mnt/usb0/packages/game.pkg"}`.
+It submits the package to the existing AppInstUtil session over an on-demand
+loopback range server. There is one shared job slot for installation and file
+operations, with the same scanner/runtime mutation gates. Patches and DLC
+require an installed base game. Sources are not deleted or automatically retried.
+Local file identity, size and modification times are checked before and during
+installation. System errors preserve the raw `native_status` code.
+
+For a file on a computer, `POST /api/v1/packages/stream` accepts
+`{"name":"game.pkg","size":123456}` and returns the job plus a private `token`.
+The response advertises `chunk_bytes` (512 KiB) and `stream_port`. Connect to
+`ws://<console>:<stream_port>/<token>/ws` on the existing on-demand package
+server. One source connection is accepted per job. Server text messages are
+`{"op":"ready","window":2}`, `{"op":"range","id":1,"offset":0,"size":524288}`
+and `{"op":"ack","id":1}`. Reply to each range with a binary message containing
+a little-endian 64-bit range ID followed by exactly the requested bytes.
+Two reads/transfers overlap; an acknowledgement releases its window slot.
+Demand notifications wake the connection immediately, without polling.
+The server closes the connection when the operation ends; disconnecting the
+source fails pending reads immediately with `pkg_stream_lost`. Explicit cancellation
+remains a separate cancelled job. Keep the browser page open until completion.
+
+The stream retains up to 64 aligned 512 KiB segments (32 MiB) in RAM and pins
+the header. Bulk reads look ahead at most eight segments, with at most sixteen
+pending requests before speculation stops. Actual reader demand takes priority.
+Speculation can evict only already-consumed segments; demanded reads can reclaim
+ready segments without active readers. This prevents competing read-ahead windows
+from repeatedly discarding each other's unread data. No staging PKG is saved to
+storage. The installer only counts each delivered byte once.
+
+Compatibility clients can use two concurrent
+`POST /api/v1/packages/stream/request` clients, with
+`{"token":"...","client":1}` or client 2. Each returns an `id`, `offset` and
+`size` immediately; id=0 means no pending range. Idle clients wait 16?100 ms
+before polling again. Reply with
+`POST /api/v1/packages/stream/chunk?token=...&id=...`, Content-Type
+`application/octet-stream`, and exactly that range's bytes. Successful range
+and chunk responses keep the HTTP connection alive. Stable client IDs reclaim
+an unacknowledged range after a lost response. Repeated buffered replies are
+accepted only if their bytes match; an evicted range returns HTTP 409.
+Only transient HTTP transport failures are recovered, at most three consecutive
+failures per client, with 150/300/600 ms delays. The install is never restarted.
+Expired sessions return 404/410.
+
+Both modes publish `operation=install` and `state=preparing|installing` through
+`/api/v1/games/storage/status` and use its existing cancellation endpoint.
+The popup shows the package name, bytes, speed, elapsed time and system state.
+Progress uses AppInstUtil downloaded/total counters when available, with HTTP
+coverage as a fallback. Speed is sampled from byte deltas once per second and
+becomes zero when progress stops. System completion does not require fetching
+PKG padding or unused ranges. An early playable state only completes the job
+after all system bytes and any local copy are finished. Cancellation calls
+AppInstUtil CancelInstall and retires the stream and its connections. Sleep
+latches cancellation for both disk and PC installations, including coalesced
+sleep/resume events. The install worker retires its per-attempt HTTP/WebSocket
+listener and any running queue; the interrupted installation must be restarted.
+The main API listener is recreated automatically after resume using its existing
+bounded bind-recovery backoff. A new installation creates fresh sockets and a
+new stream token. Shutdown uses the same cleanup path.
+A 15-minute inactivity deadline follows progress,
+not the total installation duration.
+
+The PKG parser/range-server foundation was adapted from
+[PR #157](https://github.com/drakmor/ShadowMountPlus/pull/157), with additional
+range, lifetime and source-validation fixes. The browser streaming approach
+was informed by the local ps5-pkg-manager implementation. AppInstUtil uses the
+payload's existing initialization and authid; no helper process or elfldr
+connection is introduced.
+
+Package list and queue entries also include `sdk_version`, an unsigned packed
+SDK value (for example `0x07508000` displays as `SDK 7.50`), or zero if unavailable.
+PS5 values come from `param.json.sdkVersion` (the high 32 bits of the standard
+64-bit hex string). PS4 values come from `param.sfo`'s `PUBTOOLINFO.sdk_ver`.
+Only these metadata fields are used; a zero/missing value remains unknown and
+never prevents installation. Minimum firmware requirements are separate fields.

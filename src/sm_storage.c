@@ -399,6 +399,75 @@ static int delete_storage_path(const char *path,
   return result;
 }
 
+int sm_storage_replace_directory_progress(const char *source, const char *destination,
+                                          sm_storage_progress_fn progress,
+                                          sm_storage_cancel_fn cancel,
+                                          sm_storage_finalize_fn begin_finalize,
+                                          void *ctx) {
+  if (!valid_storage_transfer_paths(source, destination)) return -1;
+  if (path_matches_root_or_child(source, destination)) {
+    errno = EINVAL;
+    return -1;
+  }
+  struct stat st;
+  if (lstat(source, &st) != 0) return -1;
+  if (!S_ISDIR(st.st_mode)) { errno = ENOTDIR; return -1; }
+  if (lstat(destination, &st) == 0) {
+    if (!S_ISDIR(st.st_mode)) { errno = ENOTDIR; return -1; }
+    // Resolve aliases before copying: replacing an ancestor of the physical
+    // source would remove the source while cleaning up the previous tree.
+    char resolved_source[PATH_MAX], resolved_destination[PATH_MAX];
+    if (!realpath(source, resolved_source) || !realpath(destination, resolved_destination))
+      return -1;
+    if (path_matches_root_or_child(resolved_source, resolved_destination)) {
+      errno = EINVAL;
+      return -1;
+    }
+  } else if (errno != ENOENT) return -1;
+  char staging[MAX_PATH], fresh[MAX_PATH], previous[MAX_PATH];
+  if (strlcpy(staging, destination, sizeof(staging)) >= sizeof(staging)) {
+    errno = ENAMETOOLONG;
+    return -1;
+  }
+  char *name = strrchr(staging, '/');
+  *name = 0;
+  if (join_storage_path(staging[0] ? staging : "/", ".backport-XXXXXX", fresh) != 0)
+    return -1;
+  (void)strlcpy(staging, fresh, sizeof(staging));
+  if (!mkdtemp(staging)) return -1;
+  int status = 0;
+  bool keep_previous = false;
+  if (join_storage_path(staging, "new", fresh) != 0 ||
+      join_storage_path(staging, "old", previous) != 0 ||
+      sm_storage_copy_path_progress(source, fresh, progress, cancel, ctx) != 0) {
+    status = errno ? errno : EIO;
+  } else if (storage_operation_cancelled(cancel, ctx) ||
+             (begin_finalize && !begin_finalize(ctx))) {
+    status = ECANCELED;
+  } else {
+    // Only the short commit step is non-cancellable. Keep the previous tree
+    // until the complete new copy has taken its final name.
+    if (lstat(destination, &st) == 0) {
+      if (!S_ISDIR(st.st_mode)) status = ENOTDIR;
+      else if (rename(destination, previous) != 0) status = errno;
+      else keep_previous = true;
+    } else if (errno != ENOENT) status = errno;
+    if (status == 0 && rename(fresh, destination) != 0) {
+      status = errno;
+      if (keep_previous && rename(previous, destination) == 0)
+        keep_previous = false;
+    } else if (status == 0) {
+      keep_previous = false;
+    }
+  }
+  // If rollback itself failed, retain the backup for recovery. Cleanup is
+  // otherwise unconditional, including during shutdown, like copy cleanup.
+  if (!keep_previous && delete_storage_path(staging, NULL, NULL) != 0 && status == 0)
+    status = errno ? errno : EIO;
+  if (status != 0) { errno = status; return -1; }
+  return 0;
+}
+
 int sm_storage_delete_path(const char *path) {
   return sm_storage_delete_path_progress(path, NULL, NULL);
 }

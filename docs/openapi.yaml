@@ -25,6 +25,7 @@ tags:
   - name: Manual sources
   - name: Images
   - name: Games
+  - name: Packages
 
 paths:
   /:
@@ -888,6 +889,273 @@ paths:
         "501":
           $ref: "#/components/responses/NotImplemented"
 
+  /api/v1/packages:
+    post:
+      operationId: listPackages
+      summary: Browse one folder of package sources
+      tags: [Packages]
+      description: Internal /data plus mounted external USB/ext drives are allowed; /data/pkgs remains a shortcut. Installed app/patch/addcont trees and symlinks are excluded. Lists at most 256 entries per page without recursion.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                path: {type: string, default: ""}
+                offset: {type: integer, minimum: 0, maximum: 1000000, default: 0}
+      responses:
+        "200":
+          description: Successful package request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PackageListing"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Busy"
+
+  /api/v1/backports/install:
+    post:
+      operationId: installBackport
+      summary: Copy a detected backport into the internal backports folder
+      tags: [Packages]
+      description: Requires a directory named PPSA or CUSA followed by five digits and any suffix, a fakelib subdirectory and no sce_sys/keystone. Copies to /data/homebrew/backports with the original name. Existing destinations are replaced after staging a complete copy; failed or cancelled copies preserve the installed version. The final rename step closes cancellation and restores the previous directory if publishing fails. Source and destination must not overlap. Uses the shared storage job with operation=copy and source_type=backport.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path: {type: string}
+      responses:
+        "202":
+          description: Backport copy accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorageJobResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Busy"
+
+  /api/v1/backports/delete:
+    post:
+      operationId: deleteBackport
+      summary: Delete the selected backport directory and its contents
+      tags: [Packages]
+      description: Validates the selected directory as a backport and deletes that exact path through the shared storage worker. Does not redirect to the internal installed copy. Existing mutation and active-game guards apply. The job uses operation=delete and source_type=backport. Preparation can be cancelled; recursive deletion cannot be cancelled once started.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path: {type: string}
+      responses:
+        "202":
+          description: Backport deletion accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorageJobResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Busy"
+
+  /api/v1/files:
+    post:
+      operationId: browseFiles
+      summary: Browse drives and select a directory or a game source
+      tags: [Storage]
+      description: Read-only path picker. Uses the same drive restrictions and pagination as the package browser, without parsing package metadata. Installed content trees and symlinks are excluded; /user is not a browse root. Entries have installable=false.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                path: {type: string, default: ""}
+                offset: {type: integer, minimum: 0, maximum: 1000000, default: 0}
+                include_files: {type: boolean, default: false}
+      responses:
+        "200":
+          description: Directories and optionally regular files
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PackageListing"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Path is outside the supported browse roots
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/packages/icon:
+    get:
+      operationId: getPackageIcon
+      summary: Extract embedded icon0.png from a local PKG
+      tags: [Packages]
+      parameters:
+        - {in: query, name: path, required: true, schema: {type: string, maxLength: 1023}}
+        - {in: query, name: v, schema: {type: string}, description: Source revision for browser caching.}
+      responses:
+        "200":
+          description: Bounded PNG artwork from an allowed package source (up to 4 MiB).
+          content:
+            image/png:
+              schema: {type: string, format: binary}
+        "404":
+          description: Package or artwork not available.
+
+  /api/v1/packages/queue:
+    post:
+      operationId: updatePackageQueue
+      summary: Manage the payload-owned sequential local PKG queue
+      tags: [Packages]
+      description: Up to 32 pending packages. Queued bases permit adding their patches and DLC. Start uses the shared storage job; errors and cancellation stop the batch and clear remaining items. Browser closure does not stop the batch.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action: {type: string, enum: [status, add, remove, clear, start], default: status}
+                path: {type: string, maxLength: 1023, description: Required for add and remove.}
+      responses:
+        "200":
+          description: Pending queue and batch state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PackageQueue"
+        "202":
+          description: Batch started in the shared storage worker.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorageJobResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Busy"
+
+  /api/v1/packages/install:
+    post:
+      operationId: installPackage
+      summary: Install a local PKG through AppInstUtil
+      tags: [Packages]
+      description: Shares the storage job slot and mutation gates. Patches and DLC require an installed base game. No automatic retry or deletion of the source.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path]
+              properties:
+                path: {type: string, maxLength: 1023}
+      responses:
+        "202":
+          description: Successful package request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorageJobResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Busy"
+
+  /api/v1/packages/stream:
+    post:
+      operationId: streamPackage
+      summary: Open a RAM-backed browser package source
+      tags: [Packages]
+      description: Returns a private token and stream_port. Connect to ws://console:stream_port/token/ws for a two-block binary range stream (uint64 little-endian ID followed by bytes). A 32 MiB RAM cache retains aligned 512 KiB segments; speculative reads preserve unread data; no staging PKG is written. HTTP range endpoints remain available for compatibility. Keep the source page open until installation ends.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, size]
+              properties:
+                name: {type: string, maxLength: 255}
+                size: {type: integer, format: int64, minimum: 1}
+      responses:
+        "202":
+          description: Successful package request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PackageStreamResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Busy"
+
+  /api/v1/packages/stream/request:
+    post:
+      operationId: requestPackageRange
+      summary: Claim a range requested by the package installer
+      tags: [Packages]
+      description: Returns immediately without blocking an HTTP worker. id=0 means no pending range; browser clients wait 16?100 ms before polling again. Stable client IDs reclaim an unacknowledged range. Session expiration returns 404 or 410. The web UI uses two clients.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: {type: string, minLength: 32, maxLength: 32}
+                client: {type: integer, minimum: 1, maximum: 4, description: Stable source client for reclaiming unacknowledged ranges.}
+      responses:
+        "200":
+          description: Successful package request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PackageRange"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Busy"
+
+  /api/v1/packages/stream/chunk:
+    post:
+      operationId: replyPackageRange
+      summary: Supply one requested range without writing to disk
+      tags: [Packages]
+      parameters:
+        - {name: token, in: query, required: true, schema: {type: string, minLength: 32, maxLength: 32}}
+        - {name: id, in: query, required: true, schema: {type: integer, minimum: 1}}
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: {type: string, format: binary, maxLength: 524288}
+      responses:
+        "200":
+          description: Range accepted; response contains status=0.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          description: Range exceeds 512 KiB.
+
 components:
   requestBodies:
     EmptyRequest:
@@ -1451,8 +1719,8 @@ components:
           type: array
           items:
             type: string
-            enum: [web_ui, storage_space, list_images, list_games, game_info, game_data_sizes, game_icon, mount_game, unmount_game, uninstall_game, move_game_source, copy_game_source, delete_game_source, unpack_game_image, storage_job_status, storage_job_cancel, list_manual_sources, add_manual_source, remove_manual_source, manage_settings, read_debug_log, read_kernel_log, rescan]
-          example: [web_ui, storage_space, list_images, list_games, game_info, game_data_sizes, game_icon, mount_game, unmount_game, uninstall_game, move_game_source, copy_game_source, delete_game_source, unpack_game_image, storage_job_status, storage_job_cancel, list_manual_sources, add_manual_source, remove_manual_source, manage_settings, read_debug_log, read_kernel_log, rescan]
+            enum: [web_ui, storage_space, list_images, list_games, game_info, game_data_sizes, pkg_install, pkg_browser_stream, game_icon, mount_game, unmount_game, uninstall_game, move_game_source, copy_game_source, delete_game_source, unpack_game_image, storage_job_status, storage_job_cancel, list_manual_sources, add_manual_source, remove_manual_source, manage_settings, read_debug_log, read_kernel_log, rescan]
+          example: [web_ui, storage_space, list_images, list_games, game_info, game_data_sizes, pkg_install, pkg_browser_stream, game_icon, mount_game, unmount_game, uninstall_game, move_game_source, copy_game_source, delete_game_source, unpack_game_image, storage_job_status, storage_job_cancel, list_manual_sources, add_manual_source, remove_manual_source, manage_settings, read_debug_log, read_kernel_log, rescan]
 
     StorageMount:
       type: object
@@ -1610,6 +1878,7 @@ components:
       required:
         - path
         - runtime_path
+        - backport_path
         - source_type
         - image_type
         - platform
@@ -1643,6 +1912,9 @@ components:
         runtime_path:
           type: string
           description: Runtime game directory used by ShadowMount; empty for installed PKGs.
+        backport_path:
+          type: string
+          description: Backport directory found using the shared title backport resolver; empty when absent. Presence does not imply that fakelib is enabled or the overlay is mounted.
         source_type:
           type: string
           enum: [folder, image, pkg]
@@ -1802,10 +2074,10 @@ components:
           minimum: 0
         operation:
           type: string
-          enum: ["", move, copy, delete, unpack]
+          enum: ["", move, copy, delete, unpack, install]
         state:
           type: string
-          enum: [idle, preparing, measuring, transferring, deleting, finalizing, completed, failed, cancelled]
+          enum: [idle, preparing, measuring, transferring, deleting, finalizing, installing, completed, failed, cancelled]
         active:
           type: boolean
         cancellable:
@@ -1814,9 +2086,19 @@ components:
           type: boolean
         title_id:
           type: string
+        title_name:
+          type: string
+        native_status:
+          type: integer
+          description: Raw AppInstUtil result; format as unsigned eight-digit hexadecimal for display.
+        queue_count: {type: integer, minimum: 0, maximum: 32}
+        queue_completed: {type: integer, minimum: 0}
+        queue_total: {type: integer, minimum: 0}
+        queue_running: {type: boolean}
+        package_kind: {type: string, enum: [unknown, base, patch, dlc]}
         source_type:
           type: string
-          enum: ["", folder, image]
+          enum: ["", folder, image, pkg, stream, backport]
         source:
           type: string
         runtime_source:
@@ -1852,7 +2134,7 @@ components:
           type: integer
           format: int64
           minimum: 0
-          description: Average processed-byte rate since transfer or deletion began.
+          description: Average processed-byte rate since transfer or deletion began. PKG installation uses recent system byte deltas (HTTP coverage until system counters are available), sampled about once per second; stalled or inactive installs report zero.
         elapsed_ms:
           type: integer
           format: int64
@@ -2018,4 +2300,81 @@ components:
     OperationErrorReason:
       type: string
       description: Stable reason code for localized operation errors; empty for generic errno failures.
-      enum: ["", rest_mode, game_active, install_pending, runtime_prepared, scanner_busy, runtime_busy, title_unmount_busy, image_unmount_busy, unpack_mounted, storage_busy, storage_unavailable]
+      enum: ["", rest_mode, game_active, install_pending, runtime_prepared, scanner_busy, runtime_busy, title_unmount_busy, image_unmount_busy, unpack_mounted, storage_busy, storage_unavailable, pkg_invalid, pkg_base_missing, pkg_stream_lost, pkg_source_changed, pkg_already_installed, pkg_queued, pkg_queue_full]
+
+    PackageListing:
+      type: object
+      required: [status, path, parent, roots, entries, offset, truncated]
+      properties:
+        status: {type: integer, const: 0}
+        path: {type: string}
+        parent: {type: string}
+        roots: {type: array, items: {type: string}}
+        offset: {type: integer, minimum: 0}
+        truncated: {type: boolean}
+        entries:
+          type: array
+          maxItems: 256
+          items:
+            type: object
+            required: [name, path, directory, installable, size_bytes]
+            properties:
+              name: {type: string}
+              path: {type: string}
+              directory: {type: boolean}
+              installable: {type: boolean}
+              backport: {type: boolean}
+              backport_installed: {type: boolean}
+              size_bytes: {type: integer, format: int64}
+              title_id: {type: string}
+              title_name: {type: string}
+              icon_url: {type: string, description: Versioned installed-game cover URL for backports; empty when unavailable.}
+              content_id: {type: string}
+              version: {type: string}
+              sdk_version: {type: integer, minimum: 0, maximum: 4294967295, description: Packed SDK from param.json/param.sfo for PKGs or the backport eboot.bin process parameter; zero when unavailable.}
+              kind: {type: string, enum: [base, patch, dlc, unknown]}
+              installed: {type: boolean, description: The base game is already installed as a native PKG.}
+              base_installed: {type: boolean, description: A base game is registered from a PKG or a folder/image source.}
+              base_queued: {type: boolean}
+              has_icon: {type: boolean}
+              icon_revision: {type: string}
+    PackageQueue:
+      type: object
+      required: [status, queue_running, queue_completed, queue_total, entries]
+      properties:
+        status: {type: integer, const: 0}
+        queue_running: {type: boolean}
+        queue_completed: {type: integer, minimum: 0}
+        queue_total: {type: integer, minimum: 0}
+        entries:
+          type: array
+          maxItems: 32
+          items:
+            type: object
+            required: [path, title_id, title_name, content_id, version, kind]
+            properties:
+              path: {type: string}
+              title_id: {type: string}
+              title_name: {type: string}
+              content_id: {type: string}
+              version: {type: string}
+              sdk_version: {type: integer, minimum: 0, maximum: 4294967295, description: Packed param.json/param.sfo SDK version; zero when unavailable.}
+              kind: {type: string, enum: [base, patch, dlc, unknown]}
+    PackageStreamResponse:
+      type: object
+      description: StorageJobResponse fields plus the private browser source token and on-demand WebSocket port.
+      required: [status, job_id, token, stream_port, chunk_bytes]
+      properties:
+        status: {type: integer, const: 0}
+        job_id: {type: integer, minimum: 1}
+        token: {type: string, minLength: 32, maxLength: 32}
+        stream_port: {type: integer, minimum: 1, maximum: 65535}
+        chunk_bytes: {type: integer, const: 524288}
+    PackageRange:
+      type: object
+      required: [status, id, offset, size]
+      properties:
+        status: {type: integer, const: 0}
+        id: {type: integer, minimum: 0}
+        offset: {type: integer, format: int64, minimum: 0}
+        size: {type: integer, minimum: 0, maximum: 524288}

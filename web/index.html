@@ -412,6 +412,9 @@
     .subtle { font-size: 15px; }
     .brand #version { font-size: 12px; margin-top: 3px; }
     .view-nav { display: flex; gap: 6px; padding: 4px; border: 1px solid var(--line); border-radius: 30px; background: #0b1628; }
+    .view-nav::before, .view-nav::after { align-self: center; margin: 0 6px; padding: 2px 5px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); font-size: 12px; }
+    .view-nav::before { content: "L1"; }
+    .view-nav::after { content: "R1"; }
     .view-nav .view-tab { border: 0; border-radius: 24px; background: transparent; padding: 0 22px; min-height: 44px; color: var(--muted); }
     .view-tab.active { background: #dceeff; color: #0c2340; }
     .topbar-actions { gap: 22px; }
@@ -429,10 +432,50 @@
     .stat { display: flex; align-items: baseline; gap: 8px; padding: 0; border: 0; background: none; border-radius: 0; }
     .stat-value { order: -1; margin: 0; font-size: 19px; font-weight: 650; }
     .stat .subtle { font-size: 14px; }
-    .storage-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 18px; margin-left: auto; color: var(--muted); font-size: 14px; }
-    .storage-summary span { white-space: nowrap; }
+    .storage-summary { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 18px; margin-left: auto; color: var(--muted); font-size: 14px; }
+    .storage-summary-item { display: flex; flex-direction: column; gap: 5px; min-width: 140px; max-width: 100%; }
+    .storage-summary-item > span { overflow-wrap: anywhere; }
+    .storage-summary .storage-meter { width: 100%; height: 3px; margin-top: 0; background: var(--green); }
     [dir="rtl"] .storage-summary { margin-left: 0; margin-right: auto; }
     .layout { display: block; }
+    .package-workbench { display: grid; grid-template-columns: 333.5px minmax(0, 1fr); gap: 24px; align-items: start; }
+    .backport-cover { background: radial-gradient(circle at 30% 20%, #2b5076, #17283e); }
+    .backport-cover svg { width: 40px; height: 40px; color: #9ebbd7; }
+    .package-sources { display: flex; flex-direction: column; gap: 18px; align-self: stretch; }
+    .package-sources .panel { padding: 18px; min-width: 0; flex-shrink: 0; }
+    .package-roots.console-list { display: grid; grid-auto-rows: 50px; gap: 8px; margin-top: 14px; max-height: 466px; overflow-y: auto; padding: 5px; }
+    .package-roots .btn { text-align: left; min-width: 0; overflow-wrap: anywhere; white-space: normal; }
+    .package-roots .active, .path-roots .active { border-color: var(--blue); background: #203d5e; }
+    .package-content { min-width: 0; }
+    .package-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+    .package-path { flex: 1; min-width: 120px; direction: ltr; overflow-wrap: anywhere; color: var(--muted); font-size: 15px; }
+    .package-list { display: grid; gap: 10px; }
+    .package-row { display: flex; align-items: center; gap: 18px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 14px; background: #101e32; min-width: 0; }
+    .package-info { flex: 1; min-width: 0; }
+    .package-info h3 { margin: 0 0 6px; font-size: 18px; overflow-wrap: anywhere; }
+    .package-info p { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+    .package-cover { width: 72px; height: 72px; flex: 0 0 72px; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: #21344d; overflow: hidden; color: var(--muted); font-size: 13px; }
+    .package-cover img { width: 100%; height: 100%; object-fit: cover; }
+    .package-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; width: 316px; flex-shrink: 0; max-width: 42%; }
+    .package-actions .btn { width: 100%; height: 56px; min-width: 0; min-height: 56px; padding: 8px 12px; font-size: 16px; line-height: 1.2; white-space: normal; overflow-wrap: anywhere; }
+    .package-queue { position: sticky; top: 16px; z-index: 2; display: flex; flex-direction: column; margin-top: 0; padding: 18px; }
+    .package-queue-head { flex-shrink: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+    .package-queue-head .btn { grid-column: 1 / -1; min-width: 0; width: 100%; padding: 10px 12px; white-space: normal; overflow-wrap: anywhere; }
+    .package-queue-head h3 { margin: 0; font-size: 18px; overflow-wrap: anywhere; }
+    .package-queue-list.console-list { min-height: 0; margin-top: 12px; display: grid; gap: 8px; max-height: none; overflow: visible; padding: 5px; }
+    .package-queue-row { display: flex; gap: 12px; align-items: center; min-width: 0; }
+    .package-queue-row span { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 15px; }
+    .btn.package-queue-remove { flex: 0 0 46px; width: 46px; height: 46px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+    .package-queue-remove svg { width: 22px; height: 22px; pointer-events: none; }
+    @media (max-width: 540px) { .package-cover { width: 56px; height: 56px; flex-basis: 56px; } .package-row:not(.package-folder) { flex-wrap: wrap; } .package-actions { width: 100%; max-width: none; } .package-actions .btn { flex: 1; } }
+    .package-folder { width: 100%; justify-content: flex-start; text-align: left; white-space: normal; }
+    .package-folder::before { content: ""; width: 26px; height: 21px; background: #88c7ff; border-radius: 3px; clip-path: polygon(0 0, 40% 0, 52% 18%, 100% 18%, 100% 100%, 0 100%); flex-shrink: 0; }
+    .package-row > .btn { flex-shrink: 0; min-width: 110px; max-width: 40%; white-space: normal; }
+    .package-remote { display: grid; gap: 12px; }
+    .package-remote h3, .package-remote p { margin: 0; }
+    .package-file { overflow-wrap: anywhere; font-size: 14px; }
+    @media (max-width: 850px) { .package-workbench { grid-template-columns: minmax(0, 1fr); } .package-sources { display: grid; align-self: start; grid-template-columns: repeat(2, minmax(0, 1fr)); } .package-queue { position: static; max-height: none; } }
+    @media (max-width: 540px) { .package-sources { display: contents; } .package-content { grid-row: 2; } .package-queue { grid-row: 3; } .package-remote { grid-row: 4; } .package-row { gap: 12px; padding: 14px; } .package-row > .btn { min-width: 90px; } }
     .section-head { margin: 0 0 18px; }
     .games { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 26px 20px; }
     .game-card { display: block; position: relative; min-width: 0; min-height: 0; padding: 9px; border: 2px solid transparent; border-radius: 18px; background: rgba(17, 30, 50, .7); transition: border-color .15s, background .15s; }
@@ -510,11 +553,30 @@
     body.dialog-open { overflow: hidden; }
     .modal { z-index: 10; grid-template-columns: minmax(0, 1fr); padding: 24px; background: rgba(3, 8, 17, .9); }
     #destinationModal, #logModal { z-index: 11; }
-    #confirmModal { z-index: 12; }
+    #pathModal { z-index: 12; }
+    #confirmModal { z-index: 13; }
+    .path-browse { flex: 0 0 50px; width: 50px; padding: 10px; }
+    .path-browse::before { content: ""; display: inline-block; width: 26px; height: 21px; background: currentColor; border-radius: 3px; clip-path: polygon(0 0, 40% 0, 52% 18%, 100% 18%, 100% 100%, 0 100%); }
+    .modal-card.path-card { width: 1000px; height: calc(100vh - 80px); max-height: 620px; }
+    .path-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 14px 20px; }
+    .path-current { flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
+    .path-body { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; padding: 0 20px 12px; flex: 1; min-height: 0; }
+    .path-body .console-list { min-height: 0; max-height: none; overflow-y: auto; }
+    .path-body .btn { width: 100%; min-width: 0; min-height: 50px; font-size: 18px; white-space: normal; overflow-wrap: anywhere; text-align: left; }
+    .path-roots, .path-entries { display: flex; flex-direction: column; gap: 8px; }
+    .path-entries .btn { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+    .path-pages { display: flex; align-items: center; justify-content: flex-end; gap: 14px; padding: 0 24px 12px; }
+    @media (max-width: 600px) {
+      .path-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); padding: 0 12px 12px; gap: 10px; }
+      .path-roots.console-list { flex-direction: row; overflow-x: auto; max-height: 80px; }
+      .path-roots .btn { width: auto; flex-shrink: 0; }
+      .path-toolbar { padding: 12px; }
+      .path-card .modal-actions .btn { white-space: normal; }
+    }
     .confirm-message { white-space: pre-wrap; overflow-wrap: anywhere; padding: 24px; }
     .unpack-option { margin: 0 18px 18px; }
     .modal-card { display: flex; flex-direction: column; width: 1000px; min-width: 0; max-width: 100%; max-height: 90vh; overflow: hidden; border-color: #536e90; background: #111f34; }
-    .modal-card.details-card { display: grid; grid-template-columns: 272px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; height: calc(100vh - 48px); max-height: 560px; }
+    .modal-card.details-card { display: grid; grid-template-columns: 272px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; height: calc(100vh - 48px); max-height: 620px; }
     .modal-head { flex-shrink: 0; padding: 24px; }
     .modal-head h2 { font-size: 26px; }
     .details-card .modal-head { grid-column: 2; grid-row: 1; min-width: 0; padding: 16px 20px 16px 0; }
@@ -582,6 +644,9 @@
       .details { grid-template-columns: 160px minmax(0, 1fr); }
     }
     @media (max-width: 540px) {
+      .view-nav { width: 100%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .view-nav::before, .view-nav::after { display: none; }
+      .view-nav .view-tab { min-width: 0; padding: 8px 6px; white-space: normal; font-size: 14px; line-height: 1.2; }
       .console-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .console-grid, .console-storage { grid-template-columns: minmax(0, 1fr); }
       .console-save { position: static; flex-direction: column; align-items: stretch; gap: 12px; }
@@ -650,6 +715,7 @@
       <nav class="view-nav" aria-label="Navigation" data-i18n-aria-label="navigate">
         <button class="btn view-tab active" id="libraryTab" type="button" aria-pressed="true" data-i18n="library">Library</button>
         <button class="btn view-tab" id="consoleTab" type="button" aria-pressed="false" data-i18n="consoleTools">Console</button>
+        <button class="btn view-tab" id="packagesTab" type="button" aria-pressed="false" data-i18n="packagesTab">Install PKG</button>
       </nav>
       <div class="topbar-actions">
         <div class="connection" id="connection" role="status">
@@ -691,6 +757,38 @@
         </div>
         <div class="games" id="games" aria-live="polite">
           <div class="empty" data-i18n="loadingLibrary">Loading library…</div>
+        </div>
+      </section>
+
+      <section class="package-workbench" id="packagesView" hidden aria-labelledby="packagesHeading">
+        <div class="package-sources">
+          <div class="panel"><h3 data-i18n="packageDevices">Drives and folders</h3><div class="package-roots console-list" id="packageRoots"></div></div>
+
+          <div class="panel package-remote" id="packageRemotePanel">
+            <h3 data-i18n="packageRemote">Stream from computer</h3>
+            <p class="subtle console-hint" data-i18n="packageRemoteHint">Keep this page open until installation finishes.</p>
+            <input id="packageFile" type="file" accept=".pkg" hidden>
+            <button class="btn" type="button" id="packageChoose" data-i18n="packageChooseFile">Choose PKG</button>
+            <span class="subtle package-file" id="packageFileName"></span>
+            <button class="btn primary" type="button" id="packageStream" disabled data-i18n="packageStream">Start streaming</button>
+          </div>
+          <div class="panel package-queue">
+            <div class="package-queue-head"><h3 data-i18n="packageQueue">Installation queue</h3><span class="subtle" id="packageQueueCount"></span>
+              <button class="btn" type="button" id="packageQueueClear" data-i18n="packageQueueClear">Clear queue</button>
+              <button class="btn primary" type="button" id="packageQueueStart" data-i18n="packageQueueStart">Install queue</button></div>
+            <div class="package-queue-list console-list" id="packageQueueList"></div>
+          </div>
+        </div>
+        <div class="package-content">
+          <div class="console-heading"><h2 id="packagesHeading" data-i18n="packagesTab">Installation</h2><p class="subtle" data-i18n="packagesHint">Games, patches, DLC and backports from /data and external drives</p></div>
+          <div class="package-toolbar">
+            <button class="btn" id="packageHome" type="button" data-i18n="storage">Storage</button>
+            <button class="btn" id="packageUp" type="button" disabled data-i18n="back">Back</button>
+            <span class="package-path" id="packagePath"></span>
+            <button class="btn" id="packageRefresh" type="button" data-i18n="refresh">Refresh</button>
+          </div>
+          <div class="package-list" id="packageList" aria-live="polite"></div>
+
         </div>
       </section>
 
@@ -745,11 +843,11 @@
             <div class="console-heading"><h2 id="sourcesHeading" data-i18n="consoleSources">Sources</h2><p class="subtle" data-i18n="consoleSourcesHint">Scan folders or add an individual game</p></div>
             <div class="console-grid">
               <div class="panel"><h3 data-i18n="scanPaths">Scan paths</h3><p class="subtle console-hint" data-i18n="scanPathsDescription">Custom recursive roots; an empty list uses built-in defaults</p>
-                <form class="manual-form" id="scanPathForm"><input id="scanPath" required placeholder="/mnt/usb0/games" aria-label="Scan path" data-i18n-aria-label="scanPaths"><button class="btn small" type="submit" data-i18n="add">Add</button></form>
+                <form class="manual-form" id="scanPathForm"><input id="scanPath" required placeholder="/mnt/usb0/games" aria-label="Scan path" data-i18n-aria-label="scanPaths"><button class="btn path-browse" type="button" data-browse-path="scanPath" aria-label="Browse" data-i18n-aria-label="browse"></button><button class="btn small" type="submit" data-i18n="add">Add</button></form>
                 <div class="manual-list console-list" id="scanPathList"><span class="subtle" data-i18n="loading">Loading?</span></div>
               </div>
               <div class="panel"><h3 id="manualHeading" data-i18n="consoleIndividualGames">Individual games</h3><p class="subtle console-hint" data-i18n="manualDescription">Direct paths to individual game folders or images</p>
-                <form class="manual-form" id="manualForm"><input id="manualPath" required placeholder="/mnt/usb0/games/PPSA12345" aria-label="Game source" data-i18n-aria-label="source"><button class="btn small" type="submit" data-i18n="add">Add</button></form>
+                <form class="manual-form" id="manualForm"><input id="manualPath" required placeholder="/mnt/usb0/games/PPSA12345" aria-label="Game source" data-i18n-aria-label="source"><button class="btn path-browse" type="button" data-browse-path="manualPath" aria-label="Browse" data-i18n-aria-label="browse"></button><button class="btn small" type="submit" data-i18n="add">Add</button></form>
                 <div class="manual-list console-list" id="manualList"><span class="subtle" data-i18n="loading">Loading?</span></div>
               </div>
               <div class="panel console-wide console-scan"><div><label class="check console-setting"><span data-i18n="resetAttempts">Reset attempt counters</span><input id="resetAttempts" type="checkbox" role="switch"></label><p class="subtle console-hint" data-i18n="resetAttemptsDescription">This option applies only to the next forced scan.</p></div><button class="btn primary" id="consoleScan" type="button" data-i18n="scan">Scan</button></div>
@@ -828,8 +926,19 @@
       <label class="check unpack-option" id="unpackOption" hidden><input id="unpackDeleteSource" type="checkbox"> <span data-i18n="deleteAfterUnpack">Delete image after unpacking</span></label>
       <form class="destination-custom" id="destinationForm">
         <input id="customDestination" required placeholder="/mnt/usb0/homebrew" data-i18n-placeholder="customDestination">
-        <button class="btn small" type="submit" data-i18n="useDestination">Use path</button>
+        <button class="btn path-browse" type="button" data-browse-path="customDestination" aria-label="Browse" data-i18n-aria-label="browse"></button>
+        <button class="btn small" id="destinationAction" type="submit" data-i18n="copy">Copy</button>
       </form>
+    </div>
+  </div>
+
+  <div class="modal" id="pathModal" hidden role="dialog" aria-modal="true" aria-labelledby="pathTitle">
+    <div class="modal-card path-card">
+      <div class="modal-head"><h2 id="pathTitle" data-i18n="packageDevices">Drives and folders</h2><button class="btn close" id="closePath" type="button" aria-label="Close" data-i18n-aria-label="close">&times;</button></div>
+      <div class="path-toolbar"><button class="btn small" id="pathDrives" type="button" data-i18n="storage">Storage</button><button class="btn small" id="pathUp" type="button" data-i18n="back">Back</button><span class="subtle path-current" id="pathCurrent" dir="ltr"></span></div>
+      <div class="path-body"><div class="path-roots console-list" id="pathRoots"></div><div class="path-entries console-list" id="pathEntries" aria-live="polite"></div></div>
+      <div class="path-pages" id="pathPages" hidden><button class="btn small" id="pathPrevious" type="button" aria-label="Back" data-i18n-aria-label="back">←</button><span class="subtle" id="pathPageRange"></span><button class="btn small" id="pathNext" type="button" aria-label="Continue" data-i18n-aria-label="continueAction">→</button></div>
+      <div class="modal-actions"><button class="btn" type="button" id="cancelPath" data-i18n="cancel">Cancel</button><button class="btn primary" id="choosePath" type="button" data-i18n="selectAction" disabled>Select</button></div>
     </div>
   </div>
 
@@ -930,7 +1039,13 @@
         logTitleKey: "debugLogTitle",
         logTriggerId: "viewLog",
         logText: null,
-        logRequest: 0
+        logRequest: 0,
+        packages: null,
+        packageQueue: null,
+        packageQueueLoading: false,
+        packageRequest: 0,
+        browserStream: null,
+        pathPicker: null
       };
       const $ = (id) => document.getElementById(id);
       const navigation = {
@@ -942,6 +1057,42 @@
 
       const translations = {
         "en-US": {
+          packageInstalled: "Installed",
+          packageReplace: "Replace",
+          browse: "Browse",
+          packageUpdate: "Update",
+          packageNoBase: "No base game",
+          packageEnqueue: "Add to queue",
+          packageQueued: "Queued",
+          packageQueue: "Installation queue",
+          packageQueueStart: "Install queue",
+          packageQueueClear: "Clear queue",
+          packageQueueFull: "Queue is full (32 packages).",
+          packageBaseMissing: "Install the base game before this patch or DLC.",
+          packagesTab: "Installation",
+          installBackport: "Install backport",
+          replaceBackport: "Replace backport",
+          backport: "Backport",
+          deleteBackport: "Delete backport",
+          deleteBackportConfirm: "Permanently delete this backport folder?\n\n{path}\n\nThis cannot be undone.",
+          unknownGame: "Unknown game",
+          packagesHint: "Games, patches, DLC and backports from /data and external drives",
+          packageDevices: "Drives and folders",
+          packageRemote: "Stream from computer",
+          packageRemoteHint: "Select a PKG on your computer and keep this page open until installation finishes.",
+          packageChooseFile: "Choose PKG",
+          packageStream: "Start streaming",
+          packageEmpty: "No PKG files or folders here",
+          packageInvalid: "Invalid or unsupported PKG",
+          packageInstall: "Install",
+          packageConfirm: "Install {title} ({kind})?\n{path}",
+          packageBase: "Game",
+          packageTruncated: "Only the first 256 entries are shown. Open a subfolder.",
+          operationInstall: "Installing",
+          jobInstalling: "Installing",
+          packageStreamLost: "The source browser stopped streaming. Start the installation again.",
+          packageInstallError: "Installation failed: {code}",
+
           totalSize: "Total size",
           fakelibMode: "Fakelib mounting",
           changeFakelibMode: "Select to cycle modes",
@@ -1162,6 +1313,42 @@
           busyStorageUnavailable: "The storage service is stopping or unavailable"
         },
         "ru-RU": {
+          packageInstalled: "Установлено",
+          packageReplace: "Заменить",
+          browse: "Обзор папок",
+          packageUpdate: "Обновить",
+          packageNoBase: "Нет игры",
+          packageEnqueue: "В очередь",
+          packageQueued: "В очереди",
+          packageQueue: "Очередь установки",
+          packageQueueStart: "Установить очередь",
+          packageQueueClear: "Очистить очередь",
+          packageQueueFull: "Очередь заполнена (32 пакета).",
+          packageBaseMissing: "Сначала установите основную игру, затем патч или DLC.",
+          packagesTab: "Установка",
+          installBackport: "Установить бэкпорт",
+          replaceBackport: "Заменить бэкпорт",
+          backport: "Бэкпорт",
+          deleteBackport: "Удалить бэкпорт",
+          deleteBackportConfirm: "Удалить выбранную папку бэкпорта?\n\n{path}\n\nОперацию нельзя отменить.",
+          unknownGame: "Неизвестная игра",
+          packagesHint: "Игры, патчи, DLC и бэкпорты из /data и с внешних дисков",
+          packageDevices: "Диски и папки",
+          packageRemote: "Установка с ПК",
+          packageRemoteHint: "Выберите PKG на компьютере и оставьте страницу открытой до завершения установки.",
+          packageChooseFile: "Выбрать PKG",
+          packageStream: "Начать передачу",
+          packageEmpty: "Здесь нет файлов PKG или папок",
+          packageInvalid: "Повреждённый или неподдерживаемый PKG",
+          packageInstall: "Установить",
+          packageConfirm: "Установить {title} ({kind})?\n{path}",
+          packageBase: "Игра",
+          packageTruncated: "Показаны первые 256 элементов. Откройте вложенную папку.",
+          operationInstall: "Установка",
+          jobInstalling: "Установка",
+          packageStreamLost: "Браузер-источник прекратил передачу. Запустите установку заново.",
+          packageInstallError: "Ошибка установки: {code}",
+
           totalSize: "Общий размер",
           fakelibMode: "Монтирование fakelib",
           changeFakelibMode: "Нажмите для смены режима",
@@ -1233,7 +1420,7 @@
           sourceSize: "Игра / образ",
           patchSize: "Патчи",
           dlcSize: "DLC",
-          systemSize: "app.db",
+          systemSize: "APP.DB",
           sourceSizeHint: "Размер папки, образа игры или основного файла app.pkg.",
           patchSizeHint: "Отдельные файлы patch этой игры. Обновления внутри основного пакета входят в размер игры.",
           dlcSizeHint: "Установленные файлы дополнений на внутреннем и подключённом расширенном хранилищах.",
@@ -1248,7 +1435,7 @@
           settings: "Настройки",
           debugLog: "Журнал отладки",
           quietMode: "Тихий режим",
-          updateFakelibEmulators: "Обновлять эмуляторы в fakelib игр",
+          updateFakelibEmulators: "Обновлять эмуляторы в папке fakelib игр",
           autoUpdateAmpr: "Обновлять эмулятор AMPR с GitHub",
           autoRemoveMissingGames: "Удалять иконки недоступных приложений",
           autoRemoveDelay: "Задержка удаления (секунды)",
@@ -1415,7 +1602,7 @@
         if (values.length !== translationKeys.length) throw new Error(`Invalid translation catalog: ${locale}`);
         translations[locale] = Object.fromEntries(translationKeys.map((key, index) => [key, values[index]]));
       }
-      const extendedTranslationKeys = ["changeFakelibMode","consoleTools","consoleSections","consoleOverview","consoleSystem","consoleSources","consoleLogs","consoleOverviewHint","consoleSystemHint","consoleNotifications","consoleNetwork","consoleCooling","consoleLibraryHint","consoleMounting","consoleMaintenance","consoleSourcesHint","consoleIndividualGames","consoleLogsHint","consoleKernelHint","consoleRecordLog","consoleSaveHint","back","navigate","controllerHint","confirmation","continueAction","chooseUnpackDestination","deleteAfterUnpack","selectAction","saveDataSize","downloadSize","saveDataSizeHint","detailSizes","sourceSize","patchSize","dlcSize","systemSize","sourceSizeHint","patchSizeHint","dlcSizeHint","systemSizeHint","copyToClipboard","logCopied","clipboardUnavailable","remountConfirm","chooseCopyDestination","noOtherDestinations","chooseMoveDestination","destinationDescription","customDestination","useDestination","totalSize"];
+      const extendedTranslationKeys = ["changeFakelibMode","consoleTools","consoleSections","consoleOverview","consoleSystem","consoleSources","consoleLogs","consoleOverviewHint","consoleSystemHint","consoleNotifications","consoleNetwork","consoleCooling","consoleLibraryHint","consoleMounting","consoleMaintenance","consoleSourcesHint","consoleIndividualGames","consoleLogsHint","consoleKernelHint","consoleRecordLog","consoleSaveHint","back","navigate","controllerHint","confirmation","continueAction","chooseUnpackDestination","deleteAfterUnpack","selectAction","saveDataSize","downloadSize","saveDataSizeHint","detailSizes","sourceSize","patchSize","dlcSize","systemSize","sourceSizeHint","patchSizeHint","dlcSizeHint","systemSizeHint","copyToClipboard","logCopied","clipboardUnavailable","remountConfirm","chooseCopyDestination","noOtherDestinations","chooseMoveDestination","destinationDescription","customDestination","useDestination","totalSize","packagesTab","packagesHint","packageDevices","packageRemote","packageRemoteHint","packageChooseFile","packageStream","packageEmpty","packageInvalid","packageInstall","packageConfirm","packageBase","packageTruncated","operationInstall","jobInstalling","packageStreamLost","packageInstallError","packageBaseMissing","packageInstalled","packageUpdate","packageNoBase","packageEnqueue","packageQueued","packageQueue","packageQueueStart","packageQueueClear","packageQueueFull","packageReplace","browse","installBackport","replaceBackport","backport","unknownGame","deleteBackport","deleteBackportConfirm"];
       const extendedTranslationCatalogs = {
         "ja-JP": [
           "選択してモードを切り替え", "本体", "本体の設定項目", "概要",
@@ -1430,7 +1617,20 @@
           "app.db", "ソースフォルダー、イメージ、または基本 app.pkg ファイルのサイズ。", "このタイトルの独立したパッチファイル。ゲームに統合された更新はゲーム本体のサイズに含まれます。", "内蔵ストレージと接続された拡張ストレージにある、このタイトルの追加コンテンツ。",
           "システムの参考値。ゲームのサイズと重複する場合があり、追加容量ではありません。", "クリップボードにコピー", "ログをクリップボードにコピーしました", "このブラウザーではログをクリップボードにコピーできませんでした",
           "{current} はすでにマウントされています。解除して {target} をマウントしますか？", "コピー先", "ほかの候補フォルダーはありません。下に任意のパスを入力してください。", "移動先",
-          "利用可能な Homebrew フォルダーを選ぶか、任意のパスを入力", "任意の絶対パス", "このパスを使用", "合計サイズ"
+          "利用可能な Homebrew フォルダーを選ぶか、任意のパスを入力", "任意の絶対パス", "このパスを使用", "合計サイズ",
+          "インストール", "/dataと外部ドライブのゲーム、パッチ、DLC、バックポート", "ドライブとフォルダー", "パソコンからストリーミング",
+          "パソコンでPKGを選択し、インストール完了までこのページを開いておいてください。", "PKGを選択", "転送を開始", "PKGファイルやフォルダーがありません",
+          "無効または未対応のPKG", "インストール", "{title}（{kind}）をインストールしますか？\n{path}", "ゲーム",
+          "最初の256項目のみ表示しています。サブフォルダーを開いてください。", "インストール中", "インストール中", "転送元のブラウザーが転送を停止しました。インストールをやり直してください。",
+          "インストール失敗：{code}", "このパッチまたはDLCの前にゲーム本体をインストールしてください。", "インストール済み", "更新",
+          "本体ゲームなし", "キューに追加", "追加済み", "インストールキュー",
+          "キューをインストール", "キューを消去", "キューがいっぱいです（32パッケージ）。",
+          "置き換え",
+          "参照",
+          "バックポートをインストール",
+          "バックポートを置き換え", "バックポート",
+          "不明なゲーム",
+          "バックポートを削除", "このバックポートフォルダーを削除しますか？\n\n{path}"
         ],
         "fr-FR": [
           "Sélectionner pour changer de mode", "Console", "Rubriques de la console", "Vue d’ensemble",
@@ -1445,7 +1645,20 @@
           "app.db", "Taille du dossier source, de l’image ou du fichier app.pkg de base.", "Fichiers de correctif distincts pour ce titre. Les mises à jour intégrées au jeu font partie de sa taille principale.", "Fichiers des extensions de ce titre installés sur le stockage interne et le stockage étendu connecté.",
           "Taille de référence du système. Elle peut recouper celle du jeu et ne représente pas un espace supplémentaire.", "Copier dans le presse-papiers", "Journal copié dans le presse-papiers", "Ce navigateur n’a pas pu copier le journal dans le presse-papiers",
           "{current} est déjà monté. Le démonter et monter {target} à la place ?", "Destination de copie", "Aucun autre dossier prédéfini. Saisissez un chemin personnalisé ci-dessous.", "Destination de déplacement",
-          "Choisissez un dossier Homebrew disponible ou saisissez un chemin personnalisé", "Chemin absolu personnalisé", "Utiliser ce chemin", "Taille totale"
+          "Choisissez un dossier Homebrew disponible ou saisissez un chemin personnalisé", "Chemin absolu personnalisé", "Utiliser ce chemin", "Taille totale",
+          "Installation", "Jeux, correctifs, DLC et backports depuis /data et les disques externes", "Disques et dossiers", "Diffuser depuis un ordinateur",
+          "Sélectionnez un PKG sur l’ordinateur et gardez cette page ouverte jusqu’à la fin de l’installation.", "Choisir un PKG", "Démarrer le transfert", "Aucun fichier PKG ni dossier ici",
+          "PKG non valide ou non pris en charge", "Installer", "Installer {title} ({kind}) ?\n{path}", "Jeu",
+          "Seules les 256 premières entrées sont affichées. Ouvrez un sous-dossier.", "Installation", "Installation", "Le navigateur source a cessé le transfert. Relancez l’installation.",
+          "Échec de l’installation : {code}", "Installez le jeu de base avant ce correctif ou DLC.", "Installé", "Mettre à jour",
+          "Jeu de base absent", "Ajouter à la file", "Dans la file", "File d’installation",
+          "Installer la file", "Vider la file", "La file est pleine (32 paquets).",
+          "Remplacer",
+          "Parcourir",
+          "Installer le backport",
+          "Remplacer le backport", "Backport",
+          "Jeu inconnu",
+          "Supprimer le backport", "Supprimer définitivement ce dossier de backport ?\n\n{path}"
         ],
         "es-ES": [
           "Selecciona para cambiar de modo", "Consola", "Secciones de la consola", "Resumen",
@@ -1460,7 +1673,20 @@
           "app.db", "Tamaño de la carpeta de origen, la imagen o el archivo app.pkg base.", "Archivos de parche independientes de este título. Las actualizaciones integradas en el juego forman parte de su tamaño principal.", "Archivos de complementos de este título instalados en el almacenamiento interno y ampliado conectado.",
           "Tamaño de referencia del sistema. Puede solaparse con el tamaño del juego y no es espacio adicional.", "Copiar al portapapeles", "Registro copiado al portapapeles", "Este navegador no pudo copiar el registro al portapapeles",
           "{current} ya está montado. ¿Desmontarlo y montar {target} en su lugar?", "Destino de copia", "No hay otras carpetas predefinidas. Introduce una ruta personalizada abajo.", "Destino de traslado",
-          "Elige una carpeta Homebrew disponible o introduce una ruta personalizada", "Ruta absoluta personalizada", "Usar ruta", "Tamaño total"
+          "Elige una carpeta Homebrew disponible o introduce una ruta personalizada", "Ruta absoluta personalizada", "Usar ruta", "Tamaño total",
+          "Instalación", "Juegos, parches, DLC y backports desde /data y discos externos", "Discos y carpetas", "Transmitir desde el ordenador",
+          "Selecciona un PKG en el ordenador y mantén esta página abierta hasta que termine la instalación.", "Elegir PKG", "Iniciar transmisión", "No hay archivos PKG ni carpetas aquí",
+          "PKG no válido o no compatible", "Instalar", "¿Instalar {title} ({kind})?\n{path}", "Juego",
+          "Solo se muestran las primeras 256 entradas. Abre una subcarpeta.", "Instalando", "Instalando", "El navegador de origen dejó de transmitir. Inicia de nuevo la instalación.",
+          "Error de instalación: {code}", "Instala el juego base antes de este parche o DLC.", "Instalado", "Actualizar",
+          "Falta el juego base", "Añadir a la cola", "En la cola", "Cola de instalación",
+          "Instalar la cola", "Vaciar la cola", "La cola está llena (32 paquetes).",
+          "Reemplazar",
+          "Examinar",
+          "Instalar backport",
+          "Reemplazar backport", "Backport",
+          "Juego desconocido",
+          "Eliminar backport", "¿Eliminar permanentemente esta carpeta de backport?\n\n{path}"
         ],
         "de-DE": [
           "Auswählen, um den Modus zu wechseln", "Konsole", "Konsolenbereiche", "Übersicht",
@@ -1475,7 +1701,20 @@
           "app.db", "Größe des Quellordners, Abbilds oder der Basisdatei app.pkg.", "Separate Patch-Dateien dieses Titels. In das Spiel integrierte Updates zählen zur Hauptgröße.", "Installierte Zusatzinhalte dieses Titels im internen und angeschlossenen erweiterten Speicher.",
           "Referenzgröße des Systems. Sie kann sich mit der Spielgröße überschneiden und ist kein zusätzlicher Speicherbedarf.", "In die Zwischenablage kopieren", "Protokoll in die Zwischenablage kopiert", "Dieser Browser konnte das Protokoll nicht in die Zwischenablage kopieren",
           "{current} ist bereits eingebunden. Aushängen und stattdessen {target} einbinden?", "Kopierziel", "Keine weiteren voreingestellten Ordner. Unten einen eigenen Pfad eingeben.", "Verschiebeziel",
-          "Einen verfügbaren Homebrew-Ordner wählen oder einen eigenen Pfad eingeben", "Eigener absoluter Pfad", "Pfad verwenden", "Gesamtgröße"
+          "Einen verfügbaren Homebrew-Ordner wählen oder einen eigenen Pfad eingeben", "Eigener absoluter Pfad", "Pfad verwenden", "Gesamtgröße",
+          "Installation", "Spiele, Patches, DLC und Backports aus /data und von externen Laufwerken", "Laufwerke und Ordner", "Vom Computer streamen",
+          "Eine PKG-Datei auf dem Computer auswählen und diese Seite bis zum Abschluss der Installation geöffnet lassen.", "PKG auswählen", "Übertragung starten", "Keine PKG-Dateien oder Ordner vorhanden",
+          "Ungültige oder nicht unterstützte PKG-Datei", "Installieren", "{title} ({kind}) installieren?\n{path}", "Spiel",
+          "Nur die ersten 256 Einträge werden angezeigt. Einen Unterordner öffnen.", "Installation läuft", "Installation läuft", "Der Quellbrowser hat die Übertragung beendet. Die Installation erneut starten.",
+          "Installation fehlgeschlagen: {code}", "Vor diesem Patch oder DLC das Basisspiel installieren.", "Installiert", "Aktualisieren",
+          "Basisspiel fehlt", "Zur Warteschlange", "Eingereiht", "Installationswarteschlange",
+          "Warteschlange installieren", "Warteschlange leeren", "Die Warteschlange ist voll (32 Pakete).",
+          "Ersetzen",
+          "Durchsuchen",
+          "Backport installieren",
+          "Backport ersetzen", "Backport",
+          "Unbekanntes Spiel",
+          "Backport löschen", "Diesen Backport-Ordner endgültig löschen?\n\n{path}"
         ],
         "it-IT": [
           "Seleziona per cambiare modalità", "Console", "Sezioni della console", "Panoramica",
@@ -1490,7 +1729,20 @@
           "app.db", "Dimensione della cartella di origine, dell’immagine o del file app.pkg di base.", "File patch separati per questo titolo. Gli aggiornamenti integrati nel gioco fanno parte della dimensione principale.", "File dei contenuti aggiuntivi di questo titolo installati nella memoria interna e nella memoria estesa collegata.",
           "Dimensione di riferimento del sistema. Può sovrapporsi a quella del gioco e non è spazio aggiuntivo.", "Copia negli appunti", "Registro copiato negli appunti", "Questo browser non ha potuto copiare il registro negli appunti",
           "{current} è già montato. Smontarlo e montare {target} al suo posto?", "Destinazione di copia", "Nessun’altra cartella predefinita. Inserisci un percorso personalizzato qui sotto.", "Destinazione di spostamento",
-          "Scegli una cartella Homebrew disponibile o inserisci un percorso personalizzato", "Percorso assoluto personalizzato", "Usa percorso", "Dimensione totale"
+          "Scegli una cartella Homebrew disponibile o inserisci un percorso personalizzato", "Percorso assoluto personalizzato", "Usa percorso", "Dimensione totale",
+          "Installazione", "Giochi, patch, DLC e backport da /data e dischi esterni", "Unità e cartelle", "Trasmetti dal computer",
+          "Seleziona un PKG sul computer e tieni aperta questa pagina fino al termine dell’installazione.", "Scegli PKG", "Avvia trasmissione", "Nessun file PKG o cartella",
+          "PKG non valido o non supportato", "Installa", "Installare {title} ({kind})?\n{path}", "Gioco",
+          "Sono mostrate solo le prime 256 voci. Apri una sottocartella.", "Installazione", "Installazione", "Il browser di origine ha interrotto la trasmissione. Riavvia l’installazione.",
+          "Installazione non riuscita: {code}", "Installa il gioco base prima di questa patch o DLC.", "Installato", "Aggiorna",
+          "Gioco base assente", "Aggiungi alla coda", "In coda", "Coda di installazione",
+          "Installa la coda", "Svuota la coda", "La coda è piena (32 pacchetti).",
+          "Sostituisci",
+          "Sfoglia",
+          "Installa backport",
+          "Sostituisci backport", "Backport",
+          "Gioco sconosciuto",
+          "Elimina backport", "Eliminare definitivamente questa cartella di backport?\n\n{path}"
         ],
         "nl-NL": [
           "Selecteer om van modus te wisselen", "Console", "Consoleonderdelen", "Overzicht",
@@ -1505,7 +1757,20 @@
           "app.db", "Grootte van de bronmap, schijfkopie of het basisbestand app.pkg.", "Afzonderlijke patchbestanden voor deze titel. Updates die in het spel zijn geïntegreerd, tellen mee bij de hoofdgrootte.", "Geïnstalleerde uitbreidingsbestanden voor deze titel op interne en aangesloten uitgebreide opslag.",
           "Referentiegrootte van het systeem. Kan overlappen met de spelgrootte en is geen extra opslaggebruik.", "Naar klembord kopiëren", "Logboek naar klembord gekopieerd", "Deze browser kon het logboek niet naar het klembord kopiëren",
           "{current} is al gekoppeld. Ontkoppelen en in plaats daarvan {target} koppelen?", "Kopieerbestemming", "Geen andere vooraf ingestelde mappen. Voer hieronder een eigen pad in.", "Verplaatsbestemming",
-          "Kies een beschikbare Homebrew-map of voer een eigen pad in", "Eigen absoluut pad", "Pad gebruiken", "Totale grootte"
+          "Kies een beschikbare Homebrew-map of voer een eigen pad in", "Eigen absoluut pad", "Pad gebruiken", "Totale grootte",
+          "Installatie", "Games, patches, DLC en backports van /data en externe schijven", "Schijven en mappen", "Streamen vanaf computer",
+          "Kies een PKG op de computer en houd deze pagina open totdat de installatie klaar is.", "PKG kiezen", "Overdracht starten", "Hier staan geen PKG-bestanden of mappen",
+          "Ongeldige of niet-ondersteunde PKG", "Installeren", "{title} ({kind}) installeren?\n{path}", "Spel",
+          "Alleen de eerste 256 items worden getoond. Open een submap.", "Installeren", "Installeren", "De bronbrowser is gestopt met streamen. Start de installatie opnieuw.",
+          "Installatie mislukt: {code}", "Installeer het basisspel vóór deze patch of DLC.", "Geïnstalleerd", "Bijwerken",
+          "Basisspel ontbreekt", "Toevoegen aan wachtrij", "In wachtrij", "Installatiewachtrij",
+          "Wachtrij installeren", "Wachtrij wissen", "De wachtrij is vol (32 pakketten).",
+          "Vervangen",
+          "Bladeren",
+          "Backport installeren",
+          "Backport vervangen", "Backport",
+          "Onbekend spel",
+          "Backport verwijderen", "Deze backportmap definitief verwijderen?\n\n{path}"
         ],
         "pt-PT": [
           "Selecionar para mudar de modo", "Consola", "Secções da consola", "Visão geral",
@@ -1520,7 +1785,20 @@
           "app.db", "Tamanho da pasta de origem, imagem ou ficheiro app.pkg base.", "Ficheiros de atualização separados deste título. As atualizações integradas no jogo fazem parte do tamanho principal.", "Ficheiros de conteúdos adicionais deste título instalados no armazenamento interno e expandido ligado.",
           "Tamanho de referência do sistema. Pode sobrepor-se ao tamanho do jogo e não representa espaço adicional.", "Copiar para a área de transferência", "Registo copiado para a área de transferência", "Este navegador não conseguiu copiar o registo para a área de transferência",
           "{current} já está montado. Desmontar e montar {target} em seu lugar?", "Destino da cópia", "Não há outras pastas predefinidas. Introduza um caminho personalizado abaixo.", "Destino da movimentação",
-          "Escolha uma pasta Homebrew disponível ou introduza um caminho personalizado", "Caminho absoluto personalizado", "Usar caminho", "Tamanho total"
+          "Escolha uma pasta Homebrew disponível ou introduza um caminho personalizado", "Caminho absoluto personalizado", "Usar caminho", "Tamanho total",
+          "Instalação", "Jogos, atualizações, DLC e backports de /data e discos externos", "Discos e pastas", "Transmitir do computador",
+          "Selecione um PKG no computador e mantenha esta página aberta até a instalação terminar.", "Escolher PKG", "Iniciar transmissão", "Não existem ficheiros PKG nem pastas aqui",
+          "PKG inválido ou não suportado", "Instalar", "Instalar {title} ({kind})?\n{path}", "Jogo",
+          "Apenas são mostradas as primeiras 256 entradas. Abra uma subpasta.", "A instalar", "A instalar", "O navegador de origem parou a transmissão. Inicie a instalação novamente.",
+          "Falha na instalação: {code}", "Instale o jogo base antes desta atualização ou DLC.", "Instalado", "Atualizar",
+          "Falta o jogo base", "Adicionar à fila", "Na fila", "Fila de instalação",
+          "Instalar a fila", "Limpar a fila", "A fila está cheia (32 pacotes).",
+          "Substituir",
+          "Procurar",
+          "Instalar backport",
+          "Substituir backport", "Backport",
+          "Jogo desconhecido",
+          "Eliminar backport", "Eliminar permanentemente esta pasta de backport?\n\n{path}"
         ],
         "ko-KR": [
           "선택하여 모드 전환", "콘솔", "콘솔 메뉴", "개요",
@@ -1535,7 +1813,20 @@
           "app.db", "소스 폴더, 이미지 또는 기본 app.pkg 파일의 크기.", "해당 타이틀의 별도 패치 파일. 게임에 통합된 업데이트는 게임 본체 크기에 포함됩니다.", "내부 저장소 및 연결된 확장 저장소에 설치된 해당 타이틀의 추가 콘텐츠 파일.",
           "시스템 참고 크기. 게임 크기와 중복될 수 있으며 추가 용량이 아닙니다.", "클립보드에 복사", "로그를 클립보드에 복사했습니다", "이 브라우저에서 로그를 클립보드에 복사하지 못했습니다",
           "{current}이(가) 이미 마운트되어 있습니다. 해제하고 대신 {target}을(를) 마운트하시겠습니까?", "복사 대상", "다른 사전 설정 폴더가 없습니다. 아래에 사용자 지정 경로를 입력하세요.", "이동 대상",
-          "사용 가능한 Homebrew 폴더를 선택하거나 사용자 지정 경로 입력", "사용자 지정 절대 경로", "경로 사용", "전체 크기"
+          "사용 가능한 Homebrew 폴더를 선택하거나 사용자 지정 경로 입력", "사용자 지정 절대 경로", "경로 사용", "전체 크기",
+          "설치", "/data 및 외장 드라이브의 게임, 패치, DLC 및 백포트", "드라이브 및 폴더", "컴퓨터에서 스트리밍",
+          "컴퓨터에서 PKG를 선택하고 설치가 끝날 때까지 이 페이지를 열어 두세요.", "PKG 선택", "전송 시작", "PKG 파일이나 폴더가 없습니다",
+          "잘못되었거나 지원하지 않는 PKG", "설치", "{title} ({kind})을(를) 설치하시겠습니까?\n{path}", "게임",
+          "처음 256개 항목만 표시됩니다. 하위 폴더를 여세요.", "설치 중", "설치 중", "원본 브라우저가 스트리밍을 중단했습니다. 설치를 다시 시작하세요.",
+          "설치 실패: {code}", "이 패치 또는 DLC를 설치하기 전에 기본 게임을 설치하세요.", "설치됨", "업데이트",
+          "기본 게임 없음", "대기열에 추가", "대기 중", "설치 대기열",
+          "대기열 설치", "대기열 비우기", "대기열이 가득 찼습니다(패키지 32개).",
+          "교체",
+          "찾아보기",
+          "백포트 설치",
+          "백포트 교체", "백포트",
+          "알 수 없는 게임",
+          "백포트 삭제", "이 백포트 폴더를 영구적으로 삭제하시겠습니까?\n\n{path}"
         ],
         "zh-TW": [
           "選取以切換模式", "主機", "主機選單", "概覽",
@@ -1550,7 +1841,20 @@
           "app.db", "來源資料夾、映像檔或基礎 app.pkg 檔案的大小。", "此遊戲的獨立更新檔。已整合進遊戲的更新包含在遊戲主體大小中。", "內部儲存空間及已連接擴充儲存空間中，此遊戲已安裝的追加內容檔案。",
           "系統參考大小。可能與遊戲大小重疊，並非額外用量。", "複製到剪貼簿", "已將記錄複製到剪貼簿", "此瀏覽器無法將記錄複製到剪貼簿",
           "{current} 已掛載。是否卸載並改為掛載 {target}？", "複製目的地", "沒有其他預設資料夾。請在下方輸入自訂路徑。", "移動目的地",
-          "選擇可用的 Homebrew 資料夾或輸入自訂路徑", "自訂絕對路徑", "使用路徑", "總大小"
+          "選擇可用的 Homebrew 資料夾或輸入自訂路徑", "自訂絕對路徑", "使用路徑", "總大小",
+          "安裝", "來自 /data 和外接磁碟的遊戲、更新、DLC 和向下相容補丁", "磁碟與資料夾", "從電腦串流",
+          "在電腦上選擇PKG，並保持此頁面開啟直到安裝完成。", "選擇PKG", "開始傳輸", "此處沒有PKG檔案或資料夾",
+          "無效或不支援的PKG", "安裝", "安裝{title}（{kind}）？\n{path}", "遊戲",
+          "僅顯示前256個項目。請開啟子資料夾。", "正在安裝", "正在安裝", "來源瀏覽器已停止串流。請重新開始安裝。",
+          "安裝失敗：{code}", "請先安裝遊戲本體，再安裝此更新檔或DLC。", "已安裝", "更新",
+          "缺少本體遊戲", "加入佇列", "已加入佇列", "安裝佇列",
+          "安裝佇列項目", "清空佇列", "佇列已滿（32 個套件）。",
+          "替換",
+          "瀏覽",
+          "安裝向下相容補丁",
+          "取代向下相容補丁", "向下相容補丁",
+          "未知遊戲",
+          "刪除向下相容補丁", "永久刪除此向下相容補丁資料夾？\n\n{path}"
         ],
         "zh-CN": [
           "选择以切换模式", "主机", "主机菜单", "概览",
@@ -1565,7 +1869,20 @@
           "app.db", "来源文件夹、镜像或基础 app.pkg 文件的大小。", "此游戏的独立补丁文件。已整合到游戏中的更新包含在游戏主体大小中。", "内部存储和已连接扩展存储中，此游戏已安装的追加内容文件。",
           "系统参考大小。可能与游戏大小重叠，并非额外用量。", "复制到剪贴板", "已将日志复制到剪贴板", "此浏览器无法将日志复制到剪贴板",
           "{current} 已挂载。是否卸载并改为挂载 {target}？", "复制目标", "没有其他预设文件夹。请在下方输入自定义路径。", "移动目标",
-          "选择可用的 Homebrew 文件夹或输入自定义路径", "自定义绝对路径", "使用路径", "总大小"
+          "选择可用的 Homebrew 文件夹或输入自定义路径", "自定义绝对路径", "使用路径", "总大小",
+          "安装", "来自 /data 和外接磁盘的游戏、更新、DLC 和向下兼容补丁", "磁盘和文件夹", "从电脑串流",
+          "在电脑上选择PKG，并保持此页面打开直到安装完成。", "选择PKG", "开始传输", "此处没有PKG文件或文件夹",
+          "无效或不支持的PKG", "安装", "安装{title}（{kind}）？\n{path}", "游戏",
+          "仅显示前256个项目。请打开子文件夹。", "正在安装", "正在安装", "来源浏览器已停止串流。请重新开始安装。",
+          "安装失败：{code}", "请先安装游戏本体，再安装此补丁或DLC。", "已安装", "更新",
+          "缺少本体游戏", "加入队列", "已加入队列", "安装队列",
+          "安装队列项目", "清空队列", "队列已满（32 个包）。",
+          "替换",
+          "浏览",
+          "安装向下兼容补丁",
+          "替换向下兼容补丁", "向下兼容补丁",
+          "未知游戏",
+          "删除向下兼容补丁", "永久删除此向下兼容补丁文件夹？\n\n{path}"
         ],
         "fi-FI": [
           "Vaihda tilaa valitsemalla", "Konsoli", "Konsolin osiot", "Yleiskatsaus",
@@ -1580,7 +1897,20 @@
           "app.db", "Lähdekansion, levykuvan tai peruspelin app.pkg-tiedoston koko.", "Tämän pelin erilliset päivitystiedostot. Peliin yhdistetyt päivitykset sisältyvät pelin pääkokoon.", "Tämän pelin asennetut lisäosat sisäisessä ja liitetyssä laajennetussa tallennustilassa.",
           "Järjestelmän viitekoko. Se voi olla päällekkäinen pelin koon kanssa eikä tarkoita lisätilaa.", "Kopioi leikepöydälle", "Loki kopioitu leikepöydälle", "Selain ei voinut kopioida lokia leikepöydälle",
           "{current} on jo liitetty. Irrotetaanko se ja liitetäänkö {target} sen tilalle?", "Kopioinnin kohde", "Muita valmiita kansioita ei ole. Anna oma polku alla.", "Siirron kohde",
-          "Valitse käytettävissä oleva Homebrew-kansio tai anna oma polku", "Oma absoluuttinen polku", "Käytä polkua", "Yhteiskoko"
+          "Valitse käytettävissä oleva Homebrew-kansio tai anna oma polku", "Oma absoluuttinen polku", "Käytä polkua", "Yhteiskoko",
+          "Asennus", "Pelit, päivitykset, DLC ja backportit /data-kansiosta ja ulkoisilta levyiltä", "Asemat ja kansiot", "Suoratoisto tietokoneelta",
+          "Valitse PKG tietokoneelta ja pidä sivu auki asennuksen loppuun asti.", "Valitse PKG", "Aloita siirto", "Ei PKG-tiedostoja tai kansioita",
+          "Virheellinen tai tukematon PKG", "Asenna", "Asennetaanko {title} ({kind})?\n{path}", "Peli",
+          "Vain ensimmäiset 256 kohdetta näytetään. Avaa alikansio.", "Asennetaan", "Asennetaan", "Lähdeselain lopetti suoratoiston. Aloita asennus uudelleen.",
+          "Asennus epäonnistui: {code}", "Asenna peruspeli ennen tätä päivitystä tai DLC:tä.", "Asennettu", "Päivitä",
+          "Peruspeli puuttuu", "Lisää jonoon", "Jonossa", "Asennusjono",
+          "Asenna jono", "Tyhjennä jono", "Jono on täynnä (32 pakettia).",
+          "Korvaa",
+          "Selaa",
+          "Asenna backport",
+          "Korvaa backport", "Backport",
+          "Tuntematon peli",
+          "Poista backport", "Poistetaanko tämä backport-kansio pysyvästi?\n\n{path}"
         ],
         "sv-SE": [
           "Välj för att byta läge", "Konsol", "Konsolavsnitt", "Översikt",
@@ -1595,7 +1925,20 @@
           "app.db", "Storlek på källmappen, avbilden eller grundfilen app.pkg.", "Separata uppdateringsfiler för denna titel. Uppdateringar som integrerats i spelet ingår i dess huvudstorlek.", "Installerade tilläggsfiler för denna titel på intern och ansluten utökad lagring.",
           "Systemets referensstorlek. Den kan överlappa spelstorleken och är inget extra utrymme.", "Kopiera till urklipp", "Loggen har kopierats till urklipp", "Webbläsaren kunde inte kopiera loggen till urklipp",
           "{current} är redan monterad. Avmontera den och montera {target} i stället?", "Kopieringsmål", "Inga andra förinställda mappar. Ange en egen sökväg nedan.", "Flyttmål",
-          "Välj en tillgänglig Homebrew-mapp eller ange en egen sökväg", "Egen absolut sökväg", "Använd sökväg", "Total storlek"
+          "Välj en tillgänglig Homebrew-mapp eller ange en egen sökväg", "Egen absolut sökväg", "Använd sökväg", "Total storlek",
+          "Installation", "Spel, uppdateringar, DLC och backportar från /data och externa enheter", "Enheter och mappar", "Strömma från dator",
+          "Välj en PKG på datorn och håll sidan öppen tills installationen är klar.", "Välj PKG", "Starta överföring", "Inga PKG-filer eller mappar här",
+          "Ogiltig PKG eller formatet stöds inte", "Installera", "Installera {title} ({kind})?\n{path}", "Spel",
+          "Bara de första 256 posterna visas. Öppna en undermapp.", "Installerar", "Installerar", "Källwebbläsaren har slutat strömma. Starta installationen igen.",
+          "Installationen misslyckades: {code}", "Installera grundspelet före denna uppdatering eller DLC.", "Installerat", "Uppdatera",
+          "Grundspelet saknas", "Lägg i kö", "I kö", "Installationskö",
+          "Installera kön", "Töm kön", "Kön är full (32 paket).",
+          "Ersätt",
+          "Bläddra",
+          "Installera backport",
+          "Ersätt backport", "Backport",
+          "Okänt spel",
+          "Ta bort backport", "Ta bort den här backport-mappen permanent?\n\n{path}"
         ],
         "da-DK": [
           "Vælg for at skifte tilstand", "Konsol", "Konsolafsnit", "Oversigt",
@@ -1610,7 +1953,20 @@
           "app.db", "Størrelsen på kildemappen, diskbilledet eller den grundlæggende app.pkg-fil.", "Separate opdateringsfiler til denne titel. Opdateringer integreret i spillet er en del af dets hovedstørrelse.", "Installerede tilføjelsesfiler til denne titel på internt og tilsluttet udvidet lager.",
           "Systemets referencestørrelse. Den kan overlappe spillets størrelse og er ikke ekstra plads.", "Kopiér til udklipsholder", "Logfil kopieret til udklipsholder", "Browseren kunne ikke kopiere logfilen til udklipsholderen",
           "{current} er allerede monteret. Afmonter den, og monter {target} i stedet?", "Kopieringsdestination", "Ingen andre forudindstillede mapper. Indtast en brugerdefineret sti nedenfor.", "Flyttedestination",
-          "Vælg en tilgængelig Homebrew-mappe, eller indtast en brugerdefineret sti", "Brugerdefineret absolut sti", "Brug sti", "Samlet størrelse"
+          "Vælg en tilgængelig Homebrew-mappe, eller indtast en brugerdefineret sti", "Brugerdefineret absolut sti", "Brug sti", "Samlet størrelse",
+          "Installation", "Spil, opdateringer, DLC og backports fra /data og eksterne drev", "Drev og mapper", "Stream fra computer",
+          "Vælg en PKG på computeren, og hold siden åben, indtil installationen er færdig.", "Vælg PKG", "Start overførsel", "Ingen PKG-filer eller mapper her",
+          "Ugyldig eller ikke-understøttet PKG", "Installer", "Installer {title} ({kind})?\n{path}", "Spil",
+          "Kun de første 256 poster vises. Åbn en undermappe.", "Installerer", "Installerer", "Kildebrowseren stoppede streamingen. Start installationen igen.",
+          "Installation mislykkedes: {code}", "Installer grundspillet før denne opdatering eller DLC.", "Installeret", "Opdater",
+          "Grundspillet mangler", "Føj til kø", "I kø", "Installationskø",
+          "Installer køen", "Tøm køen", "Køen er fuld (32 pakker).",
+          "Erstat",
+          "Gennemse",
+          "Installer backport",
+          "Erstat backport", "Backport",
+          "Ukendt spil",
+          "Slet backport", "Slet denne backport-mappe permanent?\n\n{path}"
         ],
         "no-NO": [
           "Velg for å bytte modus", "Konsoll", "Konsollseksjoner", "Oversikt",
@@ -1625,7 +1981,20 @@
           "app.db", "Størrelsen på kildemappen, diskbildet eller grunnfilen app.pkg.", "Separate oppdateringsfiler for denne tittelen. Oppdateringer integrert i spillet inngår i hovedstørrelsen.", "Installerte tilleggsfiler for denne tittelen på intern og tilkoblet utvidet lagring.",
           "Systemets referansestørrelse. Den kan overlappe spillstørrelsen og er ikke ekstra plass.", "Kopier til utklippstavlen", "Loggen er kopiert til utklippstavlen", "Nettleseren kunne ikke kopiere loggen til utklippstavlen",
           "{current} er allerede montert. Avmontere den og montere {target} i stedet?", "Kopieringsmål", "Ingen andre forhåndsdefinerte mapper. Skriv inn en egendefinert bane nedenfor.", "Flyttemål",
-          "Velg en tilgjengelig Homebrew-mappe eller skriv inn en egendefinert bane", "Egendefinert absolutt bane", "Bruk bane", "Samlet størrelse"
+          "Velg en tilgjengelig Homebrew-mappe eller skriv inn en egendefinert bane", "Egendefinert absolutt bane", "Bruk bane", "Samlet størrelse",
+          "Installasjon", "Spill, oppdateringer, DLC og backporter fra /data og eksterne disker", "Stasjoner og mapper", "Strøm fra datamaskin",
+          "Velg en PKG på datamaskinen, og hold siden åpen til installasjonen er ferdig.", "Velg PKG", "Start overføring", "Ingen PKG-filer eller mapper her",
+          "Ugyldig eller ikke støttet PKG", "Installer", "Installere {title} ({kind})?\n{path}", "Spill",
+          "Bare de første 256 oppføringene vises. Åpne en undermappe.", "Installerer", "Installerer", "Kildenettleseren sluttet å strømme. Start installasjonen på nytt.",
+          "Installasjonen mislyktes: {code}", "Installer grunnspillet før denne oppdateringen eller DLC-en.", "Installert", "Oppdater",
+          "Grunnspillet mangler", "Legg til i kø", "I kø", "Installasjonskø",
+          "Installer køen", "Tøm køen", "Køen er full (32 pakker).",
+          "Erstatt",
+          "Bla gjennom",
+          "Installer backport",
+          "Erstatt backport", "Backport",
+          "Ukjent spill",
+          "Slett backport", "Slette denne backport-mappen permanent?\n\n{path}"
         ],
         "pl-PL": [
           "Wybierz, aby zmienić tryb", "Konsola", "Sekcje konsoli", "Przegląd",
@@ -1640,7 +2009,20 @@
           "app.db", "Rozmiar folderu źródłowego, obrazu lub podstawowego pliku app.pkg.", "Oddzielne pliki aktualizacji tego tytułu. Aktualizacje scalone z grą są wliczone w jej główny rozmiar.", "Zainstalowane dodatki do tego tytułu w pamięci wewnętrznej i podłączonej pamięci rozszerzonej.",
           "Rozmiar referencyjny systemu. Może pokrywać się z rozmiarem gry i nie oznacza dodatkowego miejsca.", "Kopiuj do schowka", "Dziennik skopiowany do schowka", "Przeglądarka nie mogła skopiować dziennika do schowka",
           "{current} jest już zamontowane. Odmontować i zamontować {target} w zamian?", "Miejsce kopiowania", "Brak innych gotowych folderów. Wpisz własną ścieżkę poniżej.", "Miejsce przenoszenia",
-          "Wybierz dostępny folder Homebrew lub wpisz własną ścieżkę", "Własna ścieżka bezwzględna", "Użyj ścieżki", "Łączny rozmiar"
+          "Wybierz dostępny folder Homebrew lub wpisz własną ścieżkę", "Własna ścieżka bezwzględna", "Użyj ścieżki", "Łączny rozmiar",
+          "Instalacja", "Gry, aktualizacje, DLC i backporty z /data oraz dysków zewnętrznych", "Dyski i foldery", "Strumieniowanie z komputera",
+          "Wybierz PKG na komputerze i pozostaw tę stronę otwartą do końca instalacji.", "Wybierz PKG", "Rozpocznij przesyłanie", "Brak plików PKG lub folderów",
+          "Nieprawidłowy lub nieobsługiwany PKG", "Zainstaluj", "Zainstalować {title} ({kind})?\n{path}", "Gra",
+          "Wyświetlono tylko pierwsze 256 elementów. Otwórz podfolder.", "Instalowanie", "Instalowanie", "Przeglądarka źródłowa przerwała strumieniowanie. Rozpocznij instalację ponownie.",
+          "Instalacja nie powiodła się: {code}", "Zainstaluj podstawową grę przed tą aktualizacją lub DLC.", "Zainstalowano", "Aktualizuj",
+          "Brak gry podstawowej", "Dodaj do kolejki", "W kolejce", "Kolejka instalacji",
+          "Zainstaluj kolejkę", "Wyczyść kolejkę", "Kolejka jest pełna (32 pakiety).",
+          "Zastąp",
+          "Przeglądaj",
+          "Zainstaluj backport",
+          "Zastąp backport", "Backport",
+          "Nieznana gra",
+          "Usuń backport", "Trwale usunąć ten folder backportu?\n\n{path}"
         ],
         "pt-BR": [
           "Selecione para alternar o modo", "Console", "Seções do console", "Visão geral",
@@ -1655,7 +2037,20 @@
           "app.db", "Tamanho da pasta de origem, imagem ou arquivo app.pkg base.", "Arquivos de atualização separados deste título. Atualizações integradas ao jogo fazem parte do tamanho principal.", "Arquivos de conteúdo adicional deste título instalados no armazenamento interno e expandido conectado.",
           "Tamanho de referência do sistema. Pode se sobrepor ao tamanho do jogo e não representa espaço adicional.", "Copiar para a área de transferência", "Log copiado para a área de transferência", "Este navegador não conseguiu copiar o log para a área de transferência",
           "{current} já está montado. Desmontar e montar {target} no lugar?", "Destino da cópia", "Não há outras pastas predefinidas. Digite um caminho personalizado abaixo.", "Destino da movimentação",
-          "Escolha uma pasta Homebrew disponível ou digite um caminho personalizado", "Caminho absoluto personalizado", "Usar caminho", "Tamanho total"
+          "Escolha uma pasta Homebrew disponível ou digite um caminho personalizado", "Caminho absoluto personalizado", "Usar caminho", "Tamanho total",
+          "Instalação", "Jogos, atualizações, DLC e backports de /data e discos externos", "Discos e pastas", "Transmitir do computador",
+          "Selecione um PKG no computador e mantenha esta página aberta até a instalação terminar.", "Escolher PKG", "Iniciar transmissão", "Não há arquivos PKG ou pastas aqui",
+          "PKG inválido ou não compatível", "Instalar", "Instalar {title} ({kind})?\n{path}", "Jogo",
+          "Somente as primeiras 256 entradas são exibidas. Abra uma subpasta.", "Instalando", "Instalando", "O navegador de origem parou a transmissão. Inicie a instalação novamente.",
+          "Falha na instalação: {code}", "Instale o jogo base antes desta atualização ou DLC.", "Instalado", "Atualizar",
+          "Falta o jogo base", "Adicionar à fila", "Na fila", "Fila de instalação",
+          "Instalar a fila", "Limpar a fila", "A fila está cheia (32 pacotes).",
+          "Substituir",
+          "Procurar",
+          "Instalar backport",
+          "Substituir backport", "Backport",
+          "Jogo desconhecido",
+          "Excluir backport", "Excluir permanentemente esta pasta de backport?\n\n{path}"
         ],
         "tr-TR": [
           "Mod değiştirmek için seçin", "Konsol", "Konsol bölümleri", "Genel bakış",
@@ -1670,7 +2065,20 @@
           "app.db", "Kaynak klasörün, imajın veya temel app.pkg dosyasının boyutu.", "Bu oyuna ait ayrı yama dosyaları. Oyuna birleştirilen güncellemeler ana boyuta dahildir.", "Dahili ve bağlı genişletilmiş depolamada bu oyuna ait kurulu eklenti dosyaları.",
           "Sistemin referans boyutu. Oyun boyutuyla örtüşebilir ve ek alan değildir.", "Panoya kopyala", "Günlük panoya kopyalandı", "Bu tarayıcı günlüğü panoya kopyalayamadı",
           "{current} zaten bağlı. Bağlantısı kesilip yerine {target} bağlansın mı?", "Kopyalama hedefi", "Başka hazır klasör yok. Aşağıya özel bir yol girin.", "Taşıma hedefi",
-          "Kullanılabilir bir Homebrew klasörü seçin veya özel bir yol girin", "Özel mutlak yol", "Yolu kullan", "Toplam boyut"
+          "Kullanılabilir bir Homebrew klasörü seçin veya özel bir yol girin", "Özel mutlak yol", "Yolu kullan", "Toplam boyut",
+          "Kurulum", "/data ve harici sürücülerdeki oyunlar, yamalar, DLC ve backportlar", "Sürücüler ve klasörler", "Bilgisayardan akış",
+          "Bilgisayarınızdan bir PKG seçin ve yükleme bitene kadar bu sayfayı açık tutun.", "PKG seç", "Aktarımı başlat", "Burada PKG dosyası veya klasör yok",
+          "Geçersiz veya desteklenmeyen PKG", "Yükle", "{title} ({kind}) yüklensin mi?\n{path}", "Oyun",
+          "Yalnızca ilk 256 öğe gösteriliyor. Bir alt klasör açın.", "Yükleniyor", "Yükleniyor", "Kaynak tarayıcı akışı durdurdu. Yüklemeyi yeniden başlatın.",
+          "Yükleme başarısız: {code}", "Bu yamadan veya DLC’den önce temel oyunu yükleyin.", "Yüklendi", "Güncelle",
+          "Ana oyun yok", "Kuyruğa ekle", "Kuyrukta", "Yükleme kuyruğu",
+          "Kuyruğu yükle", "Kuyruğu temizle", "Kuyruk dolu (32 paket).",
+          "Değiştir",
+          "Göz at",
+          "Backport yükle",
+          "Backport değiştir", "Backport",
+          "Bilinmeyen oyun",
+          "Backport sil", "Bu backport klasörü kalıcı olarak silinsin mi?\n\n{path}"
         ],
         "ar-SA": [
           "اختر لتغيير الوضع", "الجهاز", "أقسام الجهاز", "نظرة عامة",
@@ -1685,7 +2093,20 @@
           "app.db", "حجم مجلد المصدر أو الصورة أو ملف app.pkg الأساسي.", "ملفات التحديث المنفصلة لهذا العنوان. التحديثات المدمجة في اللعبة مشمولة في حجمها الأساسي.", "ملفات الإضافات المثبتة لهذا العنوان في التخزين الداخلي والتخزين الموسع المتصل.",
           "حجم مرجعي من النظام. قد يتداخل مع حجم اللعبة ولا يمثل مساحة إضافية.", "نسخ إلى الحافظة", "تم نسخ السجل إلى الحافظة", "تعذر على هذا المتصفح نسخ السجل إلى الحافظة",
           "‏{current} مركّب بالفعل. هل تريد إلغاء تركيبه وتركيب {target} بدلاً منه؟", "وجهة النسخ", "لا توجد مجلدات أخرى محددة مسبقًا. أدخل مسارًا مخصصًا أدناه.", "وجهة النقل",
-          "اختر مجلد Homebrew متاحًا أو أدخل مسارًا مخصصًا", "مسار مطلق مخصص", "استخدام المسار", "الحجم الإجمالي"
+          "اختر مجلد Homebrew متاحًا أو أدخل مسارًا مخصصًا", "مسار مطلق مخصص", "استخدام المسار", "الحجم الإجمالي",
+          "التثبيت", "الألعاب والتحديثات وDLC والتعديلات المتوافقة من /data والأقراص الخارجية", "الأقراص والمجلدات", "البث من الكمبيوتر",
+          "اختر ملف PKG على الكمبيوتر واترك هذه الصفحة مفتوحة حتى ينتهي التثبيت.", "اختيار PKG", "بدء البث", "لا توجد ملفات PKG أو مجلدات هنا",
+          "ملف PKG غير صالح أو غير مدعوم", "تثبيت", "تثبيت {title} ({kind})؟\n{path}", "لعبة",
+          "تُعرض أول 256 خانة فقط. افتح مجلدًا فرعيًا.", "جارٍ التثبيت", "جارٍ التثبيت", "توقف المتصفح المصدر عن البث. ابدأ التثبيت من جديد.",
+          "فشل التثبيت: {code}", "ثبّت اللعبة الأساسية قبل هذا التحديث أو المحتوى الإضافي.", "مثبّت", "تحديث",
+          "اللعبة الأساسية غير موجودة", "إضافة إلى قائمة الانتظار", "في قائمة الانتظار", "قائمة انتظار التثبيت",
+          "تثبيت القائمة", "مسح القائمة", "قائمة الانتظار ممتلئة (32 حزمة).",
+          "استبدال",
+          "تصفح",
+          "تثبيت التصحيح التوافقي",
+          "استبدال التعديل المتوافق", "تعديل متوافق",
+          "لعبة غير معروفة",
+          "حذف التعديل المتوافق", "هل تريد حذف مجلد التعديل المتوافق هذا نهائيًا؟\n\n{path}"
         ],
         "cs-CZ": [
           "Vyberte pro změnu režimu", "Konzole", "Sekce konzole", "Přehled",
@@ -1700,7 +2121,20 @@
           "app.db", "Velikost zdrojové složky, obrazu nebo základního souboru app.pkg.", "Samostatné soubory aktualizací tohoto titulu. Aktualizace sloučené se hrou jsou zahrnuty v její hlavní velikosti.", "Nainstalované doplňky tohoto titulu v interním a připojeném rozšířeném úložišti.",
           "Referenční velikost systému. Může se překrývat s velikostí hry a nepředstavuje další místo.", "Kopírovat do schránky", "Protokol zkopírován do schránky", "Prohlížeč nemohl zkopírovat protokol do schránky",
           "{current} je již připojeno. Odpojit a místo něj připojit {target}?", "Cíl kopírování", "Žádné další přednastavené složky. Níže zadejte vlastní cestu.", "Cíl přesunu",
-          "Vyberte dostupnou složku Homebrew nebo zadejte vlastní cestu", "Vlastní absolutní cesta", "Použít cestu", "Celková velikost"
+          "Vyberte dostupnou složku Homebrew nebo zadejte vlastní cestu", "Vlastní absolutní cesta", "Použít cestu", "Celková velikost",
+          "Instalace", "Hry, aktualizace, DLC a backporty z /data a externích disků", "Disky a složky", "Streamovat z počítače",
+          "Vyberte PKG v počítači a nechte tuto stránku otevřenou do dokončení instalace.", "Vybrat PKG", "Spustit přenos", "Nejsou zde soubory PKG ani složky",
+          "Neplatný nebo nepodporovaný PKG", "Instalovat", "Nainstalovat {title} ({kind})?\n{path}", "Hra",
+          "Zobrazuje se jen prvních 256 položek. Otevřete podsložku.", "Instaluje se", "Instaluje se", "Zdrojový prohlížeč přestal streamovat. Spusťte instalaci znovu.",
+          "Instalace selhala: {code}", "Před touto aktualizací nebo DLC nainstalujte základní hru.", "Nainstalováno", "Aktualizovat",
+          "Chybí základní hra", "Přidat do fronty", "Ve frontě", "Instalační fronta",
+          "Nainstalovat frontu", "Vymazat frontu", "Fronta je plná (32 balíčků).",
+          "Nahradit",
+          "Procházet",
+          "Nainstalovat backport",
+          "Nahradit backport", "Backport",
+          "Neznámá hra",
+          "Smazat backport", "Trvale smazat tuto složku backportu?\n\n{path}"
         ],
         "hu-HU": [
           "Válaszd ki a mód váltásához", "Konzol", "Konzol szakaszai", "Áttekintés",
@@ -1715,7 +2149,20 @@
           "app.db", "A forrásmappa, lemezkép vagy alap app.pkg fájl mérete.", "A játék különálló frissítési fájljai. A játékba beépített frissítések a fő méret részét képezik.", "A játék telepített kiegészítőfájljai a belső és a csatlakoztatott bővített tárhelyen.",
           "A rendszer referenciaértéke. Átfedhet a játék méretével, és nem jelent további helyigényt.", "Másolás a vágólapra", "Napló a vágólapra másolva", "A böngésző nem tudta a naplót a vágólapra másolni",
           "A(z) {current} már csatolva van. Leválasztod, és helyette csatolod a(z) {target} elemet?", "Másolás célja", "Nincs más előre megadott mappa. Adj meg egyéni útvonalat alább.", "Áthelyezés célja",
-          "Válassz elérhető Homebrew mappát, vagy adj meg egyéni útvonalat", "Egyéni abszolút útvonal", "Útvonal használata", "Teljes méret"
+          "Válassz elérhető Homebrew mappát, vagy adj meg egyéni útvonalat", "Egyéni abszolút útvonal", "Útvonal használata", "Teljes méret",
+          "Telepítés", "Játékok, frissítések, DLC-k és backportok a /data mappából és külső meghajtókról", "Meghajtók és mappák", "Streamelés számítógépről",
+          "Válassz egy PKG-t a számítógépen, és hagyd nyitva ezt az oldalt a telepítés végéig.", "PKG kiválasztása", "Átvitel indítása", "Nincsenek PKG-fájlok vagy mappák",
+          "Érvénytelen vagy nem támogatott PKG", "Telepítés", "Telepíted a(z) {title} ({kind}) elemet?\n{path}", "Játék",
+          "Csak az első 256 elem látható. Nyiss meg egy almappát.", "Telepítés folyamatban", "Telepítés folyamatban", "A forrásböngésző leállította a streamelést. Indítsd újra a telepítést.",
+          "A telepítés sikertelen: {code}", "A frissítés vagy DLC előtt telepítsd az alapjátékot.", "Telepítve", "Frissítés",
+          "Hiányzik az alapjáték", "Hozzáadás a sorhoz", "Sorban áll", "Telepítési sor",
+          "Sor telepítése", "Sor törlése", "A sor megtelt (32 csomag).",
+          "Csere",
+          "Tallózás",
+          "Backport telepítése",
+          "Backport cseréje", "Backport",
+          "Ismeretlen játék",
+          "Backport törlése", "Végleg törli ezt a backportmappát?\n\n{path}"
         ],
         "el-GR": [
           "Επιλέξτε για αλλαγή λειτουργίας", "Κονσόλα", "Ενότητες κονσόλας", "Επισκόπηση",
@@ -1730,7 +2177,20 @@
           "app.db", "Μέγεθος φακέλου πηγής, εικόνας ή βασικού αρχείου app.pkg.", "Ξεχωριστά αρχεία ενημερώσεων αυτού του τίτλου. Οι ενημερώσεις που έχουν ενσωματωθεί στο παιχνίδι περιλαμβάνονται στο κύριο μέγεθός του.", "Εγκατεστημένα αρχεία πρόσθετου περιεχομένου αυτού του τίτλου στον εσωτερικό και συνδεδεμένο εκτεταμένο χώρο.",
           "Μέγεθος αναφοράς του συστήματος. Μπορεί να επικαλύπτεται με το μέγεθος του παιχνιδιού και δεν αποτελεί πρόσθετο χώρο.", "Αντιγραφή στο πρόχειρο", "Το αρχείο καταγραφής αντιγράφηκε στο πρόχειρο", "Το πρόγραμμα περιήγησης δεν μπόρεσε να αντιγράψει το αρχείο καταγραφής στο πρόχειρο",
           "Το {current} είναι ήδη προσαρτημένο. Να αποπροσαρτηθεί και να προσαρτηθεί το {target} στη θέση του;", "Προορισμός αντιγραφής", "Δεν υπάρχουν άλλοι προκαθορισμένοι φάκελοι. Εισαγάγετε προσαρμοσμένη διαδρομή παρακάτω.", "Προορισμός μετακίνησης",
-          "Επιλέξτε διαθέσιμο φάκελο Homebrew ή εισαγάγετε προσαρμοσμένη διαδρομή", "Προσαρμοσμένη απόλυτη διαδρομή", "Χρήση διαδρομής", "Συνολικό μέγεθος"
+          "Επιλέξτε διαθέσιμο φάκελο Homebrew ή εισαγάγετε προσαρμοσμένη διαδρομή", "Προσαρμοσμένη απόλυτη διαδρομή", "Χρήση διαδρομής", "Συνολικό μέγεθος",
+          "Εγκατάσταση", "Παιχνίδια, ενημερώσεις, DLC και backports από /data και εξωτερικούς δίσκους", "Μονάδες και φάκελοι", "Ροή από υπολογιστή",
+          "Επιλέξτε PKG στον υπολογιστή και κρατήστε τη σελίδα ανοιχτή μέχρι να ολοκληρωθεί η εγκατάσταση.", "Επιλογή PKG", "Έναρξη μετάδοσης", "Δεν υπάρχουν αρχεία PKG ή φάκελοι",
+          "Μη έγκυρο ή μη υποστηριζόμενο PKG", "Εγκατάσταση", "Να εγκατασταθεί το {title} ({kind});\n{path}", "Παιχνίδι",
+          "Εμφανίζονται μόνο οι πρώτες 256 καταχωρίσεις. Ανοίξτε υποφάκελο.", "Γίνεται εγκατάσταση", "Γίνεται εγκατάσταση", "Το πρόγραμμα περιήγησης προέλευσης διέκοψε τη ροή. Ξεκινήστε ξανά την εγκατάσταση.",
+          "Αποτυχία εγκατάστασης: {code}", "Εγκαταστήστε το βασικό παιχνίδι πριν από αυτή την ενημέρωση ή DLC.", "Εγκατεστημένο", "Ενημέρωση",
+          "Λείπει το βασικό παιχνίδι", "Προσθήκη στην ουρά", "Στην ουρά", "Ουρά εγκατάστασης",
+          "Εγκατάσταση ουράς", "Εκκαθάριση ουράς", "Η ουρά είναι πλήρης (32 πακέτα).",
+          "Αντικατάσταση",
+          "Περιήγηση",
+          "Εγκατάσταση backport",
+          "Αντικατάσταση backport", "Backport",
+          "Άγνωστο παιχνίδι",
+          "Διαγραφή backport", "Οριστική διαγραφή αυτού του φακέλου backport;\n\n{path}"
         ],
         "ro-RO": [
           "Selectează pentru a schimba modul", "Consolă", "Secțiunile consolei", "Prezentare generală",
@@ -1745,7 +2205,20 @@
           "app.db", "Dimensiunea dosarului sursă, a imaginii sau a fișierului app.pkg de bază.", "Fișiere de actualizare separate pentru acest titlu. Actualizările integrate în joc fac parte din dimensiunea principală.", "Fișierele extensiilor acestui titlu instalate pe stocarea internă și extinsă conectată.",
           "Dimensiune de referință a sistemului. Se poate suprapune cu dimensiunea jocului și nu reprezintă spațiu suplimentar.", "Copiază în clipboard", "Jurnal copiat în clipboard", "Acest browser nu a putut copia jurnalul în clipboard",
           "{current} este deja montat. Îl demontezi și montezi {target} în locul lui?", "Destinația copierii", "Nu există alte dosare predefinite. Introdu o cale personalizată mai jos.", "Destinația mutării",
-          "Alege un dosar Homebrew disponibil sau introdu o cale personalizată", "Cale absolută personalizată", "Folosește calea", "Dimensiune totală"
+          "Alege un dosar Homebrew disponibil sau introdu o cale personalizată", "Cale absolută personalizată", "Folosește calea", "Dimensiune totală",
+          "Instalare", "Jocuri, actualizări, DLC și backporturi din /data și de pe discuri externe", "Unități și dosare", "Transmisie de pe computer",
+          "Selectează un PKG de pe computer și păstrează pagina deschisă până se termină instalarea.", "Alege PKG", "Pornește transmisia", "Nu există fișiere PKG sau dosare aici",
+          "PKG nevalid sau neacceptat", "Instalează", "Instalezi {title} ({kind})?\n{path}", "Joc",
+          "Sunt afișate doar primele 256 de intrări. Deschide un subdosar.", "Se instalează", "Se instalează", "Browserul sursă a oprit transmisia. Pornește instalarea din nou.",
+          "Instalarea a eșuat: {code}", "Instalează jocul de bază înaintea acestei actualizări sau DLC.", "Instalat", "Actualizează",
+          "Lipsește jocul de bază", "Adaugă în coadă", "În coadă", "Coadă de instalare",
+          "Instalează coada", "Golește coada", "Coada este plină (32 de pachete).",
+          "Înlocuiește",
+          "Răsfoire",
+          "Instalează backport",
+          "Înlocuiește backportul", "Backport",
+          "Joc necunoscut",
+          "Șterge backportul", "Ștergeți definitiv acest folder de backport?\n\n{path}"
         ],
         "th-TH": [
           "เลือกเพื่อเปลี่ยนโหมด", "คอนโซล", "ส่วนต่าง ๆ ของคอนโซล", "ภาพรวม",
@@ -1760,7 +2233,20 @@
           "app.db", "ขนาดของโฟลเดอร์ต้นทาง อิมเมจ หรือไฟล์ app.pkg หลัก", "ไฟล์แพตช์แยกของเกมนี้ การอัปเดตที่รวมเข้ากับเกมแล้วจะนับในขนาดหลักของเกม", "ไฟล์เนื้อหาเสริมที่ติดตั้งสำหรับเกมนี้บนที่จัดเก็บภายในและที่จัดเก็บเสริมที่เชื่อมต่อ",
           "ขนาดอ้างอิงของระบบ อาจซ้ำซ้อนกับขนาดเกมและไม่ใช่พื้นที่เพิ่มเติม", "คัดลอกไปยังคลิปบอร์ด", "คัดลอกบันทึกไปยังคลิปบอร์ดแล้ว", "เบราว์เซอร์นี้ไม่สามารถคัดลอกบันทึกไปยังคลิปบอร์ดได้",
           "เมานต์ {current} อยู่แล้ว ต้องการยกเลิกการเมานต์แล้วเมานต์ {target} แทนหรือไม่?", "ปลายทางการคัดลอก", "ไม่มีโฟลเดอร์ที่ตั้งไว้ล่วงหน้าอื่น ๆ ป้อนเส้นทางที่กำหนดเองด้านล่าง", "ปลายทางการย้าย",
-          "เลือกโฟลเดอร์ Homebrew ที่ใช้ได้หรือป้อนเส้นทางที่กำหนดเอง", "เส้นทางแบบเต็มที่กำหนดเอง", "ใช้เส้นทาง", "ขนาดรวม"
+          "เลือกโฟลเดอร์ Homebrew ที่ใช้ได้หรือป้อนเส้นทางที่กำหนดเอง", "เส้นทางแบบเต็มที่กำหนดเอง", "ใช้เส้นทาง", "ขนาดรวม",
+          "การติดตั้ง", "เกม แพตช์ DLC และแบ็กพอร์ตจาก /data และไดรฟ์ภายนอก", "ไดรฟ์และโฟลเดอร์", "สตรีมจากคอมพิวเตอร์",
+          "เลือก PKG บนคอมพิวเตอร์และเปิดหน้านี้ไว้จนกว่าจะติดตั้งเสร็จ", "เลือก PKG", "เริ่มส่งข้อมูล", "ไม่มีไฟล์ PKG หรือโฟลเดอร์ที่นี่",
+          "PKG ไม่ถูกต้องหรือไม่รองรับ", "ติดตั้ง", "ติดตั้ง {title} ({kind}) หรือไม่?\n{path}", "เกม",
+          "แสดงเฉพาะ 256 รายการแรก โปรดเปิดโฟลเดอร์ย่อย", "กำลังติดตั้ง", "กำลังติดตั้ง", "เบราว์เซอร์ต้นทางหยุดสตรีม โปรดเริ่มการติดตั้งใหม่",
+          "ติดตั้งไม่สำเร็จ: {code}", "ติดตั้งเกมหลักก่อนติดตั้งแพตช์หรือ DLC นี้", "ติดตั้งแล้ว", "อัปเดต",
+          "ไม่มีเกมหลัก", "เพิ่มในคิว", "อยู่ในคิว", "คิวการติดตั้ง",
+          "ติดตั้งรายการในคิว", "ล้างคิว", "คิวเต็มแล้ว (32 แพ็กเกจ)",
+          "แทนที่",
+          "เรียกดู",
+          "ติดตั้งแบ็กพอร์ต",
+          "แทนที่แบ็กพอร์ต", "แบ็กพอร์ต",
+          "เกมที่ไม่รู้จัก",
+          "ลบแบ็กพอร์ต", "ลบโฟลเดอร์แบ็กพอร์ตนี้อย่างถาวรหรือไม่?\n\n{path}"
         ],
         "vi-VN": [
           "Chọn để chuyển chế độ", "Máy chơi game", "Các mục của máy chơi game", "Tổng quan",
@@ -1775,7 +2261,20 @@
           "app.db", "Kích thước thư mục nguồn, ảnh đĩa hoặc tệp app.pkg cơ bản.", "Các tệp bản vá riêng của trò chơi này. Bản cập nhật đã tích hợp vào trò chơi được tính trong kích thước chính.", "Các tệp nội dung bổ sung của trò chơi này được cài trên bộ nhớ trong và bộ nhớ mở rộng được kết nối.",
           "Kích thước tham chiếu của hệ thống. Có thể trùng với kích thước trò chơi và không phải dung lượng bổ sung.", "Sao chép vào bảng nhớ tạm", "Đã sao chép nhật ký vào bảng nhớ tạm", "Trình duyệt này không thể sao chép nhật ký vào bảng nhớ tạm",
           "{current} đã được gắn kết. Bạn có muốn ngắt gắn kết và gắn kết {target} thay thế không?", "Đích sao chép", "Không có thư mục đặt sẵn nào khác. Nhập đường dẫn tùy chỉnh bên dưới.", "Đích di chuyển",
-          "Chọn thư mục Homebrew khả dụng hoặc nhập đường dẫn tùy chỉnh", "Đường dẫn tuyệt đối tùy chỉnh", "Dùng đường dẫn", "Tổng dung lượng"
+          "Chọn thư mục Homebrew khả dụng hoặc nhập đường dẫn tùy chỉnh", "Đường dẫn tuyệt đối tùy chỉnh", "Dùng đường dẫn", "Tổng dung lượng",
+          "Cài đặt", "Trò chơi, bản vá, DLC và backport từ /data và ổ đĩa ngoài", "Ổ đĩa và thư mục", "Truyền từ máy tính",
+          "Chọn PKG trên máy tính và giữ trang này mở cho đến khi cài đặt xong.", "Chọn PKG", "Bắt đầu truyền", "Không có tệp PKG hoặc thư mục ở đây",
+          "PKG không hợp lệ hoặc không được hỗ trợ", "Cài đặt", "Cài đặt {title} ({kind})?\n{path}", "Trò chơi",
+          "Chỉ hiển thị 256 mục đầu tiên. Hãy mở thư mục con.", "Đang cài đặt", "Đang cài đặt", "Trình duyệt nguồn đã dừng truyền. Hãy bắt đầu cài đặt lại.",
+          "Cài đặt thất bại: {code}", "Cài đặt trò chơi gốc trước bản vá hoặc DLC này.", "Đã cài đặt", "Cập nhật",
+          "Chưa có trò chơi gốc", "Thêm vào hàng đợi", "Trong hàng đợi", "Hàng đợi cài đặt",
+          "Cài đặt hàng đợi", "Xóa hàng đợi", "Hàng đợi đã đầy (32 gói).",
+          "Thay thế",
+          "Duyệt",
+          "Cài đặt backport",
+          "Thay thế backport", "Backport",
+          "Trò chơi không xác định",
+          "Xóa backport", "Xóa vĩnh viễn thư mục backport này?\n\n{path}"
         ],
         "id-ID": [
           "Pilih untuk mengganti mode", "Konsol", "Bagian konsol", "Ringkasan",
@@ -1790,7 +2289,20 @@
           "app.db", "Ukuran folder sumber, citra, atau file app.pkg dasar.", "File patch terpisah untuk judul ini. Pembaruan yang digabungkan ke dalam game termasuk dalam ukuran utamanya.", "File konten tambahan judul ini yang terpasang di penyimpanan internal dan penyimpanan tambahan yang terhubung.",
           "Ukuran referensi sistem. Dapat tumpang tindih dengan ukuran game dan bukan ruang tambahan.", "Salin ke papan klip", "Log disalin ke papan klip", "Browser ini tidak dapat menyalin log ke papan klip",
           "{current} sudah terpasang. Lepaskan dan pasang {target} sebagai gantinya?", "Tujuan penyalinan", "Tidak ada folder prasetel lain. Masukkan jalur khusus di bawah.", "Tujuan pemindahan",
-          "Pilih folder Homebrew yang tersedia atau masukkan jalur khusus", "Jalur absolut khusus", "Gunakan jalur", "Ukuran total"
+          "Pilih folder Homebrew yang tersedia atau masukkan jalur khusus", "Jalur absolut khusus", "Gunakan jalur", "Ukuran total",
+          "Instalasi", "Game, patch, DLC, dan backport dari /data dan drive eksternal", "Drive dan folder", "Streaming dari komputer",
+          "Pilih PKG di komputer dan biarkan halaman ini terbuka hingga instalasi selesai.", "Pilih PKG", "Mulai streaming", "Tidak ada file PKG atau folder di sini",
+          "PKG tidak valid atau tidak didukung", "Instal", "Instal {title} ({kind})?\n{path}", "Game",
+          "Hanya 256 entri pertama yang ditampilkan. Buka subfolder.", "Menginstal", "Menginstal", "Browser sumber berhenti melakukan streaming. Mulai instalasi lagi.",
+          "Instalasi gagal: {code}", "Instal game dasar sebelum patch atau DLC ini.", "Terinstal", "Perbarui",
+          "Game dasar tidak ada", "Tambah ke antrean", "Dalam antrean", "Antrean instalasi",
+          "Instal antrean", "Kosongkan antrean", "Antrean penuh (32 paket).",
+          "Ganti",
+          "Jelajahi",
+          "Pasang backport",
+          "Ganti backport", "Backport",
+          "Game tidak dikenal",
+          "Hapus backport", "Hapus folder backport ini secara permanen?\n\n{path}"
         ],
         "uk-UA": [
           "Натисніть, щоб змінити режим", "Приставка", "Розділи приставки", "Огляд",
@@ -1805,7 +2317,20 @@
           "app.db", "Розмір вихідної папки, образу або базового файлу app.pkg.", "Окремі файли патчів цієї гри. Оновлення, об’єднані з грою, входять до її основного розміру.", "Встановлені файли доповнень цієї гри на внутрішньому та підключеному розширеному сховищі.",
           "Довідковий розмір системи. Може перекриватися з розміром гри та не є додатковим обсягом.", "Копіювати до буфера обміну", "Журнал скопійовано до буфера обміну", "Цей браузер не зміг скопіювати журнал до буфера обміну",
           "{current} уже змонтовано. Демонтувати його та змонтувати {target} натомість?", "Місце копіювання", "Інших готових папок немає. Введіть власний шлях нижче.", "Місце переміщення",
-          "Виберіть доступну папку Homebrew або введіть власний шлях", "Власний абсолютний шлях", "Використати шлях", "Загальний розмір"
+          "Виберіть доступну папку Homebrew або введіть власний шлях", "Власний абсолютний шлях", "Використати шлях", "Загальний розмір",
+          "Встановлення", "Ігри, патчі, DLC та бекпорти з /data і зовнішніх дисків", "Диски та папки", "Потік із комп’ютера",
+          "Виберіть PKG на комп’ютері та залиште сторінку відкритою до завершення встановлення.", "Вибрати PKG", "Почати передачу", "Тут немає файлів PKG або папок",
+          "Пошкоджений або непідтримуваний PKG", "Встановити", "Встановити {title} ({kind})?\n{path}", "Гра",
+          "Показано перші 256 елементів. Відкрийте вкладену папку.", "Встановлення", "Встановлення", "Браузер-джерело припинив передачу. Почніть встановлення знову.",
+          "Помилка встановлення: {code}", "Спочатку встановіть основну гру, потім патч або DLC.", "Установлено", "Оновити",
+          "Немає гри", "До черги", "У черзі", "Черга встановлення",
+          "Установити чергу", "Очистити чергу", "Чергу заповнено (32 пакети).",
+          "Замінити",
+          "Огляд папок",
+          "Установити бекпорт",
+          "Замінити бекпорт", "Бекпорт",
+          "Невідома гра",
+          "Видалити бекпорт", "Видалити цю папку бекпорту назавжди?\n\n{path}"
         ],
       };
       for (const [locale, values] of Object.entries(extendedTranslationCatalogs)) {
@@ -1950,7 +2475,9 @@
         image_unmount_busy: "busyImageUnmount",
         unpack_mounted: "busyUnpackMounted",
         storage_busy: "busyStorage",
-        storage_unavailable: "busyStorageUnavailable"
+        storage_unavailable: "busyStorageUnavailable",
+        pkg_invalid: "packageInvalid", pkg_base_missing: "packageBaseMissing", pkg_already_installed: "packageInstalled", pkg_queued: "packageQueued", pkg_queue_full: "packageQueueFull",
+        pkg_stream_lost: "packageStreamLost", pkg_source_changed: "sourceUnavailable"
       };
 
       function operationErrorMessage(reason, fallback) {
@@ -1971,6 +2498,7 @@
           const reason = data && data.error ? data.error : `HTTP ${response.status}`;
           const error = new Error(reason);
           error.reason = data && data.error_reason;
+          error.status = data && data.status;
           throw error;
         }
         return data;
@@ -2072,6 +2600,7 @@
         badges.append(badge(game.platform || t("unknown")));
         badges.append(badge(game.source_type === "pkg" ? "PKG" : game.image_backed ? (game.image_type || t("image")) : t("folder"), game.image_backed ? "image" : ""));
         if (game.mounted) badges.append(badge(t("mounted"), "live"));
+        if (game.backport_path) badges.append(badge(t("backport")));
         body.append(badges);
         const path = node("div", "game-path", game.path || t("sourceUnavailable"));
         path.title = game.path || "";
@@ -2140,10 +2669,11 @@
 
       function storageJobStateLabel(job) {
         const labels = {
+          installing: t("jobInstalling"),
           idle: t("jobIdle"),
           preparing: t("jobPreparing"),
           measuring: t("jobMeasuring"),
-          transferring: storageOperationLabel(job.operation),
+          transferring: storageOperationLabel(job.operation, job.source_type),
           deleting: t("jobDeleting"),
           finalizing: t("jobFinalizing"),
           completed: t("jobCompleted"),
@@ -2153,7 +2683,9 @@
         return labels[job.state] || job.state;
       }
 
-      function storageOperationLabel(operation) {
+      function storageOperationLabel(operation, sourceType) {
+        if (sourceType === "backport" && operation !== "delete") return t("operationInstall");
+        if (operation === "install") return t("operationInstall");
         if (operation === "move") return t("operationMove");
         if (operation === "delete") return t("operationDelete");
         if (operation === "unpack") return t("operationUnpack");
@@ -2162,6 +2694,11 @@
 
       function renderStorageJob(job) {
         state.storageJob = job;
+        if (state.browserStream && (job.job_id !== state.browserStream.id || !job.active)) stopBrowserStream();
+        updatePackageActions();
+        const queue = state.packageQueue;
+        if (navigation.view === "packages" && (!queue || queue.entries?.length !== job.queue_count ||
+            queue.queue_completed !== job.queue_completed || queue.queue_running !== job.queue_running)) refreshPackageQueue();
         const popup = $("transferPopup");
         const active = Boolean(job && job.active && Number(job.job_id) > 0);
         const restoreFocus = !active && popup.contains(document.activeElement);
@@ -2172,18 +2709,19 @@
             const selected = Array.from($("games").querySelectorAll(".game-open"))
               .find(item => item.getAttribute("data-title-id") === navigation.lastGame);
             focusControl(activeDialog() ? focusableControls()[0] : navigation.view === "console"
-              ? $("consoleTab") : selected || $("libraryTab"));
+              ? $("consoleTab") : navigation.view === "packages" ? $("packagesTab") : selected || $("libraryTab"));
           }
           return;
         }
 
         const percent = Math.max(0, Math.min(100, Number(job.progress_percent) || 0));
-        const operation = storageOperationLabel(job.operation);
+        const operation = storageOperationLabel(job.operation, job.source_type);
         const game = state.games.find(item => item.title_id === job.title_id);
-        $("transferSummary").textContent = `${operation} · ${game?.title_name || job.title_id}`;
+        $("transferSummary").textContent = `${operation} · ${job.title_name || game?.title_name || job.title_id || job.source}`;
         $("transferSummary").title = $("transferSummary").textContent;
         $("transferState").textContent = job.cancel_requested ? t("cancelling") : storageJobStateLabel(job);
-        $("transferRoute").textContent = job.operation === "delete"
+        if (job.queue_running) $("transferState").textContent += ` · ${Number(job.queue_completed) + 1} / ${job.queue_total}`;
+        $("transferRoute").textContent = ["delete", "install"].includes(job.operation)
           ? job.source
           : `${job.source} → ${job.destination}`;
         $("transferRoute").title = $("transferRoute").textContent;
@@ -2208,7 +2746,7 @@
         const key = `${job.job_id}:${job.state}`;
         if (!job.job_id || job.active || state.reportedStorageJob === key) return;
         state.reportedStorageJob = key;
-        const operation = storageOperationLabel(job.operation);
+        const operation = storageOperationLabel(job.operation, job.source_type);
         if (job.state === "completed") {
           logActivity(t("operationCompleted", { operation, title: job.title_id }));
           toast(t("operationCompletedShort", { operation }));
@@ -2216,12 +2754,13 @@
           logActivity(t("operationCancelled", { operation, title: job.title_id }));
           toast(t("operationCancelledShort", { operation }));
         } else if (job.state === "failed") {
-          const reason = operationErrorMessage(job.result_error_reason,
+          const reason = job.native_status ? t("packageInstallError", { code: `0x${(job.native_status >>> 0).toString(16).padStart(8, "0").toUpperCase()}` }) : operationErrorMessage(job.result_error_reason,
             job.result_error || t("statusError", { status: job.result_status }));
           logActivity(t("operationError", { operation, title: job.title_id, error: reason }), "error");
           toast(reason, true);
         }
         refreshAll();
+        if ((job.operation === "install" || job.source_type === "backport") && navigation.view === "packages") refreshPackages();
       }
 
       function scheduleStorageJobPoll() {
@@ -2262,6 +2801,20 @@
         }
       }
 
+      function storageMeter(path, usedPercent) {
+        const meter = node("div", "storage-meter");
+        meter.setAttribute("role", "progressbar");
+        meter.setAttribute("aria-label", t("storageUsed", { path }));
+        meter.setAttribute("aria-valuemin", "0");
+        meter.setAttribute("aria-valuemax", "100");
+        meter.setAttribute("aria-valuenow", String(Math.round(usedPercent)));
+        const level = usedPercent > 90 ? "danger" : usedPercent > 80 ? "warning" : "";
+        const fill = node("div", `storage-fill ${level}`.trim());
+        fill.style.width = `${usedPercent}%`;
+        meter.append(fill);
+        return meter;
+      }
+
       async function refreshStorage() {
         const list = $("storageList");
         const summary = $("storageSummary");
@@ -2294,9 +2847,10 @@
           mounts.forEach((mount) => {
             const total = Number(mount.total_bytes) || 0;
             const available = Number(mount.available_bytes) || 0;
-            summary.append(node("span", "", `${mount.mount_point} · ${t("freeSpace", { size: formatBytes(available) })}`));
             const usedPercent = total > 0 ? Math.max(0, Math.min(100, ((total - available) / total) * 100)) : 0;
-            const freePercent = 100 - usedPercent;
+            const summaryItem = node("div", "storage-summary-item");
+            summaryItem.append(node("span", "", `${mount.mount_point} · ${t("freeSpace", { size: formatBytes(available) })}`), storageMeter(mount.mount_point, usedPercent));
+            summary.append(summaryItem);
             const row = node("div", "storage-row");
             const head = node("div", "storage-head");
             const path = node("span", "storage-path", mount.mount_point);
@@ -2310,17 +2864,7 @@
             space.append(node("span", "", t("freeSpace", { size: formatBytes(available) })));
             space.append(node("span", "", t("totalSpace", { size: formatBytes(total) })));
             row.append(space);
-            const meter = node("div", "storage-meter");
-            meter.setAttribute("role", "progressbar");
-            meter.setAttribute("aria-label", t("storageUsed", { path: mount.mount_point }));
-            meter.setAttribute("aria-valuemin", "0");
-            meter.setAttribute("aria-valuemax", "100");
-            meter.setAttribute("aria-valuenow", String(Math.round(usedPercent)));
-            const level = freePercent < 10 ? "danger" : freePercent < 20 ? "warning" : "";
-            const fill = node("div", `storage-fill ${level}`.trim());
-            fill.style.width = `${usedPercent}%`;
-            meter.append(fill);
-            row.append(meter);
+            row.append(storageMeter(mount.mount_point, usedPercent));
             list.append(row);
           });
         } catch (error) {
@@ -2743,6 +3287,7 @@
         detailRow(grid, t("gameVersion"), game.version);
         detailRow(grid, t("source"), game.path);
         detailRow(grid, t("runtimePath"), game.runtime_path);
+        if (game.backport_path) detailRow(grid, t("backport"), game.backport_path);
         detailRow(grid, t("systemSize"), formatBytes(game.app_db_size_bytes), t("systemSizeHint"));
         detailRow(grid, t("installed"), game.install_time);
         detailRow(grid, t("lastLaunch"), game.last_access_time);
@@ -2834,6 +3379,93 @@
         state.selected = null;
       }
 
+      function closePathPicker() {
+        $("pathModal").hidden = true;
+        state.pathPicker = null;
+      }
+
+      function choosePath(path) {
+        const picker = state.pathPicker;
+        if (!picker || !path) return;
+        const input = $(picker.target);
+        input.value = path;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        closePathPicker();
+      }
+
+      function renderPathPicker() {
+        const picker = state.pathPicker, data = picker?.data;
+        if (!data) return;
+        const roots = $("pathRoots"), list = $("pathEntries");
+        replaceContent(roots);
+        const selectedRoot = (data.roots || []).filter(path => data.path === path || data.path.startsWith(`${path}/`))
+          .sort((a, b) => b.length - a.length)[0];
+        (data.roots || []).forEach(path => {
+          const button = actionButton(path, () => browsePath(path));
+          button.classList.toggle("active", path === selectedRoot);
+          roots.append(button);
+        });
+        $("pathCurrent").textContent = data.path || t("storage");
+        $("pathUp").disabled = !data.path;
+        $("choosePath").disabled = !data.path;
+        const destination = state.destinationRequest;
+        if (picker.target === "customDestination" && destination && ["copy", "move"].includes(destination.operation)) {
+          const source = String(destination.game.path || "").replace(/\/+/g, "/").replace(/\/+$/, "");
+          if (source && data.path === source.slice(0, source.lastIndexOf("/"))) $("choosePath").disabled = true;
+        }
+        replaceContent(list);
+        const entries = (data.entries || []).slice().sort((a, b) => Number(Boolean(b.directory)) - Number(Boolean(a.directory)) || a.name.localeCompare(b.name, currentLanguage));
+        if (!data.path) (data.roots || []).forEach(path => {
+          list.append(actionButton(path, () => browsePath(path), "package-folder"));
+        });
+        else entries.forEach(entry => {
+          const button = actionButton(entry.name, () => entry.directory ? browsePath(entry.path) : choosePath(entry.path), entry.directory ? "package-folder" : "");
+          button.dataset.path = entry.path;
+          list.append(button);
+        });
+        if (!list.children.length) list.append(node("span", "subtle", t("listEmpty")));
+        list.scrollTop = 0;
+        $("pathPages").hidden = !(data.offset || data.truncated);
+        $("pathPrevious").disabled = !data.offset;
+        $("pathNext").disabled = !data.truncated;
+        $("pathPageRange").textContent = `${data.offset + 1}–${data.offset + entries.length}`;
+      }
+
+      async function browsePath(path = "", offset = 0, fallback = null) {
+        const picker = state.pathPicker;
+        if (!picker) return;
+        const request = ++picker.request;
+        picker.data = null;
+        $("choosePath").disabled = $("pathUp").disabled = true;
+        $("pathPages").hidden = true;
+        $("pathCurrent").textContent = path || t("storage");
+        replaceContent($("pathEntries"), node("span", "subtle", t("loading")));
+        try {
+          const data = await api("/files", { path, offset, include_files: picker.target === "manualPath" });
+          if (state.pathPicker !== picker || request !== picker.request) return;
+          picker.data = data;
+          renderPathPicker();
+          focusControl($("pathEntries").querySelector("button") || $("choosePath"));
+        } catch (error) {
+          if (state.pathPicker !== picker || request !== picker.request) return;
+          if (fallback !== null && path && [2, 20, 22].includes(error.status)) {
+            browsePath(fallback, 0, fallback ? "" : null);
+          } else {
+            replaceContent($("pathEntries"), node("span", "subtle", errorMessage(error)));
+            focusControl($("pathDrives"));
+          }
+        }
+      }
+
+      function openPathPicker(target) {
+        state.pathPicker = { target, data: null, request: 0 };
+        replaceContent($("pathRoots"));
+        $("pathModal").hidden = false;
+        const path = $(target).value.trim().replace(/\/+$/, "");
+        browsePath(path, 0, path.startsWith("/") ? path.slice(0, path.lastIndexOf("/")) : "");
+      }
+
       function closeDestinationPicker() {
         $("destinationModal").hidden = true;
         state.destinationRequest = null;
@@ -2843,6 +3475,8 @@
         const request = state.destinationRequest;
         if (!request) return;
         $("destinationTitle").textContent = t({ copy: "chooseCopyDestination", move: "chooseMoveDestination", unpack: "chooseUnpackDestination" }[request.operation]);
+        $("destinationAction").dataset.i18n = request.operation;
+        $("destinationAction").textContent = t(request.operation);
         const choices = $("destinationChoices");
         replaceContent(choices);
         const fromUsb = /^\/mnt\/usb[0-7](?:\/|$)/.test(request.game.path || "");
@@ -3000,7 +3634,7 @@
       }
 
       function activeDialog() {
-        return ["confirmModal", "languageModal", "destinationModal", "logModal", "modal"]
+        return ["confirmModal", "pathModal", "languageModal", "destinationModal", "logModal", "modal"]
           .map(id => $(id)).find(item => item && !item.hidden) || null;
       }
 
@@ -3064,13 +3698,48 @@
         document.querySelector(".library-section").hidden = !library;
         document.querySelector(".toolbar").hidden = !library;
         document.querySelector(".stats").hidden = !library;
-        $("consoleView").hidden = library;
-        for (const [id, selected] of [["libraryTab", library], ["consoleTab", !library]]) {
+        $("consoleView").hidden = view !== "console";
+        $("packagesView").hidden = view !== "packages";
+        for (const [id, selected] of [["libraryTab", library], ["consoleTab", view === "console"], ["packagesTab", view === "packages"]]) {
           $(id).classList.toggle("active", selected);
           $(id).setAttribute("aria-pressed", String(selected));
         }
         window.scrollTo(0, 0);
-        focusControl($(library ? "libraryTab" : "consoleTab"));
+        focusControl($({ library: "libraryTab", console: "consoleTab", packages: "packagesTab" }[view]));
+        if (view === "packages") refreshPackages();
+      }
+
+      function switchMainTab(direction) {
+        if (activeDialog() || (!playStationBrowser && isNativeEditor(document.activeElement))) return;
+        const views = ["library", "console", "packages"];
+        const index = views.indexOf(navigation.view);
+        switchView(views[(index + direction + views.length) % views.length]);
+      }
+
+      function initializeTabHistory() {
+        if (!playStationBrowser) return;
+        // The console reserves L1/R1 for browser Back/Forward. Keep three
+        // same-document entries and return to the middle after each step,
+        // so both directions remain available without growing the history.
+        const slot = value => value && value.shadowmountTabs === 1 &&
+          [-1, 0, 1].includes(value.slot) ? value.slot : null;
+        window.addEventListener("popstate", event => {
+          const direction = slot(event.state);
+          if (direction === null || direction === 0) return;
+          switchMainTab(direction);
+          history.go(-direction);
+        });
+        try {
+          const current = slot(history.state);
+          if (current !== null) {
+            if (current !== 0) history.go(-current);
+            return;
+          }
+          history.replaceState({ shadowmountTabs: 1, slot: -1 }, "");
+          history.pushState({ shadowmountTabs: 1, slot: 0 }, "");
+          history.pushState({ shadowmountTabs: 1, slot: 1 }, "");
+          history.back();
+        } catch (_) { /* Keyboard/Gamepad navigation remains available. */ }
       }
 
       function navigate(direction) {
@@ -3119,6 +3788,417 @@
         focusControl(best);
       }
 
+      function packageKind(kind) {
+        return t({ base: "packageBase", patch: "patchSize", dlc: "dlcSize" }[kind] || "unknown");
+      }
+
+      function updatePackageActions() {
+        const queue = state.packageQueue?.entries || [];
+        const entries = state.packages?.entries || [];
+        const rows = new Map([...$("packageList").querySelectorAll(".package-row")].map(row => [row.dataset.path, row]));
+        entries.filter(entry => !entry.directory).forEach(entry => {
+          const row = rows.get(entry.path);
+          if (!row) return;
+          const installed = Boolean(entry.installed);
+          const missing = entry.kind !== "base" && !entry.base_installed;
+          const baseQueued = queue.some(item => item.kind === "base" && item.title_id === entry.title_id) ||
+            Boolean(state.storageJob?.active && state.storageJob.operation === "install" &&
+              state.storageJob.title_id === entry.title_id && state.storageJob.package_kind === "base");
+          const queued = queue.some(item => item.path === entry.path ||
+            (entry.content_id && item.content_id === entry.content_id && item.kind === entry.kind && item.version === entry.version)) ||
+            Boolean(state.storageJob?.active && state.storageJob.source === entry.path);
+          const install = row.querySelector(".package-install"), add = row.querySelector(".package-enqueue");
+          install.textContent = t(installed ? "packageInstalled" : missing ? "packageNoBase" : entry.kind === "base" && entry.base_installed ? "packageReplace" : entry.kind === "patch" ? "packageUpdate" : "packageInstall");
+          install.disabled = !entry.installable || installed || missing || queued || Boolean(state.storageJob?.active);
+          add.textContent = t(queued ? "packageQueued" : "packageEnqueue");
+          add.disabled = !entry.installable || installed || queued || (missing && !baseQueued && !(!state.packageQueue && entry.base_queued)) || queue.length >= 32 || state.packageQueueLoading;
+        });
+        $("packageList").querySelectorAll(".backport-install").forEach(button => {
+          button.disabled = button.dataset.selfSource === "true" || Boolean(state.storageJob?.active);
+        });
+        $("packageList").querySelectorAll(".backport-delete").forEach(button => {
+          button.disabled = Boolean(state.storageJob?.active);
+        });
+        $("packageQueueStart").disabled = !queue.length || Boolean(state.storageJob?.active) || state.packageQueueLoading;
+        $("packageQueueClear").disabled = !queue.length || state.packageQueueLoading;
+      }
+
+      function renderPackageQueue() {
+        const queue = state.packageQueue?.entries || [], list = $("packageQueueList");
+        replaceContent(list);
+        $("packageQueueCount").textContent = String(queue.length);
+        queue.forEach((entry, index) => {
+          const row = node("div", "package-queue-row");
+          row.append(node("span", "", `${index + 1}. ${entry.title_name || entry.title_id} · ${packageKind(entry.kind)} · ${entry.version || "—"}`));
+          const remove = actionButton("", () => changePackageQueue("remove", entry.path), "package-queue-remove");
+          const label = `${t("remove")}: ${entry.title_name || entry.title_id}`;
+          remove.setAttribute("aria-label", label);
+          remove.title = label;
+          const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          icon.setAttribute("viewBox", "0 0 24 24");
+          icon.setAttribute("fill", "none");
+          icon.setAttribute("stroke", "currentColor");
+          icon.setAttribute("stroke-width", "1.8");
+          icon.setAttribute("stroke-linecap", "round");
+          icon.setAttribute("stroke-linejoin", "round");
+          icon.setAttribute("aria-hidden", "true");
+          icon.setAttribute("focusable", "false");
+          const shape = document.createElementNS("http://www.w3.org/2000/svg", "path");
+          shape.setAttribute("d", "M3 6h18M9 6V3h6v3M5 6l1 14h12l1-14M10 10v6m4-6v6");
+          icon.appendChild(shape);
+          remove.appendChild(icon);
+          row.append(remove);
+          list.append(row);
+        });
+        updatePackageActions();
+      }
+
+      async function refreshPackageQueue() {
+        if (state.packageQueueLoading) return;
+        state.packageQueueLoading = true;
+        try { state.packageQueue = await api("/packages/queue", { action: "status" }); renderPackageQueue(); }
+        catch (_) { /* Keep the last known queue while disconnected. */ }
+        finally { state.packageQueueLoading = false; updatePackageActions(); }
+      }
+
+      async function changePackageQueue(action, path) {
+        if (state.packageQueueLoading) return;
+        const trigger = document.activeElement;
+        state.packageQueueLoading = true;
+        updatePackageActions();
+        try {
+          const data = await api("/packages/queue", { action, ...(path ? { path } : {}) });
+          if (action === "start") { renderStorageJob(data); scheduleStorageJobPoll(); focusControl($("cancelTransfer")); }
+          else { state.packageQueue = data; renderPackageQueue(); }
+        } catch (error) { toast(errorMessage(error), true); }
+        finally {
+          state.packageQueueLoading = false;
+          updatePackageActions();
+          if (action === "start") refreshPackageQueue();
+          else if (navigation.view === "packages" && !activeDialog() && trigger && (!trigger.isConnected || trigger.disabled)) {
+            const next = action === "remove" ? $("packageQueueList").querySelector("button:not(:disabled)")
+              : $("packageList").querySelector(".package-enqueue:not(:disabled)");
+            focusControl(next || (!$("packageQueueStart").disabled && $("packageQueueStart")) || $("packageRefresh"));
+          }
+        }
+      }
+
+      function packageSdkVersion(value) {
+        if (!Number.isInteger(value) || value <= 0 || value > 0xffffffff) return "—";
+        const major = value >>> 24, minor = (value >>> 16) & 255;
+        if (!major || (major >>> 4) > 9 || (major & 15) > 9) return "—";
+        const version = String((major >>> 4) * 10 + (major & 15));
+        return (minor >>> 4) <= 9 && (minor & 15) <= 9
+          ? `${version}.${(minor >>> 4)}${minor & 15}` : `${version}.xx`;
+      }
+
+      function backportCover(entry) {
+        const cover = node("div", "package-cover backport-cover");
+        const placeholder = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        placeholder.setAttribute("viewBox", "0 0 32 32");
+        placeholder.setAttribute("fill", "none");
+        placeholder.setAttribute("stroke", "currentColor");
+        placeholder.setAttribute("stroke-width", "1.7");
+        placeholder.setAttribute("stroke-linecap", "round");
+        placeholder.setAttribute("stroke-linejoin", "round");
+        placeholder.setAttribute("aria-hidden", "true");
+        placeholder.setAttribute("focusable", "false");
+        const shape = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        shape.setAttribute("d", "M11 9h10c4 0 6 4 7 10 1 5-2 7-5 4l-3-3h-8l-3 3c-3 3-6 1-5-4 1-6 3-10 7-10ZM9 14v6m-3-3h6m9-2h.1m3 3h.1");
+        placeholder.append(shape);
+        cover.append(placeholder);
+        if (entry.icon_url) {
+          const image = document.createElement("img");
+          image.alt = ""; image.loading = "lazy"; image.decoding = "async";
+          image.src = entry.icon_url;
+          image.addEventListener("error", () => replaceContent(cover, placeholder), { once: true });
+          replaceContent(cover, image);
+        }
+        return cover;
+      }
+
+      function renderPackages() {
+        const data = state.packages;
+        if (!data) return;
+        const roots = $("packageRoots"), list = $("packageList");
+        replaceContent(roots);
+        const selectedRoot = (data.roots || []).filter(path => data.path === path || data.path.startsWith(`${path}/`))
+          .sort((left, right) => right.length - left.length)[0];
+        (data.roots || []).forEach(path => {
+          const button = actionButton(path, () => refreshPackages(path, true));
+          button.classList.toggle("active", path === selectedRoot);
+          roots.append(button);
+        });
+        $("packagePath").textContent = data.path || t("storage");
+        $("packageUp").disabled = !data.path;
+        replaceContent(list);
+        const entries = (data.entries || []).slice().sort((left, right) =>
+          Number(Boolean(right.directory)) - Number(Boolean(left.directory)) || (left.title_name || left.name).localeCompare(right.title_name || right.name, currentLanguage));
+        if (!data.path) {
+          (data.roots || []).forEach(path => {
+            const button = actionButton(path, () => refreshPackages(path, true), "package-row package-folder");
+            list.append(button);
+          });
+        } else entries.forEach(entry => {
+          if (entry.directory) {
+            if (entry.backport) {
+              const row = node("div", "package-row backport-row");
+              row.dataset.path = entry.path;
+              const info = node("div", "package-info");
+              const heading = node("h3", "backport-title", entry.title_name || t("unknownGame"));
+              const metadata = node("p", "subtle");
+              const details = [entry.title_id, entry.version, entry.sdk_version ? `SDK ${packageSdkVersion(entry.sdk_version)}` : ""].filter(Boolean);
+              metadata.textContent = [t("backport"), ...details].join(" · ");
+              info.append(heading, metadata, node("p", "subtle", entry.name));
+              const selfSource = entry.path === `/data/homebrew/backports/${entry.name}`;
+              const install = actionButton(t(selfSource ? "packageInstalled" : entry.backport_installed ? "replaceBackport" : "installBackport"), () => installBackport(entry), "primary backport-install");
+              install.dataset.selfSource = String(selfSource);
+              install.dataset.path = entry.path;
+              const remove = actionButton(t("deleteBackport"), () => deleteBackport(entry), "danger backport-delete");
+              remove.dataset.path = entry.path;
+              const actions = node("div", "package-actions backport-actions");
+              actions.append(install, remove);
+              row.append(backportCover(entry), info, actions);
+              list.append(row);
+              return;
+            }
+            const folder = actionButton(entry.name, () => refreshPackages(entry.path, true), "package-row package-folder");
+            folder.dataset.path = entry.path;
+            list.append(folder);
+            return;
+          }
+          const row = node("div", "package-row");
+          row.dataset.path = entry.path;
+          const cover = node("div", "package-cover", "PKG");
+          if (entry.has_icon) {
+            const image = document.createElement("img");
+            image.alt = ""; image.loading = "lazy"; image.decoding = "async";
+            image.src = `/api/v1/packages/icon?path=${encodeURIComponent(entry.path)}&v=${encodeURIComponent(entry.icon_revision || "")}`;
+            image.addEventListener("error", () => { replaceContent(cover, document.createTextNode("PKG")); }, { once: true });
+            replaceContent(cover, image);
+          }
+          const info = node("div", "package-info");
+          info.append(node("h3", "", entry.title_name || entry.name));
+          const metadata = entry.installable
+            ? `${packageKind(entry.kind)} · ${entry.title_id} · ${entry.version || "—"} · SDK ${packageSdkVersion(entry.sdk_version)} · ${formatBytes(entry.size_bytes)}`
+            : `${t("packageInvalid")} · ${formatBytes(entry.size_bytes)}`;
+          info.append(node("p", "subtle", metadata), node("p", "subtle", entry.name));
+          const install = actionButton(t("packageInstall"), () => installPackage(entry), "primary package-install");
+          install.disabled = !entry.installable || Boolean(state.storageJob?.active);
+          install.dataset.installable = String(Boolean(entry.installable));
+          install.dataset.path = entry.path;
+          const add = actionButton(t("packageEnqueue"), () => changePackageQueue("add", entry.path), "package-enqueue");
+          add.dataset.path = entry.path;
+          const actions = node("div", "package-actions");
+          actions.append(install, add);
+          row.append(cover, info, actions);
+          list.append(row);
+        });
+        if (!list.children.length) list.append(node("div", "empty", t("packageEmpty")));
+        updatePackageActions();
+        if (data.offset || data.truncated) {
+          const pages = node("div", "package-toolbar");
+          const previous = actionButton(t("back"), () => refreshPackages(data.path, true, Math.max(0, data.offset - 256)));
+          const next = actionButton(t("continueAction"), () => refreshPackages(data.path, true, (data.offset || 0) + 256));
+          previous.disabled = !data.offset;
+          next.disabled = !data.truncated;
+          pages.append(previous, next);
+          list.append(pages);
+        }
+      }
+
+      async function refreshPackages(path = state.packages?.path || "", moveFocus = false, offset = 0) {
+        const request = ++state.packageRequest;
+        $("packageRefresh").disabled = true;
+        try {
+          const data = await api("/packages", { path, offset });
+          if (request !== state.packageRequest) return;
+          state.packages = data;
+          renderPackages();
+          refreshPackageQueue();
+          if (moveFocus && navigation.view === "packages" && !activeDialog())
+            focusControl($("packageList").querySelector("button:not(:disabled)") || $("packageUp"));
+        } catch (error) {
+          if (request === state.packageRequest) replaceContent($("packageList"), node("div", "empty", errorMessage(error)));
+        } finally {
+          if (request === state.packageRequest) $("packageRefresh").disabled = false;
+        }
+      }
+
+      async function installBackport(entry) {
+        if (state.storageJob?.active) return;
+        if (!await confirmAction(`${t(entry.backport_installed ? "replaceBackport" : "installBackport")}\n\n${entry.path}\n→ /data/homebrew/backports/${entry.name}`)) return;
+        try {
+          renderStorageJob(await api("/backports/install", { path: entry.path }));
+          scheduleStorageJobPoll();
+        } catch (error) { toast(errorMessage(error), true); }
+      }
+
+      async function deleteBackport(entry) {
+        if (state.storageJob?.active) return;
+        if (!await confirmAction(t("deleteBackportConfirm", { path: entry.path }))) return;
+        try {
+          renderStorageJob(await api("/backports/delete", { path: entry.path }));
+          scheduleStorageJobPoll();
+        } catch (error) { toast(errorMessage(error), true); }
+      }
+
+      async function installPackage(entry) {
+        if (entry.installed || (entry.kind !== "base" && !entry.base_installed)) return;
+        if (state.storageJob?.active) { toast(t("storageBusy"), true); return; }
+        if (!await confirmAction(t("packageConfirm", {
+          title: `${entry.title_name || entry.name} · ${entry.version || "—"}`,
+          kind: packageKind(entry.kind), path: entry.path
+        }))) return;
+        try {
+          const job = await api("/packages/install", { path: entry.path });
+          renderStorageJob(job);
+          scheduleStorageJobPoll();
+          toast(t("operationStarted"));
+          focusControl($("cancelTransfer"));
+        } catch (error) { toast(errorMessage(error), true); }
+      }
+
+      function stopBrowserStream(session = state.browserStream) {
+        if (!session || state.browserStream !== session) return;
+        state.browserStream = null;
+        session.controller.abort();
+        if (session.socket) session.socket.close();
+        $("packageStream").disabled = !$("packageFile").files.length;
+        $("packageChoose").disabled = playStationBrowser;
+      }
+
+      async function pumpPackageRanges(session, client) {
+        const options = { method: "POST", cache: "no-store", signal: session.controller.signal };
+        let empty = 0, failures = 0;
+        while (state.browserStream === session) {
+          try {
+            const response = await fetch(`${API}/packages/stream/request`, { ...options,
+              headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: session.token, client }) });
+            if ([404, 410].includes(response.status)) { stopBrowserStream(session); return; }
+            if (!response.ok) throw new Error(t("packageStreamLost"));
+            const range = await response.json();
+            if (range.status !== 0) throw new Error(t("packageStreamLost"));
+            if (!range.id) {
+              failures = 0;
+              await new Promise(resolve => setTimeout(resolve, ++empty > 16 ? 100 : 16));
+              continue;
+            }
+            empty = 0;
+            if (!Number.isSafeInteger(range.id) || range.id <= 0 ||
+                !Number.isSafeInteger(range.offset) || !Number.isSafeInteger(range.size) || range.offset < 0 ||
+                range.size <= 0 || range.size > session.chunkBytes || range.offset > session.file.size - range.size)
+              throw new Error(t("packageStreamLost"));
+            const body = await session.file.slice(range.offset, range.offset + range.size).arrayBuffer();
+            const chunk = await fetch(`${API}/packages/stream/chunk?token=${encodeURIComponent(session.token)}&id=${range.id}`,
+              { ...options, headers: { "Content-Type": "application/octet-stream" }, body });
+            if ([404, 410].includes(chunk.status)) { stopBrowserStream(session); return; }
+            if (chunk.status === 409) { failures = 0; continue; }
+            if (!chunk.ok || (await chunk.json()).status !== 0) throw new Error(t("packageStreamLost"));
+            failures = 0;
+          } catch (error) {
+            // Reclaim this client's pending range after a transient connection loss.
+            // The source file/job is never restarted, and recovery is bounded.
+            if (!["TypeError", "NetworkError"].includes(error.name) || ++failures > 3) throw error;
+            await new Promise(resolve => setTimeout(resolve, 150 * (2 ** (failures - 1))));
+          }
+        }
+      }
+
+      function streamPackageSocket(session, port) {
+        return new Promise((resolve, reject) => {
+          const url = new URL(location.href);
+          url.protocol = "ws:";
+          url.port = String(port);
+          url.pathname = `/${session.token}/ws`;
+          url.search = url.hash = "";
+          const socket = new WebSocket(url.href);
+          session.socket = socket;
+          const pending = new Set();
+          let settled = false;
+          const finish = error => {
+            if (settled) return;
+            settled = true;
+            if (error) reject(error); else resolve();
+          };
+          socket.onmessage = event => {
+            if (state.browserStream !== session || settled) return;
+            let message;
+            try { message = JSON.parse(event.data); }
+            catch (_) { finish(new Error(t("packageStreamLost"))); return; }
+            if (!message || typeof message !== "object" || Array.isArray(message)) {
+              finish(new Error(t("packageStreamLost"))); return;
+            }
+            if (message.op === "ready") return;
+            if (message.op === "ack") { pending.delete(message.id); return; }
+            if (message.op !== "range" || !Number.isSafeInteger(message.id) || message.id <= 0 ||
+                pending.has(message.id) || pending.size >= 2 || !Number.isSafeInteger(message.offset) ||
+                !Number.isSafeInteger(message.size) || message.size <= 0 || message.size > session.chunkBytes ||
+                message.offset < 0 || message.offset > session.file.size - message.size) {
+              finish(new Error(t("packageStreamLost"))); return;
+            }
+            pending.add(message.id);
+            // Reads overlap the other block's network transfer; only two blocks are in flight.
+            session.file.slice(message.offset, message.offset + message.size).arrayBuffer().then(buffer => {
+              if (settled || state.browserStream !== session || socket.readyState !== WebSocket.OPEN) return;
+              const packet = new Uint8Array(8 + buffer.byteLength);
+              const header = new DataView(packet.buffer);
+              header.setUint32(0, message.id >>> 0, true);
+              header.setUint32(4, Math.floor(message.id / 4294967296), true);
+              packet.set(new Uint8Array(buffer), 8);
+              socket.send(packet);
+            }).catch(error => finish(error));
+          };
+          socket.onerror = () => { /* onclose checks the authoritative job state. */ };
+          socket.onclose = async event => {
+            if (state.browserStream !== session || event.code === 1000) { finish(); return; }
+            // Installer cleanup may close the socket just before publishing its terminal state.
+            for (let i = 0; i < 3; ++i) {
+              try {
+                const job = await api("/games/storage/status", { job_id: session.id });
+                if (state.browserStream !== session || settled) { finish(); return; }
+                if (!job.active || job.job_id !== session.id) { renderStorageJob(job); finish(); return; }
+              } catch (_) { /* A real disconnect is reported below. */ }
+              await new Promise(done => setTimeout(done, 100));
+            }
+            finish(state.browserStream === session && !settled ? new Error(t("packageStreamLost")) : undefined);
+          };
+          session.controller.signal.addEventListener("abort", () => { socket.close(); finish(); }, { once: true });
+        });
+      }
+
+      async function streamPackage() {
+        const file = $("packageFile").files[0];
+        if (!file || state.browserStream) return;
+        if (state.storageJob?.active) { toast(t("storageBusy"), true); return; }
+        if (!/\.pkg$/i.test(file.name) || !Number.isSafeInteger(file.size) || !file.size) {
+          toast(t("packageInvalid"), true); return;
+        }
+        $("packageStream").disabled = $("packageChoose").disabled = true;
+        let session;
+        try {
+          const job = await api("/packages/stream", { name: file.name, size: file.size });
+          session = { file, token: job.token, id: job.job_id, chunkBytes: job.chunk_bytes || 262144, controller: new AbortController() };
+          state.browserStream = session;
+          renderStorageJob(job);
+          scheduleStorageJobPoll();
+          if (Number.isInteger(job.stream_port) && job.stream_port > 0 && job.stream_port <= 65535)
+            await streamPackageSocket(session, job.stream_port);
+          else await Promise.all(Array.from({ length: 2 }, (_, index) => pumpPackageRanges(session, index + 1)));
+        } catch (error) {
+          if (error.name !== "AbortError") {
+            toast(session ? t("packageStreamLost") : errorMessage(error), true);
+            if (session) {
+              stopBrowserStream(session);
+              try { await api("/games/storage/cancel", { job_id: session.id }); } catch (_) { /* Status polling reports connection loss. */ }
+            }
+          }
+        } finally {
+          if (session) stopBrowserStream(session);
+          else { $("packageStream").disabled = !$("packageFile").files.length; $("packageChoose").disabled = playStationBrowser; }
+        }
+      }
+
       function closeLanguagePicker() {
         $("languageModal").hidden = true;
         $("language").setAttribute("aria-expanded", "false");
@@ -3134,16 +4214,24 @@
           renderScanPaths();
           refreshStorage();
           refreshManual();
+          renderPackages();
+          renderPackageQueue();
         }
         closeLanguagePicker();
       }
 
       function goBack() {
         if (!$("confirmModal").hidden) finishConfirmation(false);
+        else if (!$("pathModal").hidden) {
+          const data = state.pathPicker?.data;
+          if (data?.path) browsePath(data.parent || "");
+          else closePathPicker();
+        }
         else if (!$("languageModal").hidden) closeLanguagePicker();
         else if (!$("destinationModal").hidden) closeDestinationPicker();
         else if (!$("logModal").hidden) closeDebugLog();
         else if (!$("modal").hidden) closeModal();
+        else if (navigation.view === "packages" && state.packages?.path) refreshPackages(state.packages.parent || "", true);
         else {
           if (navigation.view !== "library") switchView("library");
           const selected = Array.from($("games").querySelectorAll(".game-open"))
@@ -3190,8 +4278,19 @@
         navigation.keyboardAt = performance.now();
         const dialog = activeDialog();
         const aliases = { Left: "ArrowLeft", Right: "ArrowRight", Up: "ArrowUp", Down: "ArrowDown", Esc: "Escape", Spacebar: " " };
-        const legacyKeys = { 9: "Tab", 13: "Enter", 27: "Escape", 32: " ", 33: "PageUp", 34: "PageDown", 37: "ArrowLeft", 38: "ArrowUp", 39: "ArrowRight", 40: "ArrowDown" };
+        const legacyKeys = { 9: "Tab", 13: "Enter", 27: "Escape", 32: " ", 33: "PageUp", 34: "PageDown", 37: "ArrowLeft", 38: "ArrowUp", 39: "ArrowRight", 40: "ArrowDown", 166: "BrowserBack", 167: "BrowserForward" };
         const key = aliases[event.key] || (event.key && event.key !== "Unidentified" ? event.key : legacyKeys[event.keyCode]);
+        if (playStationBrowser && (key === "BrowserBack" || key === "BrowserForward")) {
+          event.preventDefault();
+          if (!event.repeat) switchMainTab(key === "BrowserBack" ? -1 : 1);
+          return;
+        }
+        if (!dialog && !isNativeEditor(document.activeElement) && !event.altKey && !event.ctrlKey && !event.metaKey &&
+            ["L1", "R1", "PageUp", "PageDown"].includes(key)) {
+          event.preventDefault();
+          if (!event.repeat) switchMainTab(key === "L1" || key === "PageUp" ? -1 : 1);
+          return;
+        }
         if (key === "Escape" || key === "BrowserBack") {
           event.preventDefault();
           goBack();
@@ -3234,29 +4333,35 @@
 
       function pollGamepad(now) {
         navigation.padFrame = 0;
-        if (playStationBrowser || document.hidden || !navigator.getGamepads) return;
+        if (document.hidden || !navigator.getGamepads) return;
         let pads;
         try { pads = Array.from(navigator.getGamepads()).filter(pad => pad && pad.connected && pad.mapping === "standard"); }
         catch (_) { return; }
         if (!pads.length) { navigation.padCommand = ""; return; }
         const pad = pads[0];
-        if (activeDialog() === $("modal") && Math.abs(pad.axes[3] || 0) > .55 && now >= navigation.padScrollAt) {
+        if (!playStationBrowser && activeDialog() === $("modal") && Math.abs(pad.axes[3] || 0) > .55 && now >= navigation.padScrollAt) {
           const pane = document.activeElement.closest("#detailSidebar") || $("details");
           pane.scrollTop += pad.axes[3] * 80;
           navigation.padScrollAt = now + 80;
         }
         const pressed = index => pad.buttons[index] && pad.buttons[index].pressed;
         let command = "";
-        if (pressed(1)) command = "back";
-        else if (pressed(0)) command = "accept";
-        else if (pressed(12) || pad.axes[1] < -.55) command = "up";
-        else if (pressed(13) || pad.axes[1] > .55) command = "down";
-        else if (pressed(14) || pad.axes[0] < -.55) command = "left";
-        else if (pressed(15) || pad.axes[0] > .55) command = "right";
+        if (pressed(4) && !pressed(5)) command = "previousTab";
+        else if (pressed(5) && !pressed(4)) command = "nextTab";
+        else if (!playStationBrowser) {
+          if (pressed(1)) command = "back";
+          else if (pressed(0)) command = "accept";
+          else if (pressed(12) || pad.axes[1] < -.55) command = "up";
+          else if (pressed(13) || pad.axes[1] > .55) command = "down";
+          else if (pressed(14) || pad.axes[0] < -.55) command = "left";
+          else if (pressed(15) || pad.axes[0] > .55) command = "right";
+        }
         const changed = command !== navigation.padCommand;
-        if (command && (changed || (now >= navigation.padRepeatAt && command !== "accept" && command !== "back"))) {
+        const repeatable = ["up", "down", "left", "right"].includes(command);
+        if (command && (changed || (repeatable && now >= navigation.padRepeatAt))) {
           if (now - navigation.keyboardAt > 100) {
-            if (command === "back") goBack();
+            if (command === "previousTab" || command === "nextTab") switchMainTab(command === "previousTab" ? -1 : 1);
+            else if (command === "back") goBack();
             else if (command === "accept") {
               const target = document.activeElement;
               if (now - navigation.activatedAt >= 150) {
@@ -3276,7 +4381,7 @@
       }
 
       function startGamepad() {
-        if (!playStationBrowser && !navigation.padFrame && !document.hidden && navigator.getGamepads)
+        if (!navigation.padFrame && !document.hidden && navigator.getGamepads)
           navigation.padFrame = requestAnimationFrame(pollGamepad);
       }
 
@@ -3310,6 +4415,24 @@
         return root.contains(target) && !target.closest("[hidden]") && target.getClientRects().length ? target : null;
       }
 
+      $("packagesTab").addEventListener("click", () => switchView("packages"));
+      $("packageHome").addEventListener("click", () => refreshPackages("", true));
+      $("packageUp").addEventListener("click", () => refreshPackages(state.packages?.parent || "", true));
+      $("packageRefresh").addEventListener("click", () => refreshPackages());
+      $("packageQueueStart").addEventListener("click", () => changePackageQueue("start"));
+      $("packageQueueClear").addEventListener("click", () => changePackageQueue("clear"));
+      $("packageChoose").disabled = playStationBrowser;
+      $("packageRemotePanel").hidden = playStationBrowser;
+      $("packageChoose").addEventListener("click", () => $("packageFile").click());
+      $("packageFile").addEventListener("change", () => {
+        const file = $("packageFile").files[0];
+        $("packageFileName").textContent = file ? `${file.name} · ${formatBytes(file.size)}` : "";
+        $("packageStream").disabled = !file || Boolean(state.browserStream);
+      });
+      $("packageStream").addEventListener("click", streamPackage);
+      window.addEventListener("beforeunload", event => {
+        if (state.browserStream) { event.preventDefault(); event.returnValue = ""; }
+      });
       $("libraryTab").addEventListener("click", () => switchView("library"));
       $("confirmCancel").addEventListener("click", () => finishConfirmation(false));
       $("confirmAccept").addEventListener("click", () => finishConfirmation(true));
@@ -3407,6 +4530,17 @@
       $("copyLog").addEventListener("click", copyLog);
       $("logModal").addEventListener("click", (event) => { if (event.target === $("logModal")) closeDebugLog(); });
       $("destinationForm").addEventListener("submit", submitCustomDestination);
+      document.querySelectorAll("[data-browse-path]").forEach(button => {
+        button.addEventListener("click", () => openPathPicker(button.dataset.browsePath));
+      });
+      $("closePath").addEventListener("click", closePathPicker);
+      $("cancelPath").addEventListener("click", closePathPicker);
+      $("pathModal").addEventListener("click", event => { if (event.target === $("pathModal")) closePathPicker(); });
+      $("pathDrives").addEventListener("click", () => browsePath());
+      $("pathUp").addEventListener("click", () => browsePath(state.pathPicker?.data?.parent || ""));
+      $("choosePath").addEventListener("click", () => choosePath(state.pathPicker?.data?.path));
+      $("pathPrevious").addEventListener("click", () => { const data = state.pathPicker?.data; if (data) browsePath(data.path, Math.max(0, data.offset - 256)); });
+      $("pathNext").addEventListener("click", () => { const data = state.pathPicker?.data; if (data?.truncated) browsePath(data.path, data.offset + 256); });
       $("closeDestination").addEventListener("click", closeDestinationPicker);
       $("destinationModal").addEventListener("click", (event) => { if (event.target === $("destinationModal")) closeDestinationPicker(); });
       $("closeModal").addEventListener("click", closeModal);
@@ -3418,6 +4552,7 @@
         $("fanTemperature").append(option);
       }
       applyLanguage(currentLanguage);
+      initializeTabHistory();
       Promise.all([refreshAll(), refreshManual(), refreshSettings(), refreshStorageJob()]);
     })();
   </script>

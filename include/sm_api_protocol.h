@@ -33,5 +33,15 @@
 #define SM_API_ROUTE_DEBUG_LOG "/api/v1/debug-log"
 #define SM_API_ROUTE_KERNEL_LOG "/api/v1/kernel-log"
 #define SM_API_ROUTE_SCAN "/api/v1/scan"
+#define SM_API_ROUTE_PACKAGES "/api/v1/packages"
+#define SM_API_ROUTE_FILES "/api/v1/files"
+#define SM_API_ROUTE_BACKPORT_INSTALL "/api/v1/backports/install"
+#define SM_API_ROUTE_BACKPORT_DELETE "/api/v1/backports/delete"
+#define SM_API_ROUTE_PACKAGE_INSTALL "/api/v1/packages/install"
+#define SM_API_ROUTE_PACKAGE_QUEUE "/api/v1/packages/queue"
+#define SM_API_ROUTE_PACKAGE_ICON "/api/v1/packages/icon"
+#define SM_API_ROUTE_PACKAGE_STREAM "/api/v1/packages/stream"
+#define SM_API_ROUTE_PACKAGE_RANGE "/api/v1/packages/stream/request"
+#define SM_API_ROUTE_PACKAGE_CHUNK "/api/v1/packages/stream/chunk"
 
 #endif
