@@ -889,6 +889,53 @@ paths:
         "501":
           $ref: "#/components/responses/NotImplemented"
 
+  /api/v1/games/content/uninstall:
+    options:
+      operationId: preflightUninstallGameContent
+      summary: CORS preflight
+      tags: [Games]
+      responses:
+        "204":
+          $ref: "#/components/responses/Preflight"
+    post:
+      operationId: uninstallGameContent
+      summary: Delete the installed patch or one installed DLC
+      description: Uses AppUnInstallPat or AppUnInstallAddcont without deleting the base game. DLC content_id must belong to title_id and have native installed state 4. Blocked during rest mode, active/prepared games, scanning and storage/install operations. Successful deletion invalidates app.db metadata; clients should reload game information and sizes.
+      tags: [Games]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title_id, kind]
+              properties:
+                title_id: {type: string, pattern: '^(PPSA|CUSA)[0-9]{5}$'}
+                kind: {type: string, enum: [patch, dlc]}
+                content_id: {type: string, minLength: 21, maxLength: 47, description: Required for DLC; full content ID of the selected add-on}
+      responses:
+        "200":
+          description: Content uninstallation accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, title_id, kind, uninstall_requested]
+                properties:
+                  status: {type: integer, enum: [0]}
+                  title_id: {type: string}
+                  kind: {type: string, enum: [patch, dlc]}
+                  content_id: {type: string, description: Present for DLC}
+                  uninstall_requested: {type: boolean, enum: [true]}
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Busy"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /api/v1/packages:
     post:
       operationId: listPackages
@@ -1719,8 +1766,8 @@ components:
           type: array
           items:
             type: string
-            enum: [web_ui, storage_space, list_images, list_games, game_info, game_data_sizes, pkg_install, pkg_browser_stream, game_icon, mount_game, unmount_game, uninstall_game, move_game_source, copy_game_source, delete_game_source, unpack_game_image, storage_job_status, storage_job_cancel, list_manual_sources, add_manual_source, remove_manual_source, manage_settings, read_debug_log, read_kernel_log, rescan]
-          example: [web_ui, storage_space, list_images, list_games, game_info, game_data_sizes, pkg_install, pkg_browser_stream, game_icon, mount_game, unmount_game, uninstall_game, move_game_source, copy_game_source, delete_game_source, unpack_game_image, storage_job_status, storage_job_cancel, list_manual_sources, add_manual_source, remove_manual_source, manage_settings, read_debug_log, read_kernel_log, rescan]
+            enum: [web_ui, storage_space, list_images, list_games, game_info, game_data_sizes, pkg_install, pkg_browser_stream, game_icon, mount_game, unmount_game, uninstall_game, uninstall_game_content, move_game_source, copy_game_source, delete_game_source, unpack_game_image, storage_job_status, storage_job_cancel, list_manual_sources, add_manual_source, remove_manual_source, manage_settings, read_debug_log, read_kernel_log, rescan]
+          example: [web_ui, storage_space, list_images, list_games, game_info, game_data_sizes, pkg_install, pkg_browser_stream, game_icon, mount_game, unmount_game, uninstall_game, uninstall_game_content, move_game_source, copy_game_source, delete_game_source, unpack_game_image, storage_job_status, storage_job_cancel, list_manual_sources, add_manual_source, remove_manual_source, manage_settings, read_debug_log, read_kernel_log, rescan]
 
     StorageMount:
       type: object
@@ -2032,9 +2079,80 @@ components:
           format: int64
           minimum: 0
           description: Present when dlc_size_status is zero. Sum of regular-file lengths below the title's addcont directories; aliases are counted once.
+        system_content_size_status:
+          type: integer
+          description: games/info only. AppGetSize result, zero on success; native error codes are preserved.
+        system_content_size_bytes:
+          type: integer
+          format: int64
+          minimum: 0
+          description: System-accounted installed total from AppGetSize. Does not replace physical source sizes, particularly for folders and images.
+        patch_info_status:
+          type: integer
+          description: Patch information result, zero on success. Native download status falls back to installed patch.pkg presence when task history is absent. Available in library listings and game details.
+        has_patch:
+          type: boolean
+          description: Library only; present when patch_info_status is zero. True for a playable/completed native patch or a regular nonempty patch.pkg in the supported internal/ext0/ext1 roots.
+        base_version:
+          type: string
+          description: Game details only. Original version read from the base PKG for a patched PKG game. Empty if absent or unreadable; never assumed from the current patched version.
+        dlc_count:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Library only; installed DLC count from AppGetAddcontNum, present when dlc_info_status is zero. Does not enumerate content or measure files.
+        patch:
+          $ref: "#/components/schemas/InstalledPatchInfo"
+        dlc_info_status:
+          type: integer
+          description: Native DLC count result in library listings, enumeration result in game details. Zero on success; independent of filesystem measurement errors.
+        dlc_info_truncated:
+          type: boolean
+          description: More than 256 matching records exist. Partial arrays can also accompany a nonzero dlc_info_status.
+        dlc:
+          type: array
+          maxItems: 256
+          items:
+            $ref: "#/components/schemas/InstalledDlcInfo"
         status:
           type: integer
           const: 0
+
+    InstalledPatchInfo:
+      type: object
+      additionalProperties: false
+      required: [installed, version, size_bytes]
+      properties:
+        installed:
+          type: boolean
+          description: Native patch status is playable/completed or a regular nonempty patch.pkg exists in a supported internal/ext0/ext1 root. Consult patch_info_status before treating false as absence.
+        version:
+          type: string
+        size_bytes:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Patch byte count from native install status, or the filesystem measurement when installed-file fallback is used. Native counts may exclude metadata.
+
+    InstalledDlcInfo:
+      type: object
+      additionalProperties: false
+      required: [content_id, title_name, version, size_status]
+      properties:
+        content_id:
+          type: string
+        title_name:
+          type: string
+        version:
+          type: string
+        size_status:
+          type: integer
+          minimum: 0
+        size_bytes:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Size recorded by the system for this DLC. Present when size_status is zero.
 
     GamesResponse:
       type: object
@@ -2058,7 +2176,7 @@ components:
       allOf:
         - $ref: "#/components/schemas/Game"
         - type: object
-          required: [status, size_status]
+          required: [status, size_status, patch_info_status, patch, dlc_info_status, dlc_info_truncated, dlc, system_content_size_status]
 
     StorageJobResponse:
       type: object
@@ -2306,7 +2424,7 @@ components:
       type: object
       required: [status, path, parent, roots, entries, offset, truncated]
       properties:
-        status: {type: integer, const: 0}
+        status: {type: integer, enum: [0]}
         path: {type: string}
         parent: {type: string}
         roots: {type: array, items: {type: string}}
@@ -2342,7 +2460,7 @@ components:
       type: object
       required: [status, queue_running, queue_completed, queue_total, entries]
       properties:
-        status: {type: integer, const: 0}
+        status: {type: integer, enum: [0]}
         queue_running: {type: boolean}
         queue_completed: {type: integer, minimum: 0}
         queue_total: {type: integer, minimum: 0}
@@ -2365,7 +2483,7 @@ components:
       description: StorageJobResponse fields plus the private browser source token and on-demand WebSocket port.
       required: [status, job_id, token, stream_port, chunk_bytes]
       properties:
-        status: {type: integer, const: 0}
+        status: {type: integer, enum: [0]}
         job_id: {type: integer, minimum: 1}
         token: {type: string, minLength: 32, maxLength: 32}
         stream_port: {type: integer, minimum: 1, maximum: 65535}
@@ -2374,7 +2492,7 @@ components:
       type: object
       required: [status, id, offset, size]
       properties:
-        status: {type: integer, const: 0}
+        status: {type: integer, enum: [0]}
         id: {type: integer, minimum: 0}
         offset: {type: integer, format: int64, minimum: 0}
         size: {type: integer, minimum: 0, maximum: 524288}

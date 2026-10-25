@@ -193,6 +193,11 @@ static storage_job_t g_storage_job = {
 };
 
 static int operation_http_status(int status);
+static bool storage_job_is_active(storage_job_state_t state) {
+  return state == STORAGE_JOB_PREPARING || state == STORAGE_JOB_MEASURING ||
+         state == STORAGE_JOB_TRANSFERRING ||
+         state == STORAGE_JOB_DELETING || state == STORAGE_JOB_FINALIZING || state == STORAGE_JOB_INSTALLING;
+}
 static void handle_file_listing(struct MHD_Connection *connection, struct json_object *request, bool packages);
 static void handle_backport_operation(struct MHD_Connection *connection, struct json_object *request,
                                       game_storage_operation_t operation);
@@ -670,6 +675,7 @@ static void handle_version(struct MHD_Connection *fd) {
       !append_json_string(capabilities, "mount_game") ||
       !append_json_string(capabilities, "unmount_game") ||
       !append_json_string(capabilities, "uninstall_game") ||
+      !append_json_string(capabilities, "uninstall_game_content") ||
       !append_json_string(capabilities, "move_game_source") ||
       !append_json_string(capabilities, "copy_game_source") ||
       !append_json_string(capabilities, "delete_game_source") ||
@@ -1124,6 +1130,69 @@ static bool find_installed_pkg_game(const char *title_id,
   return found;
 }
 
+static const char *const game_patch_roots[] = {
+    "/user/patch", "/mnt/ext0/user/patch", "/mnt/ext0/ps5/user/patch",
+    "/mnt/ext1/user/patch", "/mnt/ext1/ps5/user/patch"};
+
+static int resolve_game_patch_file(const char *title_id, char path[MAX_PATH]) {
+  for (size_t i = 0; i < sizeof(game_patch_roots) / sizeof(game_patch_roots[0]); ++i) {
+    int length = snprintf(path, MAX_PATH, "%s/%s/patch.pkg", game_patch_roots[i], title_id);
+    if (length < 0 || length >= MAX_PATH) return ENAMETOOLONG;
+    struct stat st;
+    if (lstat(path, &st) != 0) {
+      if (errno == ENOENT || errno == ENOTDIR) continue;
+      return errno != 0 ? errno : EIO;
+    }
+    if (!S_ISREG(st.st_mode)) return S_ISLNK(st.st_mode) ? ELOOP : EINVAL;
+    if (st.st_size > 0) return 0;
+  }
+  path[0] = 0;
+  return ENOENT;
+}
+
+static int read_game_patch_status(const char *title_id, const char *content_id,
+                                  sm_pkg_native_status_t *patch, bool *installed) {
+  *installed = false;
+  memset(patch, 0, sizeof(*patch));
+  if (api_listener_stop_requested(NULL)) return ECANCELED;
+  int status = content_id && content_id[0] ?
+      sceAppInstUtilGetPatchInstallStatus(content_id, patch) : EINVAL;
+  patch->status[sizeof(patch->status) - 1] = 0;
+  patch->patch_version[sizeof(patch->patch_version) - 1] = 0;
+  if (!status && patch->error.code) status = patch->error.code;
+  if (!status && patch->total > INT64_MAX) status = EOVERFLOW;
+  if (!status && !strcmp(patch->status, "error")) status = EIO;
+  *installed = !status && (!strcmp(patch->status, "playable") || !strcmp(patch->status, "completed"));
+  if (!*installed) {
+    // Download task history can be empty for an installed patch, including on ext drives.
+    char path[MAX_PATH];
+    int file_status = resolve_game_patch_file(title_id, path);
+    if (!file_status) {
+      *installed = true;
+      patch->total = 0;
+      patch->patch_version[0] = 0;
+      return 0;
+    }
+    if (!status && file_status != ENOENT) status = file_status;
+  }
+  return status;
+}
+
+static bool add_game_content_summary(struct json_object *item, const char *title_id,
+                                      const char *content_id, bool installed_pkg) {
+  sm_pkg_native_status_t patch;
+  bool installed = false;
+  int patch_status = installed_pkg ? read_game_patch_status(title_id, content_id, &patch, &installed) : 0;
+  uint64_t dlc_count = 0;
+  int dlc_status = api_listener_stop_requested(NULL) ? ECANCELED :
+      sceAppInstUtilAppGetAddcontNum(title_id, &dlc_count);
+  if (!dlc_status && dlc_count > INT64_MAX) dlc_status = EOVERFLOW;
+  return add_json_int(item, "patch_info_status", patch_status) &&
+      (patch_status || add_json_bool(item, "has_patch", installed)) &&
+      add_json_int(item, "dlc_info_status", dlc_status) &&
+      (dlc_status || add_json_int(item, "dlc_count", (int64_t)dlc_count));
+}
+
 static struct json_object *game_to_json(
     const sm_game_cache_snapshot_entry_t *source,
     const sm_app_db_game_info_t *metadata, const runtime_config_t *cfg,
@@ -1211,6 +1280,10 @@ static struct json_object *game_to_json(
     return NULL;
   }
 
+  if (library_entry && !add_game_content_summary(item, source->title_id, content_id, installed_pkg)) {
+    json_object_put(item);
+    return NULL;
+  }
   if (include_size) {
     uint64_t size = 0;
     uint64_t file_count = 0;
@@ -1595,9 +1668,6 @@ static int measure_title_content(const char *const *roots, size_t root_count,
 
 static bool add_game_data_sizes(struct json_object *item,
                                const char *title_id) {
-  static const char *const patch_roots[] = {
-      "/user/patch", "/mnt/ext0/user/patch", "/mnt/ext0/ps5/user/patch",
-      "/mnt/ext1/user/patch", "/mnt/ext1/ps5/user/patch"};
   static const char *const dlc_roots[] = {
       "/user/addcont", "/mnt/ext0/user/addcont", "/mnt/ext0/ps5/user/addcont",
       "/mnt/ext1/user/addcont", "/mnt/ext1/ps5/user/addcont"};
@@ -1605,8 +1675,8 @@ static bool add_game_data_sizes(struct json_object *item,
   int save_status = measure_title_savedata("/user/home", title_id, &saves);
   int download_status = measure_optional_title_directory(
       "/user/download", title_id, &downloads);
-  int patch_status = measure_title_content(patch_roots,
-      sizeof(patch_roots) / sizeof(patch_roots[0]), title_id, &patches);
+  int patch_status = measure_title_content(game_patch_roots,
+      sizeof(game_patch_roots) / sizeof(game_patch_roots[0]), title_id, &patches);
   int dlc_status = measure_title_content(dlc_roots,
       sizeof(dlc_roots) / sizeof(dlc_roots[0]), title_id, &dlc);
   return add_json_int(item, "save_data_size_status", save_status) &&
@@ -1621,6 +1691,109 @@ static bool add_game_data_sizes(struct json_object *item,
          add_json_int(item, "dlc_size_status", dlc_status) &&
          (dlc_status != 0 ||
           add_json_int(item, "dlc_size_bytes", (int64_t)dlc));
+}
+
+static bool valid_game_dlc_content_id(const char *content_id, const char *title_id) {
+  if (!content_id || !title_id) return false;
+  size_t length = strnlen(content_id, 48);
+  if (length < 21 || length >= 48 || content_id[6] != '-' ||
+      strncmp(content_id + 7, title_id, 9) || content_id[16] != '_' ||
+      content_id[17] < '0' || content_id[17] > '9' ||
+      content_id[18] < '0' || content_id[18] > '9' || content_id[19] != '-')
+    return false;
+  for (size_t i = 0; i < length; ++i) {
+    unsigned char c = (unsigned char)content_id[i];
+    if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
+          (c >= '0' && c <= '9') || c == '-' || c == '_')) return false;
+  }
+  return true;
+}
+
+static bool add_game_content_info(struct json_object *item, const char *title_id,
+                                  const char *content_id, bool installed_pkg) {
+  uint64_t system_size = 0;
+  int system_status = api_listener_stop_requested(NULL) ? ECANCELED :
+      sceAppInstUtilAppGetSize(title_id, &system_size);
+  if (!system_status && system_size > INT64_MAX) system_status = EOVERFLOW;
+  if (!add_json_int(item, "system_content_size_status", system_status) ||
+      (!system_status && !add_json_int(item, "system_content_size_bytes", (int64_t)system_size)))
+    return false;
+
+  sm_pkg_native_status_t native_patch = {0};
+  bool installed = false;
+  int patch_status = installed_pkg ? read_game_patch_status(title_id, content_id, &native_patch, &installed) : 0;
+  const char *patch_version = native_patch.patch_version[0] ? native_patch.patch_version :
+      json_object_get_string(json_object_object_get(item, "version"));
+  int64_t patch_size = native_patch.total ? (int64_t)native_patch.total :
+      json_object_get_int64(json_object_object_get(item, "patch_size_bytes"));
+  struct json_object *patch = json_object_new_object();
+  if (!add_json_value(item, "patch", patch) ||
+      !add_json_int(item, "patch_info_status", patch_status) ||
+      !add_json_bool(patch, "installed", installed) ||
+      !add_json_string(patch, "version", installed && patch_version ? patch_version : "") ||
+      !add_json_int(patch, "size_bytes", installed ? patch_size : 0))
+    return false;
+  char base_version[MAX_GAME_VERSION] = {0};
+  if (installed && !api_listener_stop_requested(NULL)) {
+    const char *path = json_object_get_string(json_object_object_get(item, "path"));
+    sm_pkg_info_t base;
+    if (path && path[0] && sm_pkg_parse_file(path, NULL, &base) &&
+        base.pkg_kind == PKG_KIND_BASE && !strcmp(base.title_id, title_id))
+      (void)strlcpy(base_version, base.app_ver, sizeof(base_version));
+  }
+  if (!add_json_string(item, "base_version", base_version)) return false;
+
+  struct json_object *dlc = json_object_new_array();
+  if (!add_json_value(item, "dlc", dlc)) return false;
+  enum { PAGE = 16, LIMIT = 256 };
+  sm_pkg_native_addcont_t page[PAGE];
+  uint64_t total = 0;
+  size_t offset = 0;
+  int dlc_status = 0;
+  while (offset < LIMIT) {
+    if (api_listener_stop_requested(NULL)) { dlc_status = ECANCELED; break; }
+    memset(page, 0, sizeof(page));
+    dlc_status = sceAppInstUtilGetAddcontInfoList2(title_id, 0, (int)offset, PAGE, page, &total);
+    if (dlc_status) break;
+    if (total > INT64_MAX) { dlc_status = EOVERFLOW; break; }
+    size_t count = total > offset ? (size_t)(total - offset) : 0;
+    if (count > PAGE) count = PAGE;
+    for (size_t i = 0; i < count; ++i) {
+      sm_pkg_native_addcont_t *entry = &page[i];
+      // Validate the parent title and all string boundaries before publishing.
+      if (!valid_game_dlc_content_id(entry->content_id, title_id)) {
+        dlc_status = EPROTO;
+        break;
+      }
+      entry->title_name[sizeof(entry->title_name) - 1] = 0;
+      entry->version[sizeof(entry->version) - 1] = 0;
+      bool duplicate = false;
+      for (size_t j = 0; j < json_object_array_length(dlc); ++j) {
+        struct json_object *old = json_object_array_get_idx(dlc, j);
+        if (!strcmp(json_object_get_string(json_object_object_get(old, "content_id")), entry->content_id)) {
+          duplicate = true;
+          break;
+        }
+      }
+      if (duplicate) continue;
+      struct json_object *record = json_object_new_object();
+      if (!record) return false;
+      bool built = add_json_string(record, "content_id", entry->content_id) &&
+          add_json_string(record, "title_name", entry->title_name) &&
+          add_json_string(record, "version", entry->version) &&
+          add_json_int(record, "size_status", entry->size > INT64_MAX ? EOVERFLOW : 0) &&
+          (entry->size > INT64_MAX || add_json_int(record, "size_bytes", (int64_t)entry->size));
+      if (!built || json_object_array_add(dlc, record) != 0) {
+        json_object_put(record);
+        return false;
+      }
+    }
+    if (dlc_status) break;
+    offset += count;
+    if (offset >= total) break;
+  }
+  return add_json_int(item, "dlc_info_status", dlc_status) &&
+      add_json_bool(item, "dlc_info_truncated", !dlc_status && offset < total);
 }
 
 static void handle_game_info(struct MHD_Connection *connection,
@@ -1664,6 +1837,8 @@ static void handle_game_info(struct MHD_Connection *connection,
     return;
   }
   if (!add_game_data_sizes(response, title_id) ||
+      !add_game_content_info(response, title_id, json_object_get_string(
+          json_object_object_get(response, "content_id")), installed_pkg) ||
       !add_json_int(response, "status", 0)) {
     json_object_put(response);
     send_out_of_memory_response(connection);
@@ -2550,6 +2725,96 @@ static void handle_uninstall(struct MHD_Connection *fd,
   json_object_put(response);
 }
 
+static void handle_content_uninstall(struct MHD_Connection *connection,
+                                      struct json_object *request) {
+  const char *title_id = get_title_id(request);
+  struct json_object *kind_value = NULL, *cid_value = NULL;
+  const char *kind = NULL, *cid = NULL;
+  if (json_object_object_get_ex(request, "kind", &kind_value) &&
+      json_object_is_type(kind_value, json_type_string))
+    kind = json_object_get_string(kind_value);
+  bool patch = kind && json_object_get_string_len(kind_value) == 5 && !strcmp(kind, "patch");
+  bool dlc = kind && json_object_get_string_len(kind_value) == 3 && !strcmp(kind, "dlc");
+  char dir_name[32] = {0};
+  if (dlc && json_object_object_get_ex(request, "content_id", &cid_value) &&
+      json_object_is_type(cid_value, json_type_string)) {
+    cid = json_object_get_string(cid_value);
+    size_t length = strlen(cid);
+    if ((size_t)json_object_get_string_len(cid_value) != length ||
+        !valid_game_dlc_content_id(cid, title_id)) {
+      cid = NULL;
+    }
+    if (cid) strlcpy(dir_name, cid + 20, sizeof(dir_name));
+  }
+  if (!title_id || (!patch && !dlc) || (dlc && !cid)) {
+    send_error_response(connection, 400, EINVAL,
+                        "valid title_id, kind (patch/dlc), and matching DLC content_id required");
+    return;
+  }
+  if (!sm_scanner_try_begin_external_mutation()) {
+    send_operation_error_response(connection, EBUSY, "scanner_busy");
+    return;
+  }
+  if (!sm_shellcore_try_begin_external_mutation()) {
+    sm_scanner_end_external_mutation();
+    send_operation_error_response(connection, EBUSY, "runtime_busy");
+    return;
+  }
+  const char *error = runtime_mutation_block_reason();
+  int status = error ? EBUSY : 0;
+  int native_status = 0;
+  // Serialize with storage submissions, including the PKG installation queue.
+  pthread_mutex_lock(&g_storage_job.mutex);
+  if (!status && (!g_storage_job.accepting ||
+      storage_job_is_active(g_storage_job.state) || g_storage_job.pkg_queue_running)) {
+    status = EBUSY; error = "storage_busy";
+  }
+  if (!status && sm_shellcore_title_is_protected(title_id)) {
+    status = EBUSY; error = "game_active";
+  }
+  if (!status && (sm_shellcore_service_has_prepared_mount() || is_data_mounted(title_id))) {
+    status = EBUSY; error = "runtime_prepared";
+  }
+  if (!status && !is_installed(title_id)) status = ENOENT;
+  if (!status && patch) {
+    sm_game_cache_snapshot_entry_t package;
+    if (!find_installed_pkg_game(title_id, &package))
+      status = errno != 0 ? errno : ENOENT;
+  }
+  if (!status && dlc) {
+    int installed = 0;
+    native_status = sceAppInstUtilGetAddcontInstalledStatus(cid, &installed);
+    if (native_status) status = EIO;
+    else if (installed != SM_PKG_ADDCONT_INSTALLED) status = ENOENT;
+  }
+  if (!status) {
+    native_status = patch ? sceAppInstUtilAppUnInstallPat(title_id) :
+        sceAppInstUtilAppUnInstallAddcont(title_id, dir_name);
+    if (native_status) status = EIO;
+    else invalidate_app_db_title_cache();
+  }
+  pthread_mutex_unlock(&g_storage_job.mutex);
+  sm_shellcore_end_external_mutation();
+  sm_scanner_end_external_mutation();
+  log_debug("  [API] content uninstall: title=%s kind=%s content=%s status=%d native=0x%08X",
+            title_id, kind, cid ? cid : "", status, (uint32_t)native_status);
+  if (status) {
+    send_operation_error_response(connection, status, error);
+    return;
+  }
+  struct json_object *response = new_status_response(0);
+  if (!response || !add_json_string(response, "title_id", title_id) ||
+      !add_json_string(response, "kind", kind) ||
+      !add_json_bool(response, "uninstall_requested", true) ||
+      (dlc && !add_json_string(response, "content_id", cid))) {
+    if (response) json_object_put(response);
+    send_out_of_memory_response(connection);
+    return;
+  }
+  (void)send_json_object(connection, 200, response);
+  json_object_put(response);
+}
+
 static void handle_game_fakelib(struct MHD_Connection *connection,
                                  struct json_object *request) {
   const char *title_id = get_title_id(request);
@@ -2665,6 +2930,8 @@ static void dispatch_request(struct MHD_Connection *connection,
     handle_mount_operation(connection, json, false);
   } else if (strcmp(route, SM_API_ROUTE_UNINSTALL) == 0) {
     handle_uninstall(connection, json);
+  } else if (strcmp(route, SM_API_ROUTE_CONTENT_UNINSTALL) == 0) {
+    handle_content_uninstall(connection, json);
   } else if (strcmp(route, SM_API_ROUTE_GAME_MOVE) == 0) {
     handle_game_storage_operation(connection, json, GAME_STORAGE_MOVE);
   } else if (strcmp(route, SM_API_ROUTE_GAME_COPY) == 0) {
@@ -2981,13 +3248,6 @@ static bool storage_job_is_cancellable(storage_job_state_t state) {
   return state == STORAGE_JOB_PREPARING || state == STORAGE_JOB_MEASURING ||
          state == STORAGE_JOB_TRANSFERRING || state == STORAGE_JOB_INSTALLING;
 }
-
-static bool storage_job_is_active(storage_job_state_t state) {
-  return state == STORAGE_JOB_PREPARING || state == STORAGE_JOB_MEASURING ||
-         state == STORAGE_JOB_TRANSFERRING ||
-         state == STORAGE_JOB_DELETING || state == STORAGE_JOB_FINALIZING || state == STORAGE_JOB_INSTALLING;
-}
-
 static void copy_storage_job_snapshot_locked(
     storage_job_snapshot_t *snapshot) {
   snapshot->active = storage_job_is_active(g_storage_job.state);
@@ -4098,7 +4358,9 @@ static void *package_install_thread(void *opaque) {
         int installed = 0;
         native_result = sceAppInstUtilGetAddcontInstalledStatus(submission.info.content_id, &installed);
         if (native_result) { status = EIO; break; }
-        completed = installed == 1;
+        // An existing DLC can remain installed while its replacement transfers.
+        completed = installed == SM_PKG_ADDCONT_INSTALLED &&
+            (completed || !strcmp(native_status.status, "none"));
       }
       if (completed) break;
       for (int i = 0; i < 10; ++i) {

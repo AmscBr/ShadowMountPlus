@@ -577,7 +577,7 @@ static bool parse_package(const char *path, const struct stat *st,
 bool sm_pkg_parse_file(const char *path, const struct stat *st, sm_pkg_info_t *candidate) {
   (void)st;
   if (!path || !candidate || !pkg_extension(pkg_filename(path)) || strlen(path) >= MAX_PATH) return false;
-  int fd = open(path, O_RDONLY | O_NOFOLLOW);
+  int fd = open(path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
   if (fd < 0) return false;
   struct stat opened;
   bool ok = fstat(fd, &opened) == 0 && S_ISREG(opened.st_mode) && opened.st_size > 0;

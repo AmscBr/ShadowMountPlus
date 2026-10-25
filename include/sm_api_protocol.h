@@ -19,6 +19,7 @@
 #define SM_API_ROUTE_MOUNT "/api/v1/games/mount"
 #define SM_API_ROUTE_UNMOUNT "/api/v1/games/unmount"
 #define SM_API_ROUTE_UNINSTALL "/api/v1/games/uninstall"
+#define SM_API_ROUTE_CONTENT_UNINSTALL "/api/v1/games/content/uninstall"
 #define SM_API_ROUTE_GAME_MOVE "/api/v1/games/move"
 #define SM_API_ROUTE_GAME_COPY "/api/v1/games/copy"
 #define SM_API_ROUTE_GAME_DELETE "/api/v1/games/delete"

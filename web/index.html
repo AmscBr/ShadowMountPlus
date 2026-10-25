@@ -230,6 +230,8 @@
     .badge { border: 1px solid var(--line); border-radius: 999px; color: var(--muted); padding: 2px 7px; font-size: 11px; text-transform: uppercase; }
     .badge.live { border-color: rgba(82, 211, 154, .35); color: var(--green); }
     .badge.image { border-color: rgba(85, 167, 255, .38); color: #8cc4ff; }
+    .game-patch-marker { color: #ffc878; font-family: system-ui, sans-serif; font-size: .9em; }
+    .badge.dlc { border-color: rgba(180, 147, 255, .38); color: #b493ff; }
 
     .game-path { overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
     .game-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
@@ -341,7 +343,7 @@
     .detail-grid { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 7px 12px; margin-top: 13px; font-size: 13px; }
     .detail-key { color: var(--muted); }
     .detail-value { min-width: 0; overflow-wrap: anywhere; }
-    .detail-sizes { margin: 0 0 14px; padding: 8px 10px; border: 1px solid #2c415d; border-radius: 10px; background: #0c192b; }
+    .detail-sizes { margin: 0 0 10px; padding: 8px 10px; border: 1px solid #2c415d; border-radius: 10px; background: #0c192b; }
     .size-total { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 6px; color: var(--muted); font-size: 13px; line-height: 1.2; }
     .size-total strong { color: var(--text); font-size: 18px; white-space: nowrap; }
     .size-bar { display: flex; height: 8px; overflow: hidden; border-radius: 6px; background: #31415a; }
@@ -356,6 +358,22 @@
     .detail-size dt { color: var(--muted); font-size: 12px; line-height: 1.3; overflow-wrap: anywhere; }
     .detail-size dt::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-inline-end: 5px; border-radius: 50%; background: var(--size-color); vertical-align: middle; }
     .detail-size dd { margin: 4px 0 0; font-size: 14px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+    .content-summary { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin: 0 8px 8px; font-size: 13px; }
+    .content-dlc-toggle { min-width: 0; min-height: 36px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 9px; background: #0c192b; }
+    .content-summary .content-dlc-toggle { justify-content: space-between; min-height: 36px; padding: 6px 10px; font-size: 14px; }
+    .content-chevron { width: 16px; height: 16px; flex-shrink: 0; margin-inline-start: 10px; color: var(--muted); }
+    .detail-base-version { margin-inline-start: 8px; color: var(--muted); font-size: inherit; }
+    .content-dlc-list { grid-column: 1 / -1; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+    .content-dlc-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; padding: 10px 16px; }
+    .content-dlc-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px 12px; }
+    .content-delete { min-height: 36px; padding: 6px 10px; }
+    .content-dlc-row .content-delete { min-width: 0; min-height: 38px; padding: 6px 10px; font-size: 14px; }
+    .content-dlc-row + .content-dlc-row { border-top: 1px solid var(--line); }
+    .content-dlc-title { min-width: 0; overflow-wrap: anywhere; }
+    .content-dlc-title strong { display: block; font-weight: 500; }
+    .content-dlc-title small { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
+    .content-dlc-meta { color: var(--muted); text-align: end; font-size: 12px; white-space: nowrap; }
+    .content-dlc-meta span { display: block; }
     .modal-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 18px 18px; }
     .destination-list { display: grid; gap: 8px; padding: 18px; }
     .destination-list .btn { justify-content: space-between; width: 100%; text-align: left; }
@@ -477,7 +495,7 @@
     @media (max-width: 850px) { .package-workbench { grid-template-columns: minmax(0, 1fr); } .package-sources { display: grid; align-self: start; grid-template-columns: repeat(2, minmax(0, 1fr)); } .package-queue { position: static; max-height: none; } }
     @media (max-width: 540px) { .package-sources { display: contents; } .package-content { grid-row: 2; } .package-queue { grid-row: 3; } .package-remote { grid-row: 4; } .package-row { gap: 12px; padding: 14px; } .package-row > .btn { min-width: 90px; } }
     .section-head { margin: 0 0 18px; }
-    .games { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 26px 20px; }
+    .games { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 26px 20px; align-items: start; }
     .game-card { display: block; position: relative; min-width: 0; min-height: 0; padding: 9px; border: 2px solid transparent; border-radius: 18px; background: rgba(17, 30, 50, .7); transition: border-color .15s, background .15s; }
     .game-card:hover { background: #1b304c; }
     .game-card.is-focused { border-color: #e3f3ff; background: #1c3554; box-shadow: 0 0 0 4px rgba(104, 181, 255, .25), 0 12px 36px #0005; }
@@ -579,13 +597,13 @@
     .modal-card.details-card { display: grid; grid-template-columns: 272px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; height: calc(100vh - 48px); max-height: 620px; }
     .modal-head { flex-shrink: 0; padding: 24px; }
     .modal-head h2 { font-size: 26px; }
-    .details-card .modal-head { grid-column: 2; grid-row: 1; min-width: 0; padding: 16px 20px 16px 0; }
+    .details-card .modal-head { grid-column: 2; grid-row: 1; min-width: 0; padding: 12px 20px 12px 0; }
     .details-card .modal-head > div { min-width: 0; }
     .details-card .modal-head h2 { font-size: 24px; }
     .details-card .close { width: 44px; height: 44px; min-height: 44px; }
     .modal-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 4px; }
     .modal-meta .badges { margin: 0; }
-    .details { display: block; grid-column: 2; grid-row: 2; min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 12px 20px 12px 0; }
+    .details { display: block; grid-column: 2; grid-row: 2; min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 8px 20px 8px 0; }
     .details:focus, .log-view:focus { outline-offset: -4px; }
     .detail-sidebar { grid-column: 1; grid-row: 1 / 3; min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 16px 20px 12px; }
     .detail-sidebar .cover { width: 232px; height: 232px; margin: 0 auto; }
@@ -601,7 +619,7 @@
     [aria-checked="true"] .switch-track { background: #2383c4; }
     [aria-checked="true"] .switch-track::after { transform: translateX(14px); }
     .fakelib-controls .fakelib-hint { font-size: 12px; line-height: 1.4; }
-    .detail-grid { margin-top: 0; font-size: 16px; grid-template-columns: 160px minmax(0, 1fr); gap: 8px 16px; }
+    .detail-grid { margin-top: 0; font-size: 16px; line-height: 1.45; grid-template-columns: 160px minmax(0, 1fr); gap: 8px 16px; }
     .modal-actions { flex-shrink: 0; gap: 12px; padding: 18px 24px 24px; border-top: 1px solid var(--line); }
     .details-card .modal-actions { grid-column: 1 / -1; grid-row: 3; display: grid; grid-template-columns: repeat(auto-fit, minmax(125px, 1fr)); gap: 8px; padding: 12px 18px; }
     .details-card .modal-actions .btn { min-width: 0; min-height: 46px; padding: 8px; font-size: 14px; line-height: 1.3; white-space: normal; }
@@ -1075,6 +1093,13 @@
           backport: "Backport",
           deleteBackport: "Delete backport",
           deleteBackportConfirm: "Permanently delete this backport folder?\n\n{path}\n\nThis cannot be undone.",
+          baseVersionBeforePatch: "(version before patch - {version})",
+          patchBadge: "Patch",
+          deletePatch: "Delete patch",
+          deleteDlc: "Delete DLC",
+          deletePatchConfirm: "Delete the installed patch for {game}? The base game will be kept.",
+          deleteDlcConfirm: "Delete DLC “{content}” for {game}? The game and other DLC will be kept.",
+          noDlc: "No DLC installed",
           unknownGame: "Unknown game",
           packagesHint: "Games, patches, DLC and backports from /data and external drives",
           packageDevices: "Drives and folders",
@@ -1331,6 +1356,13 @@
           backport: "Бэкпорт",
           deleteBackport: "Удалить бэкпорт",
           deleteBackportConfirm: "Удалить выбранную папку бэкпорта?\n\n{path}\n\nОперацию нельзя отменить.",
+          baseVersionBeforePatch: "(версия до патча - {version})",
+          patchBadge: "Патч",
+          deletePatch: "Удалить патч",
+          deleteDlc: "Удалить DLC",
+          deletePatchConfirm: "Удалить установленный патч для {game}? Основная игра сохранится.",
+          deleteDlcConfirm: "Удалить DLC «{content}» для {game}? Игра и остальные дополнения сохранятся.",
+          noDlc: "Нет установленных DLC",
           unknownGame: "Неизвестная игра",
           packagesHint: "Игры, патчи, DLC и бэкпорты из /data и с внешних дисков",
           packageDevices: "Диски и папки",
@@ -1602,7 +1634,7 @@
         if (values.length !== translationKeys.length) throw new Error(`Invalid translation catalog: ${locale}`);
         translations[locale] = Object.fromEntries(translationKeys.map((key, index) => [key, values[index]]));
       }
-      const extendedTranslationKeys = ["changeFakelibMode","consoleTools","consoleSections","consoleOverview","consoleSystem","consoleSources","consoleLogs","consoleOverviewHint","consoleSystemHint","consoleNotifications","consoleNetwork","consoleCooling","consoleLibraryHint","consoleMounting","consoleMaintenance","consoleSourcesHint","consoleIndividualGames","consoleLogsHint","consoleKernelHint","consoleRecordLog","consoleSaveHint","back","navigate","controllerHint","confirmation","continueAction","chooseUnpackDestination","deleteAfterUnpack","selectAction","saveDataSize","downloadSize","saveDataSizeHint","detailSizes","sourceSize","patchSize","dlcSize","systemSize","sourceSizeHint","patchSizeHint","dlcSizeHint","systemSizeHint","copyToClipboard","logCopied","clipboardUnavailable","remountConfirm","chooseCopyDestination","noOtherDestinations","chooseMoveDestination","destinationDescription","customDestination","useDestination","totalSize","packagesTab","packagesHint","packageDevices","packageRemote","packageRemoteHint","packageChooseFile","packageStream","packageEmpty","packageInvalid","packageInstall","packageConfirm","packageBase","packageTruncated","operationInstall","jobInstalling","packageStreamLost","packageInstallError","packageBaseMissing","packageInstalled","packageUpdate","packageNoBase","packageEnqueue","packageQueued","packageQueue","packageQueueStart","packageQueueClear","packageQueueFull","packageReplace","browse","installBackport","replaceBackport","backport","unknownGame","deleteBackport","deleteBackportConfirm"];
+      const extendedTranslationKeys = ["changeFakelibMode","consoleTools","consoleSections","consoleOverview","consoleSystem","consoleSources","consoleLogs","consoleOverviewHint","consoleSystemHint","consoleNotifications","consoleNetwork","consoleCooling","consoleLibraryHint","consoleMounting","consoleMaintenance","consoleSourcesHint","consoleIndividualGames","consoleLogsHint","consoleKernelHint","consoleRecordLog","consoleSaveHint","back","navigate","controllerHint","confirmation","continueAction","chooseUnpackDestination","deleteAfterUnpack","selectAction","saveDataSize","downloadSize","saveDataSizeHint","detailSizes","sourceSize","patchSize","dlcSize","systemSize","sourceSizeHint","patchSizeHint","dlcSizeHint","systemSizeHint","copyToClipboard","logCopied","clipboardUnavailable","remountConfirm","chooseCopyDestination","noOtherDestinations","chooseMoveDestination","destinationDescription","customDestination","useDestination","totalSize","packagesTab","packagesHint","packageDevices","packageRemote","packageRemoteHint","packageChooseFile","packageStream","packageEmpty","packageInvalid","packageInstall","packageConfirm","packageBase","packageTruncated","operationInstall","jobInstalling","packageStreamLost","packageInstallError","packageBaseMissing","packageInstalled","packageUpdate","packageNoBase","packageEnqueue","packageQueued","packageQueue","packageQueueStart","packageQueueClear","packageQueueFull","packageReplace","browse","installBackport","replaceBackport","backport","unknownGame","deleteBackport","deleteBackportConfirm","baseVersionBeforePatch","noDlc","deletePatch","deleteDlc","deletePatchConfirm","deleteDlcConfirm","patchBadge"];
       const extendedTranslationCatalogs = {
         "ja-JP": [
           "選択してモードを切り替え", "本体", "本体の設定項目", "概要",
@@ -1630,7 +1662,9 @@
           "バックポートをインストール",
           "バックポートを置き換え", "バックポート",
           "不明なゲーム",
-          "バックポートを削除", "このバックポートフォルダーを削除しますか？\n\n{path}"
+          "バックポートを削除", "このバックポートフォルダーを削除しますか？\n\n{path}",
+          "（パッチ適用前のバージョン: {version}）", "インストール済みDLCなし",
+          "パッチを削除", "DLCを削除", "{game}のパッチを削除しますか？ゲーム本体は保持されます。", "{game}のDLC「{content}」を削除しますか？ゲームと他のDLCは保持されます。", "パッチ"
         ],
         "fr-FR": [
           "Sélectionner pour changer de mode", "Console", "Rubriques de la console", "Vue d’ensemble",
@@ -1658,7 +1692,9 @@
           "Installer le backport",
           "Remplacer le backport", "Backport",
           "Jeu inconnu",
-          "Supprimer le backport", "Supprimer définitivement ce dossier de backport ?\n\n{path}"
+          "Supprimer le backport", "Supprimer définitivement ce dossier de backport ?\n\n{path}",
+          "(version avant correctif : {version})", "Aucun DLC installé",
+          "Supprimer le correctif", "Supprimer le DLC", "Supprimer le correctif de {game} ? Le jeu de base sera conservé.", "Supprimer le DLC « {content} » de {game} ? Le jeu et les autres DLC seront conservés.", "Correctif"
         ],
         "es-ES": [
           "Selecciona para cambiar de modo", "Consola", "Secciones de la consola", "Resumen",
@@ -1686,7 +1722,9 @@
           "Instalar backport",
           "Reemplazar backport", "Backport",
           "Juego desconocido",
-          "Eliminar backport", "¿Eliminar permanentemente esta carpeta de backport?\n\n{path}"
+          "Eliminar backport", "¿Eliminar permanentemente esta carpeta de backport?\n\n{path}",
+          "(versión anterior al parche: {version})", "No hay DLC instalados",
+          "Eliminar parche", "Eliminar DLC", "¿Eliminar el parche de {game}? Se conservará el juego base.", "¿Eliminar el DLC «{content}» de {game}? Se conservarán el juego y los demás DLC.", "Parche"
         ],
         "de-DE": [
           "Auswählen, um den Modus zu wechseln", "Konsole", "Konsolenbereiche", "Übersicht",
@@ -1714,7 +1752,9 @@
           "Backport installieren",
           "Backport ersetzen", "Backport",
           "Unbekanntes Spiel",
-          "Backport löschen", "Diesen Backport-Ordner endgültig löschen?\n\n{path}"
+          "Backport löschen", "Diesen Backport-Ordner endgültig löschen?\n\n{path}",
+          "(Version vor dem Patch: {version})", "Keine DLCs installiert",
+          "Patch löschen", "DLC löschen", "Patch für {game} löschen? Das Hauptspiel bleibt erhalten.", "DLC „{content}“ für {game} löschen? Das Spiel und andere DLCs bleiben erhalten.", "Patch"
         ],
         "it-IT": [
           "Seleziona per cambiare modalità", "Console", "Sezioni della console", "Panoramica",
@@ -1742,7 +1782,9 @@
           "Installa backport",
           "Sostituisci backport", "Backport",
           "Gioco sconosciuto",
-          "Elimina backport", "Eliminare definitivamente questa cartella di backport?\n\n{path}"
+          "Elimina backport", "Eliminare definitivamente questa cartella di backport?\n\n{path}",
+          "(versione prima della patch: {version})", "Nessun DLC installato",
+          "Elimina patch", "Elimina DLC", "Eliminare la patch di {game}? Il gioco base verrà conservato.", "Eliminare il DLC «{content}» di {game}? Il gioco e gli altri DLC verranno conservati.", "Patch"
         ],
         "nl-NL": [
           "Selecteer om van modus te wisselen", "Console", "Consoleonderdelen", "Overzicht",
@@ -1770,7 +1812,9 @@
           "Backport installeren",
           "Backport vervangen", "Backport",
           "Onbekend spel",
-          "Backport verwijderen", "Deze backportmap definitief verwijderen?\n\n{path}"
+          "Backport verwijderen", "Deze backportmap definitief verwijderen?\n\n{path}",
+          "(versie vóór de patch: {version})", "Geen DLC geïnstalleerd",
+          "Patch verwijderen", "DLC verwijderen", "De patch voor {game} verwijderen? Het basisspel blijft behouden.", "DLC ‘{content}’ voor {game} verwijderen? Het spel en andere DLC blijven behouden.", "Patch"
         ],
         "pt-PT": [
           "Selecionar para mudar de modo", "Consola", "Secções da consola", "Visão geral",
@@ -1798,7 +1842,9 @@
           "Instalar backport",
           "Substituir backport", "Backport",
           "Jogo desconhecido",
-          "Eliminar backport", "Eliminar permanentemente esta pasta de backport?\n\n{path}"
+          "Eliminar backport", "Eliminar permanentemente esta pasta de backport?\n\n{path}",
+          "(versão antes da atualização: {version})", "Nenhum DLC instalado",
+          "Eliminar atualização", "Eliminar DLC", "Eliminar a atualização de {game}? O jogo base será mantido.", "Eliminar o DLC «{content}» de {game}? O jogo e os restantes DLC serão mantidos.", "Atualização"
         ],
         "ko-KR": [
           "선택하여 모드 전환", "콘솔", "콘솔 메뉴", "개요",
@@ -1826,7 +1872,9 @@
           "백포트 설치",
           "백포트 교체", "백포트",
           "알 수 없는 게임",
-          "백포트 삭제", "이 백포트 폴더를 영구적으로 삭제하시겠습니까?\n\n{path}"
+          "백포트 삭제", "이 백포트 폴더를 영구적으로 삭제하시겠습니까?\n\n{path}",
+          "(패치 전 버전: {version})", "설치된 DLC 없음",
+          "패치 삭제", "DLC 삭제", "{game}의 패치를 삭제할까요? 기본 게임은 유지됩니다.", "{game}의 DLC “{content}”를 삭제할까요? 게임과 다른 DLC는 유지됩니다.", "패치"
         ],
         "zh-TW": [
           "選取以切換模式", "主機", "主機選單", "概覽",
@@ -1854,7 +1902,9 @@
           "安裝向下相容補丁",
           "取代向下相容補丁", "向下相容補丁",
           "未知遊戲",
-          "刪除向下相容補丁", "永久刪除此向下相容補丁資料夾？\n\n{path}"
+          "刪除向下相容補丁", "永久刪除此向下相容補丁資料夾？\n\n{path}",
+          "（更新前版本：{version}）", "沒有已安裝的DLC",
+          "刪除更新檔", "刪除DLC", "要刪除{game}的更新檔嗎？將保留主遊戲。", "要刪除{game}的DLC「{content}」嗎？將保留遊戲與其他DLC。", "更新檔"
         ],
         "zh-CN": [
           "选择以切换模式", "主机", "主机菜单", "概览",
@@ -1882,7 +1932,9 @@
           "安装向下兼容补丁",
           "替换向下兼容补丁", "向下兼容补丁",
           "未知游戏",
-          "删除向下兼容补丁", "永久删除此向下兼容补丁文件夹？\n\n{path}"
+          "删除向下兼容补丁", "永久删除此向下兼容补丁文件夹？\n\n{path}",
+          "（补丁前版本：{version}）", "没有已安装的DLC",
+          "删除补丁", "删除DLC", "删除{game}的补丁？将保留基础游戏。", "删除{game}的DLC“{content}”？将保留游戏及其他DLC。", "补丁"
         ],
         "fi-FI": [
           "Vaihda tilaa valitsemalla", "Konsoli", "Konsolin osiot", "Yleiskatsaus",
@@ -1910,7 +1962,9 @@
           "Asenna backport",
           "Korvaa backport", "Backport",
           "Tuntematon peli",
-          "Poista backport", "Poistetaanko tämä backport-kansio pysyvästi?\n\n{path}"
+          "Poista backport", "Poistetaanko tämä backport-kansio pysyvästi?\n\n{path}",
+          "(versio ennen päivitystä: {version})", "Ei asennettuja lisäosia",
+          "Poista päivitys", "Poista DLC", "Poistetaanko pelin {game} päivitys? Peruspeli säilytetään.", "Poistetaanko pelin {game} DLC ”{content}”? Peli ja muut DLC:t säilytetään.", "Päivitys"
         ],
         "sv-SE": [
           "Välj för att byta läge", "Konsol", "Konsolavsnitt", "Översikt",
@@ -1938,7 +1992,9 @@
           "Installera backport",
           "Ersätt backport", "Backport",
           "Okänt spel",
-          "Ta bort backport", "Ta bort den här backport-mappen permanent?\n\n{path}"
+          "Ta bort backport", "Ta bort den här backport-mappen permanent?\n\n{path}",
+          "(version före uppdateringen: {version})", "Inga DLC installerade",
+          "Ta bort uppdatering", "Ta bort DLC", "Ta bort uppdateringen för {game}? Grundspelet behålls.", "Ta bort DLC ”{content}” för {game}? Spelet och övriga DLC behålls.", "Uppdatering"
         ],
         "da-DK": [
           "Vælg for at skifte tilstand", "Konsol", "Konsolafsnit", "Oversigt",
@@ -1966,7 +2022,9 @@
           "Installer backport",
           "Erstat backport", "Backport",
           "Ukendt spil",
-          "Slet backport", "Slet denne backport-mappe permanent?\n\n{path}"
+          "Slet backport", "Slet denne backport-mappe permanent?\n\n{path}",
+          "(version før opdateringen: {version})", "Ingen DLC installeret",
+          "Slet opdatering", "Slet DLC", "Slet opdateringen til {game}? Grundspillet bevares.", "Slet DLC ”{content}” til {game}? Spillet og andre DLC bevares.", "Opdatering"
         ],
         "no-NO": [
           "Velg for å bytte modus", "Konsoll", "Konsollseksjoner", "Oversikt",
@@ -1994,7 +2052,9 @@
           "Installer backport",
           "Erstatt backport", "Backport",
           "Ukjent spill",
-          "Slett backport", "Slette denne backport-mappen permanent?\n\n{path}"
+          "Slett backport", "Slette denne backport-mappen permanent?\n\n{path}",
+          "(versjon før oppdateringen: {version})", "Ingen DLC installert",
+          "Slett oppdatering", "Slett DLC", "Slette oppdateringen til {game}? Grunnspillet beholdes.", "Slette DLC «{content}» til {game}? Spillet og andre DLC beholdes.", "Oppdatering"
         ],
         "pl-PL": [
           "Wybierz, aby zmienić tryb", "Konsola", "Sekcje konsoli", "Przegląd",
@@ -2022,7 +2082,9 @@
           "Zainstaluj backport",
           "Zastąp backport", "Backport",
           "Nieznana gra",
-          "Usuń backport", "Trwale usunąć ten folder backportu?\n\n{path}"
+          "Usuń backport", "Trwale usunąć ten folder backportu?\n\n{path}",
+          "(wersja przed aktualizacją: {version})", "Brak zainstalowanych DLC",
+          "Usuń aktualizację", "Usuń DLC", "Usunąć aktualizację gry {game}? Podstawowa gra zostanie zachowana.", "Usunąć DLC „{content}” do gry {game}? Gra i pozostałe DLC zostaną zachowane.", "Aktualizacja"
         ],
         "pt-BR": [
           "Selecione para alternar o modo", "Console", "Seções do console", "Visão geral",
@@ -2050,7 +2112,9 @@
           "Instalar backport",
           "Substituir backport", "Backport",
           "Jogo desconhecido",
-          "Excluir backport", "Excluir permanentemente esta pasta de backport?\n\n{path}"
+          "Excluir backport", "Excluir permanentemente esta pasta de backport?\n\n{path}",
+          "(versão antes da atualização: {version})", "Nenhum DLC instalado",
+          "Excluir atualização", "Excluir DLC", "Excluir a atualização de {game}? O jogo base será mantido.", "Excluir o DLC “{content}” de {game}? O jogo e os outros DLC serão mantidos.", "Atualização"
         ],
         "tr-TR": [
           "Mod değiştirmek için seçin", "Konsol", "Konsol bölümleri", "Genel bakış",
@@ -2078,7 +2142,9 @@
           "Backport yükle",
           "Backport değiştir", "Backport",
           "Bilinmeyen oyun",
-          "Backport sil", "Bu backport klasörü kalıcı olarak silinsin mi?\n\n{path}"
+          "Backport sil", "Bu backport klasörü kalıcı olarak silinsin mi?\n\n{path}",
+          "(yama öncesi sürüm: {version})", "Yüklü DLC yok",
+          "Yamayı sil", "DLC sil", "{game} yaması silinsin mi? Ana oyun korunacak.", "{game} için “{content}” DLC silinsin mi? Oyun ve diğer DLC içerikleri korunacak.", "Yama"
         ],
         "ar-SA": [
           "اختر لتغيير الوضع", "الجهاز", "أقسام الجهاز", "نظرة عامة",
@@ -2106,7 +2172,9 @@
           "تثبيت التصحيح التوافقي",
           "استبدال التعديل المتوافق", "تعديل متوافق",
           "لعبة غير معروفة",
-          "حذف التعديل المتوافق", "هل تريد حذف مجلد التعديل المتوافق هذا نهائيًا؟\n\n{path}"
+          "حذف التعديل المتوافق", "هل تريد حذف مجلد التعديل المتوافق هذا نهائيًا؟\n\n{path}",
+          "(الإصدار قبل التصحيح: {version})", "لا توجد إضافات مثبّتة",
+          "حذف التصحيح", "حذف DLC", "هل تريد حذف تصحيح {game}؟ سيتم الاحتفاظ باللعبة الأساسية.", "هل تريد حذف DLC «{content}» للعبة {game}؟ سيتم الاحتفاظ باللعبة والإضافات الأخرى.", "تصحيح"
         ],
         "cs-CZ": [
           "Vyberte pro změnu režimu", "Konzole", "Sekce konzole", "Přehled",
@@ -2134,7 +2202,9 @@
           "Nainstalovat backport",
           "Nahradit backport", "Backport",
           "Neznámá hra",
-          "Smazat backport", "Trvale smazat tuto složku backportu?\n\n{path}"
+          "Smazat backport", "Trvale smazat tuto složku backportu?\n\n{path}",
+          "(verze před aktualizací: {version})", "Žádná nainstalovaná DLC",
+          "Odstranit aktualizaci", "Odstranit DLC", "Odstranit aktualizaci hry {game}? Základní hra zůstane zachována.", "Odstranit DLC „{content}“ pro {game}? Hra a ostatní DLC zůstanou zachovány.", "Aktualizace"
         ],
         "hu-HU": [
           "Válaszd ki a mód váltásához", "Konzol", "Konzol szakaszai", "Áttekintés",
@@ -2162,7 +2232,9 @@
           "Backport telepítése",
           "Backport cseréje", "Backport",
           "Ismeretlen játék",
-          "Backport törlése", "Végleg törli ezt a backportmappát?\n\n{path}"
+          "Backport törlése", "Végleg törli ezt a backportmappát?\n\n{path}",
+          "(frissítés előtti verzió: {version})", "Nincs telepített DLC",
+          "Frissítés törlése", "DLC törlése", "Törli a(z) {game} frissítését? Az alapjáték megmarad.", "Törli a(z) {game} „{content}” DLC-jét? A játék és a többi DLC megmarad.", "Frissítés"
         ],
         "el-GR": [
           "Επιλέξτε για αλλαγή λειτουργίας", "Κονσόλα", "Ενότητες κονσόλας", "Επισκόπηση",
@@ -2190,7 +2262,9 @@
           "Εγκατάσταση backport",
           "Αντικατάσταση backport", "Backport",
           "Άγνωστο παιχνίδι",
-          "Διαγραφή backport", "Οριστική διαγραφή αυτού του φακέλου backport;\n\n{path}"
+          "Διαγραφή backport", "Οριστική διαγραφή αυτού του φακέλου backport;\n\n{path}",
+          "(έκδοση πριν την ενημέρωση: {version})", "Δεν υπάρχουν εγκατεστημένα DLC",
+          "Διαγραφή ενημέρωσης", "Διαγραφή DLC", "Να διαγραφεί η ενημέρωση του {game}; Το βασικό παιχνίδι θα διατηρηθεί.", "Να διαγραφεί το DLC «{content}» του {game}; Το παιχνίδι και τα άλλα DLC θα διατηρηθούν.", "Ενημέρωση"
         ],
         "ro-RO": [
           "Selectează pentru a schimba modul", "Consolă", "Secțiunile consolei", "Prezentare generală",
@@ -2218,7 +2292,9 @@
           "Instalează backport",
           "Înlocuiește backportul", "Backport",
           "Joc necunoscut",
-          "Șterge backportul", "Ștergeți definitiv acest folder de backport?\n\n{path}"
+          "Șterge backportul", "Ștergeți definitiv acest folder de backport?\n\n{path}",
+          "(versiunea înainte de actualizare: {version})", "Niciun DLC instalat",
+          "Șterge actualizarea", "Șterge DLC", "Ștergeți actualizarea pentru {game}? Jocul de bază va fi păstrat.", "Ștergeți DLC-ul „{content}” pentru {game}? Jocul și celelalte DLC-uri vor fi păstrate.", "Actualizare"
         ],
         "th-TH": [
           "เลือกเพื่อเปลี่ยนโหมด", "คอนโซล", "ส่วนต่าง ๆ ของคอนโซล", "ภาพรวม",
@@ -2246,7 +2322,9 @@
           "ติดตั้งแบ็กพอร์ต",
           "แทนที่แบ็กพอร์ต", "แบ็กพอร์ต",
           "เกมที่ไม่รู้จัก",
-          "ลบแบ็กพอร์ต", "ลบโฟลเดอร์แบ็กพอร์ตนี้อย่างถาวรหรือไม่?\n\n{path}"
+          "ลบแบ็กพอร์ต", "ลบโฟลเดอร์แบ็กพอร์ตนี้อย่างถาวรหรือไม่?\n\n{path}",
+          "(เวอร์ชันก่อนแพตช์: {version})", "ไม่มี DLC ที่ติดตั้ง",
+          "ลบแพตช์", "ลบ DLC", "ลบแพตช์ของ {game} หรือไม่? เกมหลักจะยังคงอยู่", "ลบ DLC “{content}” ของ {game} หรือไม่? เกมและ DLC อื่นจะยังคงอยู่", "แพตช์"
         ],
         "vi-VN": [
           "Chọn để chuyển chế độ", "Máy chơi game", "Các mục của máy chơi game", "Tổng quan",
@@ -2274,7 +2352,9 @@
           "Cài đặt backport",
           "Thay thế backport", "Backport",
           "Trò chơi không xác định",
-          "Xóa backport", "Xóa vĩnh viễn thư mục backport này?\n\n{path}"
+          "Xóa backport", "Xóa vĩnh viễn thư mục backport này?\n\n{path}",
+          "(phiên bản trước bản vá: {version})", "Chưa cài đặt DLC",
+          "Xóa bản vá", "Xóa DLC", "Xóa bản vá của {game}? Trò chơi gốc sẽ được giữ lại.", "Xóa DLC “{content}” của {game}? Trò chơi và các DLC khác sẽ được giữ lại.", "Bản vá"
         ],
         "id-ID": [
           "Pilih untuk mengganti mode", "Konsol", "Bagian konsol", "Ringkasan",
@@ -2302,7 +2382,9 @@
           "Pasang backport",
           "Ganti backport", "Backport",
           "Game tidak dikenal",
-          "Hapus backport", "Hapus folder backport ini secara permanen?\n\n{path}"
+          "Hapus backport", "Hapus folder backport ini secara permanen?\n\n{path}",
+          "(versi sebelum patch: {version})", "Tidak ada DLC terpasang",
+          "Hapus patch", "Hapus DLC", "Hapus patch untuk {game}? Game utama akan tetap disimpan.", "Hapus DLC “{content}” untuk {game}? Game dan DLC lainnya akan tetap disimpan.", "Patch"
         ],
         "uk-UA": [
           "Натисніть, щоб змінити режим", "Приставка", "Розділи приставки", "Огляд",
@@ -2330,7 +2412,9 @@
           "Установити бекпорт",
           "Замінити бекпорт", "Бекпорт",
           "Невідома гра",
-          "Видалити бекпорт", "Видалити цю папку бекпорту назавжди?\n\n{path}"
+          "Видалити бекпорт", "Видалити цю папку бекпорту назавжди?\n\n{path}",
+          "(версія до патча - {version})", "Немає встановлених DLC",
+          "Видалити патч", "Видалити DLC", "Видалити встановлений патч для {game}? Основна гра збережеться.", "Видалити DLC «{content}» для {game}? Гра та решта доповнень збережуться.", "Патч"
         ],
       };
       for (const [locale, values] of Object.entries(extendedTranslationCatalogs)) {
@@ -2590,7 +2674,9 @@
         const heading = node("div", "game-heading");
         const identity = node("div", "game-identity");
         identity.append(node("h3", "game-title", game.title_name || game.title_id));
-        identity.append(node("div", "game-id", `${game.title_id} · ${game.version || "—"}`));
+        const version = node("div", "game-id", `${game.title_id} · ${game.version || "—"}`);
+        if (game.has_patch) version.append(node("span", "game-patch-marker", ` · ${t("patchBadge").toLocaleUpperCase(currentLanguage)}`));
+        identity.append(version);
         heading.append(identity);
         if (game.size_bytes !== undefined) {
           heading.append(node("strong", "game-card-size", formatBytes(game.size_bytes)));
@@ -2601,6 +2687,7 @@
         badges.append(badge(game.source_type === "pkg" ? "PKG" : game.image_backed ? (game.image_type || t("image")) : t("folder"), game.image_backed ? "image" : ""));
         if (game.mounted) badges.append(badge(t("mounted"), "live"));
         if (game.backport_path) badges.append(badge(t("backport")));
+        if (game.dlc_count > 0) badges.append(badge(`${t("dlcSize")} · ${game.dlc_count}`, "dlc"));
         body.append(badges);
         const path = node("div", "game-path", game.path || t("sourceUnavailable"));
         path.title = game.path || "";
@@ -3173,18 +3260,25 @@
       }
 
       async function runMutation(label, task, closeAfter = false) {
+        let result;
         try {
-          const result = await task();
-          const message = result && result.scan_queued
-            ? `${label}. ${scanQueueMessage(result)}` : label;
-          logActivity(message);
-          toast(message);
-          if (closeAfter) closeModal();
-          await refreshAll();
+          result = await task();
         } catch (error) {
           logActivity(`${label}: ${errorMessage(error)}`, "error");
           toast(errorMessage(error), true);
+          return false;
         }
+        const message = result && result.scan_queued
+          ? `${label}. ${scanQueueMessage(result)}` : label;
+        logActivity(message);
+        toast(message);
+        if (closeAfter) closeModal();
+        try { await refreshAll(); }
+        catch (error) {
+          logActivity(`${t("refresh")}: ${errorMessage(error)}`, "error");
+          toast(errorMessage(error), true);
+        }
+        return true;
       }
 
       async function titleRuntime(game, operation, mode) {
@@ -3231,6 +3325,65 @@
         const item = node("div", "detail-value", value || "—");
         if (hint) item.title = hint;
         grid.append(node("div", "detail-key", key), item);
+        return item;
+      }
+
+      function installedContentFor(game) {
+        const section = node("section", "content-summary");
+        const entries = Array.isArray(game.dlc) ? game.dlc : [];
+        if (!entries.length) {
+          section.hidden = true;
+          return section;
+        }
+        const incomplete = game.dlc_info_status !== 0 || game.dlc_info_truncated;
+        const label = `${t("dlcSize")} (${entries.length}${incomplete ? "+" : ""})`;
+        const list = node("div", "content-dlc-list");
+        list.id = "detailDlcList";
+        list.hidden = true;
+        const toggle = actionButton(label, () => {
+          if (!list.children.length) populate();
+          list.hidden = !list.hidden;
+          toggle.setAttribute("aria-expanded", String(!list.hidden));
+          chevronPath.setAttribute("d", list.hidden ? "M6 9l6 6 6-6" : "M6 15l6-6 6 6");
+        }, "content-dlc-toggle");
+        const chevron = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        chevron.setAttribute("class", "content-chevron");
+        chevron.setAttribute("viewBox", "0 0 24 24");
+        chevron.setAttribute("width", "16");
+        chevron.setAttribute("height", "16");
+        chevron.setAttribute("fill", "none");
+        chevron.setAttribute("stroke", "currentColor");
+        chevron.setAttribute("stroke-width", "2");
+        chevron.setAttribute("stroke-linecap", "round");
+        chevron.setAttribute("stroke-linejoin", "round");
+        chevron.setAttribute("aria-hidden", "true");
+        chevron.setAttribute("focusable", "false");
+        const chevronPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        chevronPath.setAttribute("d", "M6 9l6 6 6-6");
+        chevron.appendChild(chevronPath);
+        toggle.setAttribute("aria-controls", list.id);
+        toggle.setAttribute("aria-expanded", "false");
+        toggle.append(chevron);
+        function populate() {
+          for (const entry of entries) {
+            const row = node("div", "content-dlc-row");
+            const title = node("div", "content-dlc-title");
+            title.append(node("strong", "", entry.title_name || entry.content_id), node("small", "", entry.content_id));
+            const meta = node("div", "content-dlc-meta");
+            if (entry.version) meta.append(node("span", "", `${t("gameVersion")} ${entry.version}`));
+            meta.append(node("span", "", entry.size_status === 0 && Number.isFinite(entry.size_bytes)
+              ? formatBytes(entry.size_bytes) : t("unavailable")));
+            const actions = node("div", "content-dlc-actions");
+            const remove = actionButton(t("remove"), () => uninstallContent(game, entry), "danger content-delete");
+            remove.setAttribute("aria-label", `${t("deleteDlc")}: ${entry.title_name || entry.content_id}`);
+            actions.append(meta, remove);
+            row.append(title, actions);
+            list.append(row);
+          }
+          if (incomplete) list.append(node("div", "content-dlc-row subtle", t("unavailable")));
+        }
+        section.append(toggle, list);
+        return section;
       }
 
       function renderDetails(game, focusRuntimeAction = false) {
@@ -3284,14 +3437,17 @@
         });
         sizes.append(total, bar, legend);
         detailRow(grid, t("contentId"), game.content_id);
-        detailRow(grid, t("gameVersion"), game.version);
+        const version = detailRow(grid, t("gameVersion"), game.version);
+        if (game.patch_info_status === 0 && game.patch?.installed) {
+          version.append(node("span", "detail-base-version", t("baseVersionBeforePatch", { version: game.base_version || t("unavailable") })));
+        }
         detailRow(grid, t("source"), game.path);
         detailRow(grid, t("runtimePath"), game.runtime_path);
         if (game.backport_path) detailRow(grid, t("backport"), game.backport_path);
         detailRow(grid, t("systemSize"), formatBytes(game.app_db_size_bytes), t("systemSizeHint"));
         detailRow(grid, t("installed"), game.install_time);
         detailRow(grid, t("lastLaunch"), game.last_access_time);
-        content.append(sizes, grid);
+        content.append(sizes, installedContentFor(game), grid);
         if (game.can_toggle_fakelib) {
           const policy = node("section", "fakelib-controls");
           policy.append(node("h3", "subtle", t("fakelibMode")));
@@ -3322,6 +3478,9 @@
         const runtimeAction = appendRuntimeActions(actions, game);
         if (runtimeAction) runtimeAction.className += " primary";
         const destructive = [];
+        if (game.patch_info_status === 0 && game.patch?.installed) {
+          destructive.push(actionButton(t("deletePatch"), () => uninstallContent(game), "danger content-delete"));
+        }
         if (game.can_uninstall !== false) {
           destructive.push(actionButton(t("uninstall"), () => uninstallGame(game), "danger"));
         }
@@ -3602,6 +3761,38 @@
               focusControl($("detailSidebar").querySelectorAll(".fakelib-controls button")[focusedIndex]);
             }
           }
+        }
+      }
+
+      async function uninstallContent(game, entry = null) {
+        if (!await confirmAction(t(entry ? "deleteDlcConfirm" : "deletePatchConfirm", {
+          game: gameLabel(game), content: entry?.title_name || entry?.content_id || ""
+        }))) return;
+        const request = state.detailRequest;
+        const dlcExpanded = $("details").querySelector(".content-dlc-toggle")?.getAttribute("aria-expanded") === "true";
+        const buttons = [...$("modal").querySelectorAll(".content-delete")];
+        buttons.forEach(button => { button.disabled = true; });
+        try {
+          const removed = await runMutation(t("operationCompleted", {
+            operation: t("operationDelete"), title: entry?.title_name || gameLabel(game)
+          }), () => api("/games/content/uninstall", {
+            title_id: game.title_id, kind: entry ? "dlc" : "patch",
+            ...(entry ? { content_id: entry.content_id } : {})
+          }));
+          if (removed && state.detailRequest === request && !$("modal").hidden) {
+            const updated = await api("/games/info", { title_id: game.title_id });
+            if (state.detailRequest === request && !$("modal").hidden) {
+              renderDetails(updated);
+              if (dlcExpanded && updated.dlc?.length) $("details").querySelector(".content-dlc-toggle")?.click();
+              focusControl($("details").querySelector(".content-dlc-toggle:not(:disabled)") || $("closeModal"));
+            }
+          }
+        } catch (error) {
+          if (state.detailRequest === request && !$("modal").hidden) closeModal();
+          logActivity(`${t("refresh")}: ${errorMessage(error)}`, "error");
+          toast(errorMessage(error), true);
+        } finally {
+          buttons.forEach(button => { button.disabled = false; });
         }
       }
 

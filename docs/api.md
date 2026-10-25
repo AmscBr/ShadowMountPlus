@@ -66,6 +66,7 @@ device.
 | `/api/v1/games/mount` | `{"title_id":"PPSA12345","mode":"ro"}` | Mount a managed game, optionally overriding its image mode with `ro`/`rw` |
 | `/api/v1/games/unmount` | `{"title_id":"PPSA12345"}` | Unmount a managed game |
 | `/api/v1/games/uninstall` | `{"title_id":"PPSA12345"}` | Request uninstallation through AppInstUtil |
+| `/api/v1/games/content/uninstall` | `{"title_id":"PPSA12345","kind":"patch"}` or `{"title_id":"PPSA12345","kind":"dlc","content_id":"…"}` | Remove only the patch or the specified installed DLC through AppInstUtil |
 | `/api/v1/games/move` | `{"title_id":"PPSA12345","destination_dir":"/mnt/usb1/games"}` | Start an asynchronous move job |
 | `/api/v1/games/copy` | `{"title_id":"PPSA12345","destination_dir":"/mnt/usb1/games"}` | Start an asynchronous copy job |
 | `/api/v1/games/unpack` | `{"title_id":"PPSA12345","destination_dir":"/mnt/usb1/games","delete_source":false}` | Mount an image read-only and asynchronously copy the game into a folder |
@@ -114,7 +115,7 @@ A successful version response has this shape:
   "status": 0,
   "api_version": 1,
   "shadowmount_version": "1.7",
-  "capabilities": ["web_ui", "storage_space", "list_images", "list_games", "game_info", "game_data_sizes", "game_icon", "mount_game", "unmount_game", "uninstall_game", "move_game_source", "copy_game_source", "delete_game_source", "unpack_game_image", "storage_job_status", "storage_job_cancel", "list_manual_sources", "add_manual_source", "remove_manual_source", "manage_settings", "read_debug_log", "read_kernel_log", "rescan"]
+  "capabilities": ["web_ui", "storage_space", "list_images", "list_games", "game_info", "game_data_sizes", "game_icon", "mount_game", "unmount_game", "uninstall_game", "uninstall_game_content", "move_game_source", "copy_game_source", "delete_game_source", "unpack_game_image", "storage_job_status", "storage_job_cancel", "list_manual_sources", "add_manual_source", "remove_manual_source", "manage_settings", "read_debug_log", "read_kernel_log", "rescan"]
 }
 ```
 
@@ -200,6 +201,54 @@ The web detail dialog shows a compact colored bar and a labeled legend for
 the source, patches, DLC, saves and downloads. Their sum is shown only when
 all five measurements succeed. The app.db figure is displayed separately as
 a system reference and is excluded from this total.
+
+Details also return `patch_info_status`, a `patch` object (`installed`,
+`version`, `size_bytes`), `dlc_info_status`, a `dlc` array and
+`dlc_info_truncated`. Patch metadata uses `GetPatchInstallStatus`; DLC records
+use `GetAddcontInfoList2` with 16-entry pages and a 256-record cap. The native
+list's returned count is the total matching count, not the page length. DLC
+records contain `content_id`, `title_name`, `version`, `size_status` and, when
+valid, `size_bytes`. Native errors leave filesystem size results intact.
+Library entries include `patch_info_status` and `dlc_info_status`, with
+`has_patch` and `dlc_count` present only when their respective query succeeds.
+These use GetPatchInstallStatus and AppGetAddcontNum, without file size scans
+or DLC enumeration. Since patch download history may be absent for an installed
+patch, presence also checks regular, nonempty `patch.pkg` files in the same
+five internal/ext0/ext1 roots used for patch sizes. This rule is shared by
+the library version marker and detail card; installation progress still uses native
+download status alone. In the filesystem fallback, the existing game version
+and measured patch size supply detail metadata.
+The library shows a localized patch marker beside the version and a DLC badge
+with the count; failed queries do not display a badge.
+
+The web dialog appends the localized original version in parentheses beside
+the current version when a patch is installed. `base_version` is read from the
+base PKG only for game details, with title ID and base-PKG classification
+checks. Patch detection and original-version annotations apply only to PKG games. Empty means the original version
+could not be read; the UI displays unavailable rather than assuming 1.00.
+A button with an SVG
+disclosure arrow expands DLC names, content IDs, versions and system-recorded sizes.
+Games without listed DLC do not show an empty disclosure button. Expanded
+lists may scroll within the detail body; the bottom action row stays visible.
+
+Patch removal is available in the bottom action row; each expanded DLC row has its
+own delete button. Both actions require confirmation and reload the card's
+metadata and sizes. The content uninstall route checks runtime/scanner guards
+and serializes against storage submissions. DLC deletion passes the content ID
+suffix in a zero-padded 32-byte directory-name buffer to AppUnInstallAddcont;
+patch deletion calls AppUnInstallPat. Neither requests whole-game removal.
+The `uninstall_game_content` capability advertises the route.
+
+`system_content_size_status` and, on success, `system_content_size_bytes`
+expose `AppGetSize` for comparison. This is a system-accounted installed total,
+not the physical source size.
+
+`GetContentSize` with a base-content record returned the system-accounted
+total too; `GetContentSize2` returned `0x80F50005` on the tested titles.
+For DEATHLOOP's DLC the native record reported 1,245,184 bytes while its files
+totalled 1,246,202 bytes. These different accounting scopes are why the size
+bar retains filesystem counts; native totals never replace folder/image sizes
+or get added to the bar a second time. These calls add no background polling.
 
 The `game_data_sizes` capability advertises these fields.
 
@@ -522,10 +571,12 @@ The popup shows the package name, bytes, speed, elapsed time and system state.
 Progress uses AppInstUtil downloaded/total counters when available, with HTTP
 coverage as a fallback. Patches use `sceAppInstUtilGetPatchInstallStatus`: the
 general install status can report the already playable base game with the same
-content ID. DLC completion requires the installed flag from
+content ID. DLC completion requires state `4` (installed) from
 `sceAppInstUtilGetAddcontInstalledStatus`; general status still supplies its
 download counters and errors. DLC without a general download record still uses
-its own installed flag. `sceAppInstUtilGetInstallProgress` and
+its own installed state. State `1` is not installed and must not complete the job.
+When a general download record exists, it must also be complete, so an installed
+DLC cannot prematurely finish an in-progress replacement. `sceAppInstUtilGetInstallProgress` and
 `sceAppInstUtilGetInstallProgressInfo` are not used for patch completion: on
 the tested 9.40 console both kept reporting 100% for the installed base while
 its patch was still transferring. Speed is sampled from byte deltas once per
