@@ -121,7 +121,8 @@ A successful version response has this shape:
 ```
 
 List responses contain `count` and the complete `images` or `games` array.
-Confirmed running `FAKE*` and `LAPY*` applications do not defer scans or block
+Homebrew IDs contain four uppercase ASCII letters and five digits, excluding
+`CUSA`, `PPSA`, and `NPXS` prefixes. Confirmed running homebrew does not defer scans or block
 source copy/move/delete operations and uninstalls for unrelated titles. This
 applies to folder, image and installed-PKG applications. Ordinary PS4/PS5 games
 allow the same work while AppFocus confirms they are in the background. The
@@ -351,7 +352,7 @@ do not combine it with `mode` or `enabled`. False removes the exclusion, includi
 legacy `global_fakelib_exclude_title` entries. The game's own fakelib mode stays
 unchanged. Changes apply on the next launch and preserve active mounts.
 The fakelib route accepts only known PS5 games, including PKGs, images and
-folders. `PPSA` identifies PS5; `LAPY`/`FAKE` homebrew uses its `app.db` platform.
+folders. `PPSA` identifies PS5; homebrew uses its `app.db` platform.
 Send `mode: "full"`, `"emulators"` or `"disabled"` to persist an explicit override,
 or `mode: "default"` to remove it and inherit `fakelib_default_mode`.
 Legacy `enabled: true|false` requests remain supported and select explicit

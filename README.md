@@ -35,7 +35,8 @@
 | `.ffpfsc` | `pfs` container | `LVD` | Experimental container for nested images |
 
 Notes:
-- Confirmed running `FAKE*` and `LAPY*` applications allow background scans,
+- Homebrew IDs contain four uppercase ASCII letters and five digits, excluding
+  the `CUSA`, `PPSA`, and `NPXS` prefixes. Confirmed running homebrew allows background scans,
   registration, and source copy/move/delete operations on other titles, whether
   the application uses a folder, image, or installed PKG. Its own runtime, source
   and all backing image layers remain protected. Operations that would release
@@ -86,7 +87,7 @@ Supported keys (all optional):
 - `backport_fakelib=1|0` (`1` mounts sandbox `fakelib` overlays for running games; default: `1`)
 - `fakelib_default_mode=full|emulators|disabled` (mode for games without an individual override; default: `full`; also available in web settings)
 - `fakelib_mode=<TITLE_ID>:default|full|emulators|disabled` (per-game mode, repeatable; `default` restores inheritance; shared limit of 128 explicit title rules)
-- `fakelib_exclude=<TITLE_ID>` (legacy alias for `disabled`; repeatable, up to 128 titles; disables all fakelib overlays for matching PPSA/CUSA/LAPY/FAKE IDs; default: no exclusions)
+- `fakelib_exclude=<TITLE_ID>` (legacy alias for `disabled`; repeatable, up to 128 titles; disables all fakelib overlays for matching PS4, PS5, or homebrew IDs; default: no exclusions)
 - `update_emulators=1|0` (`1` updates matching emulator files for folder/image games; installed PKGs and `fakelib2` are excluded; default: `1`)
 - `emulators_path=<absolute_path>` (folder containing emulator update files; default: `/data/shadowmount/emus`)
 - `auto_update_ampr=1|0` (check for a new `libSceAmpr.sprx` 30 seconds after startup and every four hours; default: `0`)
@@ -202,7 +203,7 @@ Backport overlay behavior:
 - `Emulators only` mounts available regular files named `libSceAppContent.sprx`, `libSceGameUpdate.sprx` and `libSceNpEntitlementAccess.sprx` for installed PKGs. Folder/image games also allow `libSceAmpr.sprx` and `libScePlayGo.sprx`. Missing files are silently skipped; an empty selection creates no fakelib overlay. Emulator updates obey the same allowlist.
 - With fakelib enabled, `libkernel.sprx` is removed from the selected writable folder fakelib and participating global fakelib. For image games and installed PKGs, source files remain unchanged and a cache omitting this library is mounted instead. If a required filtered cache cannot be created, the unfiltered source is never mounted.
 - Use repeatable `fakelib_exclude=<TITLE_ID>` entries to disable per-game `fakelib`, `fakelib2`, global fakelib and cache preparation for specific games. `/data`, sandbox storage aliases and PKG `app0` backports remain enabled. Reloaded exclusions apply on the next launch; existing mounts remain until game exit. Title IDs are case-insensitive and must have a supported prefix followed by five digits; invalid entries and entries beyond the 128-title limit are logged and ignored.
-- `/data` is mounted through writable `nullfs` for PS5 (`PPSA*`), PS4 (`CUSA*`) and homebrew (`LAPY*`, `FAKE*`) titles. Sandbox `/mnt` remains a local directory: only mounted volumes at `/mnt/usb0` through `/mnt/usb7`, `/mnt/ext0` through `/mnt/ext1` and `/mnt/disc` receive individual writable `nullfs` aliases. Empty mount directories and other host `/mnt` entries are skipped. Storage aliases follow filesystem mount/unmount events, including USB hotplug and disc insertion/ejection. All aliases are removed on game process exit.
+- `/data` is mounted through writable `nullfs` for PS5 (`PPSA*`), PS4 (`CUSA*`) and homebrew titles. Sandbox `/mnt` remains a local directory: only mounted volumes at `/mnt/usb0` through `/mnt/usb7`, `/mnt/ext0` through `/mnt/ext1` and `/mnt/disc` receive individual writable `nullfs` aliases. Empty mount directories and other host `/mnt` entries are skipped. Storage aliases follow filesystem mount/unmount events, including USB hotplug and disc insertion/ejection. All aliases are removed on game process exit.
 - `backport_fakelib=0` disables the sandbox `fakelib` watcher, including global fakelib and emulator updates.
 - For `backport_fakelib` to work correctly, the standalone `BackPork` payload must be disabled. Running both at the same time will conflict.
 

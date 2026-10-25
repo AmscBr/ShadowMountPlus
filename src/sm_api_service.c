@@ -534,7 +534,8 @@ static struct json_object *parse_request_json(const sm_http_request_t *request) 
 static const char *get_title_id(struct json_object *request) {
   struct json_object *value = NULL;
   if (!json_object_object_get_ex(request, "title_id", &value) ||
-      !json_object_is_type(value, json_type_string)) {
+      !json_object_is_type(value, json_type_string) ||
+      json_object_get_string_len(value) != 9) {
     return NULL;
   }
   const char *title_id = json_object_get_string(value);

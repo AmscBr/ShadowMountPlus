@@ -47,19 +47,17 @@ static void extract_title_name(struct json_object *root, char *out) {
 }
 
 bool is_supported_game_title_id(const char *title_id) {
-  if (!title_id || strlen(title_id) != 9u)
+  if (!title_id)
     return false;
-  if (strncmp(title_id, "PPSA", 4u) != 0 &&
-      strncmp(title_id, "CUSA", 4u) != 0 &&
-      strncmp(title_id, "LAPY", 4u) != 0 &&
-      strncmp(title_id, "FAKE", 4u) != 0) {
-    return false;
-  }
-  for (size_t i = 4u; i < 9u; ++i) {
-    if (!isdigit((unsigned char)title_id[i]))
+  for (size_t i = 0; i < 4u; ++i) {
+    if (title_id[i] < 'A' || title_id[i] > 'Z')
       return false;
   }
-  return true;
+  for (size_t i = 4u; i < 9u; ++i) {
+    if (title_id[i] < '0' || title_id[i] > '9')
+      return false;
+  }
+  return title_id[9] == '\0' && strncmp(title_id, "NPXS", 4u) != 0;
 }
 
 static bool resolve_game_param(const char *base_path, char path[MAX_PATH],

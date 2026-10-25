@@ -69,12 +69,11 @@ static _Atomic bool g_game_exit_handoff_pending = false;
 #define GAME_BACKGROUND_BLOCKED 1u
 #define GAME_BACKGROUND_TITLE_BASE 2u
 #define GAME_BACKGROUND_TITLE_RANGE 100000u
-#define GAME_BACKGROUND_TITLE_BLOCKED (UINT32_C(1) << 31)
+#define GAME_BACKGROUND_TITLE_BLOCKED (UINT64_C(1) << 63)
 #define GAME_APP_FOCUS_KNOWN (UINT64_C(1) << 32)
 #define GAME_APP_FOCUS_PENDING (UINT64_C(1) << 33)
-static const char g_background_title_prefixes[][5] = {
-    "FAKE", "LAPY", "PPSA", "CUSA"};
-static _Atomic uint32_t g_background_game_state = GAME_BACKGROUND_IDLE;
+// Four base-26 letters and five decimal digits fit in one 64-bit snapshot.
+static _Atomic uint64_t g_background_game_state = GAME_BACKGROUND_IDLE;
 static uint32_t g_active_game_app_id = 0;
 static pending_game_exit_t g_pending_game_exit;
 // Retain the last focus after consumption; publish its identity and validity
@@ -100,36 +99,26 @@ static void publish_background_game_state(bool was_active) {
   pid_t pid = atomic_load(&g_active_game_pid);
   bool pending = atomic_load(&g_game_exit_handoff_pending);
   bool active = published_game_active(pid, pending);
-  uint32_t state = active ? GAME_BACKGROUND_BLOCKED : GAME_BACKGROUND_IDLE;
+  uint64_t state = active ? GAME_BACKGROUND_BLOCKED : GAME_BACKGROUND_IDLE;
   const char *title = g_active_game_title_id;
   uint64_t focus = atomic_load(&g_app_focus_state);
   bool background = g_active_game_app_id != 0 &&
       (focus & GAME_APP_FOCUS_KNOWN) != 0 &&
       (uint32_t)focus != g_active_game_app_id;
-  size_t prefix_count = sizeof(g_background_title_prefixes) /
-                        sizeof(g_background_title_prefixes[0]);
-  size_t prefix = 0;
-  while (prefix < prefix_count &&
-         strncmp(title, g_background_title_prefixes[prefix], 4u) != 0)
-    ++prefix;
-  if (pid > 0 && strlen(title) == 9u && prefix < prefix_count) {
+  if (pid > 0 && is_supported_game_title_id(title)) {
+    uint64_t prefix = 0;
+    for (size_t i = 0; i < 4u; ++i)
+      prefix = prefix * 26u + (uint64_t)(title[i] - 'A');
     uint32_t number = 0;
-    bool valid = true;
-    for (size_t i = 4u; i < 9u; ++i) {
-      if (title[i] < '0' || title[i] > '9') {
-        valid = false;
-        break;
-      }
+    for (size_t i = 4u; i < 9u; ++i)
       number = number * 10u + (uint32_t)(title[i] - '0');
-    }
-    if (valid) {
-      state = GAME_BACKGROUND_TITLE_BASE +
-              (uint32_t)prefix * GAME_BACKGROUND_TITLE_RANGE + number;
-      if (pending || (prefix >= 2u && !background))
-        state |= GAME_BACKGROUND_TITLE_BLOCKED;
-    }
+    state = GAME_BACKGROUND_TITLE_BASE + prefix * GAME_BACKGROUND_TITLE_RANGE + number;
+    bool ordinary_game = strncmp(title, "PPSA", 4u) == 0 ||
+                         strncmp(title, "CUSA", 4u) == 0;
+    if (pending || (ordinary_game && !background))
+      state |= GAME_BACKGROUND_TITLE_BLOCKED;
   }
-  uint32_t previous = atomic_exchange(&g_background_game_state, state);
+  uint64_t previous = atomic_exchange(&g_background_game_state, state);
   bool was_blocked = previous == GAME_BACKGROUND_BLOCKED ||
                      (previous & GAME_BACKGROUND_TITLE_BLOCKED) != 0;
   bool blocked = state == GAME_BACKGROUND_BLOCKED ||
@@ -1368,7 +1357,7 @@ bool sm_game_lifecycle_has_active_game(void) {
 }
 
 bool sm_game_lifecycle_background_title(char title_id[MAX_TITLE_ID]) {
-  uint32_t state = atomic_load(&g_background_game_state);
+  uint64_t state = atomic_load(&g_background_game_state);
   bool allowed = state != GAME_BACKGROUND_BLOCKED &&
                  (state & GAME_BACKGROUND_TITLE_BLOCKED) == 0;
   if (title_id)
@@ -1376,11 +1365,15 @@ bool sm_game_lifecycle_background_title(char title_id[MAX_TITLE_ID]) {
   if (state == GAME_BACKGROUND_BLOCKED || state == GAME_BACKGROUND_IDLE ||
       !title_id)
     return allowed;
-  uint32_t identity =
+  uint64_t identity =
       (state & ~GAME_BACKGROUND_TITLE_BLOCKED) - GAME_BACKGROUND_TITLE_BASE;
-  (void)snprintf(title_id, MAX_TITLE_ID, "%s%05u",
-                 g_background_title_prefixes[identity / GAME_BACKGROUND_TITLE_RANGE],
-                 identity % GAME_BACKGROUND_TITLE_RANGE);
+  uint64_t prefix = identity / GAME_BACKGROUND_TITLE_RANGE;
+  for (size_t i = 4u; i > 0; --i) {
+    title_id[i - 1u] = (char)('A' + prefix % 26u);
+    prefix /= 26u;
+  }
+  (void)snprintf(title_id + 4u, MAX_TITLE_ID - 4u, "%05u",
+                 (unsigned int)(identity % GAME_BACKGROUND_TITLE_RANGE));
   return allowed;
 }
 

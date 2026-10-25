@@ -16,6 +16,7 @@
 #include <json-c/json.h>
 
 #include "sm_pkg.h"
+#include "sm_gameinfo.h"
 
 #define PKG_MAGIC_CNT 0x7F434E54u
 #define PKG_MAGIC_FIH 0x7F464948u
@@ -503,20 +504,7 @@ static bool parse_package(const char *path, const struct stat *st,
     (void)content_title_id(candidate->content_id, candidate->title_id);
   if (candidate->title_id[0] == '\0')
     return false;
-  bool supported_title_id =
-      strlen(candidate->title_id) == 9u &&
-      (strncmp(candidate->title_id, "PPSA", 4u) == 0 ||
-       strncmp(candidate->title_id, "CUSA", 4u) == 0 ||
-       strncmp(candidate->title_id, "LAPY", 4u) == 0);
-  if (supported_title_id) {
-    for (size_t i = 4; i < 9; i++) {
-      if (candidate->title_id[i] < '0' || candidate->title_id[i] > '9') {
-        supported_title_id = false;
-        break;
-      }
-    }
-  }
-  if (!supported_title_id) {
+  if (!is_supported_game_title_id(candidate->title_id)) {
     return false;
   }
   candidate->content_type = be32(header + 0x74);

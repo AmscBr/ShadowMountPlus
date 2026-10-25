@@ -910,7 +910,7 @@ paths:
               type: object
               required: [title_id, kind]
               properties:
-                title_id: {type: string, pattern: '^(PPSA|CUSA)[0-9]{5}$'}
+                title_id: {$ref: '#/components/schemas/TitleId'}
                 kind: {type: string, enum: [patch, dlc]}
                 content_id: {type: string, minLength: 21, maxLength: 47, description: Required for DLC; full content ID of the selected add-on}
       responses:
@@ -1546,8 +1546,11 @@ components:
   schemas:
     TitleId:
       type: string
-      pattern: "^(CUSA|PPSA|LAPY|FAKE)[0-9]{5}$"
-      examples: [PPSA12345]
+      minLength: 9
+      maxLength: 9
+      pattern: "^(?!NPXS)[A-Z]{4}[0-9]{5}$"
+      description: PS4 (CUSA), PS5 (PPSA), or homebrew title ID. NPXS system apps are excluded.
+      examples: [PPSA12345, HBRW12345]
 
     TitleRequest:
       type: object
