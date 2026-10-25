@@ -219,9 +219,9 @@ static directory_candidate_probe_t probe_directory_candidate(
     return DIRECTORY_CANDIDATE_SKIP_DESCEND;
   }
 
-  if (!directory_has_param_json(full_path, &param_st)) {
+  if (!directory_has_game_param(full_path, &param_st)) {
     if (is_missing_param_scan_limited(full_path)) {
-      log_debug("  [SKIP] param.json retry limit reached: %s", full_path);
+      log_debug("  [SKIP] param.json/param.sfo retry limit reached: %s", full_path);
     } else {
       record_missing_param_failure(full_path);
     }
@@ -325,13 +325,8 @@ static existing_directory_result_t handle_existing_directory_candidate(
       installed ? get_appmeta_present_for_scan_cycle(info->title_id) : false;
   link_matches_source = installed && link_matches_source;
   bool source_valid = false;
-  if (link_matches_source) {
-    char eboot_path[MAX_PATH];
-    int written = snprintf(eboot_path, sizeof(eboot_path), "%s/eboot.bin",
-                           full_path);
-    source_valid = written > 0 && (size_t)written < sizeof(eboot_path) &&
-                   path_exists(eboot_path);
-  }
+  if (link_matches_source)
+    source_valid = directory_has_game_executable(full_path);
 
   if (source_valid && appmeta_present) {
     cache_game_entry(full_path, info->title_id, info->title_name);
@@ -616,7 +611,7 @@ static void collect_scan_candidates_from_manual_root(
   bool try_root_candidate = !pfsc_container_root;
   if (try_root_candidate && is_under_image_mount_base(scan_path)) {
     struct stat param_st;
-    try_root_candidate = directory_has_param_json(scan_path, &param_st);
+    try_root_candidate = directory_has_game_param(scan_path, &param_st);
   }
 
   if (try_root_candidate) {
@@ -719,7 +714,7 @@ static void collect_scan_candidates_from_manual_path(
   }
 
   struct stat param_st;
-  if (!S_ISDIR(st.st_mode) || !directory_has_param_json(manual_path, &param_st)) {
+  if (!S_ISDIR(st.st_mode) || !directory_has_game_param(manual_path, &param_st)) {
     log_debug("  [MANUAL] expected game directory or image file: %s",
               manual_path);
     return;

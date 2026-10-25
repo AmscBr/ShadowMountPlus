@@ -50,8 +50,8 @@ static const char *const g_nl_nl[SM_L10N_COUNT] = {
     [SM_L10N_BATCH_INSTALL_AND_MORE] = "\n... en nog %d",
     /* English: Batch install failed for %d app(s).\ncode=0x%08X */
     [SM_L10N_BATCH_INSTALL_FAILED] = "Batchinstallatie mislukt voor %d apps.\ncode=0x%08X",
-    /* English: Missing/invalid param.json:\n%s */
-    [SM_L10N_MISSING_PARAM] = "param.json ontbreekt of is ongeldig:\n%s",
+    /* English: Missing/invalid param.json/param.sfo:\n%s */
+    [SM_L10N_MISSING_PARAM] = "param.json/param.sfo ontbreekt of is ongeldig:\n%s",
     /* English: Found %d new games. Processing... */
     [SM_L10N_FOUND_NEW_GAMES] = "%d nieuwe games gevonden. Verwerken...",
     /* English: Library synchronized.\nFound %d games. */

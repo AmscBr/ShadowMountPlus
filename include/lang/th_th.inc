@@ -50,8 +50,8 @@ static const char *const g_th_th[SM_L10N_COUNT] = {
     [SM_L10N_BATCH_INSTALL_AND_MORE] = "\n... และอีก %d",
     /* English: Batch install failed for %d app(s).\ncode=0x%08X */
     [SM_L10N_BATCH_INSTALL_FAILED] = "การติดตั้งแบบชุดล้มเหลวสำหรับ %d แอป\nรหัส=0x%08X",
-    /* English: Missing/invalid param.json:\n%s */
-    [SM_L10N_MISSING_PARAM] = "param.json หายไปหรือไม่ถูกต้อง:\n%s",
+    /* English: Missing/invalid param.json/param.sfo:\n%s */
+    [SM_L10N_MISSING_PARAM] = "param.json/param.sfo หายไปหรือไม่ถูกต้อง:\n%s",
     /* English: Found %d new games. Processing... */
     [SM_L10N_FOUND_NEW_GAMES] = "พบเกมใหม่ %d เกม กำลังประมวลผล...",
     /* English: Library synchronized.\nFound %d games. */

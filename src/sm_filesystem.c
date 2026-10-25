@@ -2,6 +2,7 @@
 #include "sm_shellcore_service.h"
 #include "sm_runtime.h"
 #include "sm_filesystem.h"
+#include "sm_gameinfo.h"
 #include "sm_config_mount.h"
 #include "sm_limits.h"
 #include "sm_log.h"
@@ -60,16 +61,35 @@ bool is_installed(const char *title_id) {
 
 bool has_appmeta_data(const char *title_id) {
   char path[MAX_PATH];
-  snprintf(path, sizeof(path), "%s/%s/param.json", APPMETA_BASE, title_id);
   struct stat st;
-  return (stat(path, &st) == 0 && S_ISREG(st.st_mode));
+  const char *names[] = {"param.json", "param.sfo"};
+  for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); ++i) {
+    int written = snprintf(path, sizeof(path), "%s/%s/%s", APPMETA_BASE,
+                           title_id, names[i]);
+    if (written > 0 && (size_t)written < sizeof(path) &&
+        stat(path, &st) == 0 && S_ISREG(st.st_mode))
+      return true;
+  }
+  return false;
 }
 
 bool is_data_mounted(const char *title_id) {
   char path[MAX_PATH];
-  snprintf(path, sizeof(path), "/system_ex/app/%s/sce_sys/param.json",
-           title_id);
-  return path_exists(path);
+  snprintf(path, sizeof(path), "/system_ex/app/%s", title_id);
+  return directory_has_game_param(path, NULL);
+}
+
+bool directory_has_game_executable(const char *dir_path) {
+  const char *names[] = {"eboot.bin", "eboot2.bin"};
+  for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); ++i) {
+    char path[MAX_PATH];
+    int written = snprintf(path, sizeof(path), "%s/%s", dir_path, names[i]);
+    struct stat st;
+    if (written > 0 && (size_t)written < sizeof(path) &&
+        stat(path, &st) == 0 && S_ISREG(st.st_mode))
+      return true;
+  }
+  return false;
 }
 
 static bool read_mount_link_file(const char *lnk_path, char *out,
@@ -351,12 +371,7 @@ static bool source_path_needs_cleanup(const char *source_path) {
   if (path_matches_root_or_child(source_path, "/system_ex/app"))
     return true;
 
-  char eboot_path[MAX_PATH];
-  int written =
-      snprintf(eboot_path, sizeof(eboot_path), "%s/eboot.bin", source_path);
-  if (written < 0 || (size_t)written >= sizeof(eboot_path))
-    return true;
-  return !path_exists(eboot_path);
+  return !directory_has_game_executable(source_path);
 }
 
 static bool resolve_mount_image_source_path(const title_link_paths_t *paths,
@@ -1311,16 +1326,7 @@ int remount_system_ex(void) {
 
 bool mount_title_nullfs(const char *title_id, const char *src_path) {
   char dst[MAX_PATH];
-  char src_eboot[MAX_PATH];
-  char dst_eboot[MAX_PATH];
   snprintf(dst, sizeof(dst), "/system_ex/app/%s", title_id);
-  int written = snprintf(src_eboot, sizeof(src_eboot), "%s/eboot.bin", src_path);
-  if (written < 0 || (size_t)written >= sizeof(src_eboot)) {
-    log_debug("  [LINK] source eboot path too long for %s: %s", title_id,
-              src_path);
-    return false;
-  }
-  snprintf(dst_eboot, sizeof(dst_eboot), "%s/eboot.bin", dst);
 
   struct stat src_st;
   if (stat(src_path, &src_st) != 0) {
@@ -1333,12 +1339,10 @@ bool mount_title_nullfs(const char *title_id, const char *src_path) {
               title_id, src_path, (unsigned)(src_st.st_mode & 077777));
     return false;
   }
-  if (!path_exists(src_eboot)) {
-    if (source_path_needs_cleanup(src_path)) {
-      log_debug("  [LINK] source eboot.bin missing for %s: %s", title_id,
-                src_eboot);
-      return false;
-    }
+  if (!directory_has_game_executable(src_path)) {
+    log_debug("  [LINK] source eboot.bin/eboot2.bin missing for %s: %s", title_id,
+              src_path);
+    return false;
   }
 
   int mkdir_res = mkdir(dst, 0755);
@@ -1371,7 +1375,7 @@ bool mount_title_nullfs(const char *title_id, const char *src_path) {
   }
   if (state.mounted) {
     if (state.has_our_nullfs && title_stack_top_is_managed(&state) &&
-        path_exists(dst_eboot)) {
+        directory_has_game_executable(dst)) {
       log_debug("  [LINK] mount stack already active: %s -> %s", src_path, dst);
       return true;
     }
@@ -1403,9 +1407,9 @@ bool mount_title_nullfs(const char *title_id, const char *src_path) {
     return false;
   }
 
-  if (!path_exists(dst_eboot)) {
-    log_debug("  [LINK] mounted nullfs but eboot.bin is missing at target: %s",
-              dst_eboot);
+  if (!directory_has_game_executable(dst)) {
+    log_debug("  [LINK] mounted nullfs but eboot.bin/eboot2.bin missing at target: %s",
+              dst);
     if (!unmount_top_controlled_layer(dst))
       log_debug("  [LINK] empty nullfs rollback deferred: %s", dst);
     return false;

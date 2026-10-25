@@ -50,8 +50,8 @@ static const char *const g_el_gr[SM_L10N_COUNT] = {
     [SM_L10N_BATCH_INSTALL_AND_MORE] = "\n... και %d ακόμα",
     /* English: Batch install failed for %d app(s).\ncode=0x%08X */
     [SM_L10N_BATCH_INSTALL_FAILED] = "Η μαζική εγκατάσταση απέτυχε για %d app(s).\nκωδικός=0x%08X",
-    /* English: Missing/invalid param.json:\n%s */
-    [SM_L10N_MISSING_PARAM] = "Λείπει ή είναι άκυρο το param.json:\n%s",
+    /* English: Missing/invalid param.json/param.sfo:\n%s */
+    [SM_L10N_MISSING_PARAM] = "Λείπει ή είναι άκυρο το param.json/param.sfo:\n%s",
     /* English: Found %d new games. Processing... */
     [SM_L10N_FOUND_NEW_GAMES] = "Βρέθηκαν %d νέα παιχνίδια. Γίνεται επεξεργασία...",
     /* English: Library synchronized.\nFound %d games. */

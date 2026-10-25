@@ -50,8 +50,8 @@ static const char *const g_cs_cz[SM_L10N_COUNT] = {
     [SM_L10N_BATCH_INSTALL_AND_MORE] = "\n... a dalších %d",
     /* English: Batch install failed for %d app(s).\ncode=0x%08X */
     [SM_L10N_BATCH_INSTALL_FAILED] = "Dávková instalace selhala pro %d aplikací.\nkód=0x%08X",
-    /* English: Missing/invalid param.json:\n%s */
-    [SM_L10N_MISSING_PARAM] = "Chybí nebo je neplatný param.json:\n%s",
+    /* English: Missing/invalid param.json/param.sfo:\n%s */
+    [SM_L10N_MISSING_PARAM] = "Chybí nebo je neplatný param.json/param.sfo:\n%s",
     /* English: Found %d new games. Processing... */
     [SM_L10N_FOUND_NEW_GAMES] = "Nalezeno %d nových her. Zpracovávám...",
     /* English: Library synchronized.\nFound %d games. */

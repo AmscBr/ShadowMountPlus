@@ -50,8 +50,8 @@ static const char *const g_ro_ro[SM_L10N_COUNT] = {
     [SM_L10N_BATCH_INSTALL_AND_MORE] = "\n... și încă %d",
     /* English: Batch install failed for %d app(s).\ncode=0x%08X */
     [SM_L10N_BATCH_INSTALL_FAILED] = "Instalarea în lot a eșuat pentru %d aplicații.\ncod=0x%08X",
-    /* English: Missing/invalid param.json:\n%s */
-    [SM_L10N_MISSING_PARAM] = "param.json lipsește sau este invalid:\n%s",
+    /* English: Missing/invalid param.json/param.sfo:\n%s */
+    [SM_L10N_MISSING_PARAM] = "param.json/param.sfo lipsește sau este invalid:\n%s",
     /* English: Found %d new games. Processing... */
     [SM_L10N_FOUND_NEW_GAMES] = "S-au găsit %d jocuri noi. Se procesează...",
     /* English: Library synchronized.\nFound %d games. */

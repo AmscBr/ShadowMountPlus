@@ -296,7 +296,7 @@ static bool find_required_image_layer(const char *root,
 }
 
 static bool repair_image_chain_for_runtime_source(
-    const char *title_id, const char *runtime_source, const char *eboot_path,
+    const char *title_id, const char *runtime_source,
     char image_chain[MAX_IMAGE_CHAIN_DEPTH][MAX_PATH], size_t *image_count,
     const bool *mount_read_only_override) {
   while (*image_count < MAX_IMAGE_CHAIN_DEPTH) {
@@ -326,7 +326,7 @@ static bool repair_image_chain_for_runtime_source(
                 title_id, *image_count);
     }
 
-    if (path_exists(eboot_path)) {
+    if (directory_has_game_executable(runtime_source)) {
       return true;
     }
   }
@@ -336,12 +336,7 @@ static bool repair_image_chain_for_runtime_source(
 static bool prepare_image_source(const char *title_id,
                                  const char *runtime_source,
                                  const bool *mount_read_only_override) {
-  char eboot_path[MAX_PATH];
-  int written = snprintf(eboot_path, sizeof(eboot_path), "%s/eboot.bin",
-                         runtime_source);
-  if (written < 0 || (size_t)written >= sizeof(eboot_path))
-    return false;
-  if (path_exists(eboot_path) && !mount_read_only_override)
+  if (directory_has_game_executable(runtime_source) && !mount_read_only_override)
     return true;
   if (!is_under_image_mount_base(runtime_source))
     return false;
@@ -366,15 +361,15 @@ static bool prepare_image_source(const char *title_id,
       return false;
     }
   }
-  if (path_exists(eboot_path))
+  if (directory_has_game_executable(runtime_source))
     return true;
   if (repair_image_chain_for_runtime_source(title_id, runtime_source,
-                                            eboot_path, image_chain,
+                                            image_chain,
                                             &image_count,
                                             mount_read_only_override))
     return true;
-  log_debug("  [SHELLCORE] image chain ready but eboot missing: %s",
-            eboot_path);
+  log_debug("  [SHELLCORE] image chain ready but eboot.bin/eboot2.bin missing: %s",
+            runtime_source);
   return false;
 }
 
@@ -388,13 +383,8 @@ static bool resumed_runtime_source_ready(const char *title_id,
               runtime_source);
   }
 
-  if (is_usb_storage_path(runtime_source)) {
-    char eboot_path[MAX_PATH];
-    int written =
-        snprintf(eboot_path, sizeof(eboot_path), "%s/eboot.bin", runtime_source);
-    return written > 0 && (size_t)written < sizeof(eboot_path) &&
-           path_exists(eboot_path);
-  }
+  if (is_usb_storage_path(runtime_source))
+    return directory_has_game_executable(runtime_source);
   if (!is_under_image_mount_base(runtime_source))
     return true;
 

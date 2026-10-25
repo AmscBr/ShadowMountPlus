@@ -829,7 +829,7 @@ static sm_scan_tree_dir_visit_t register_watch_directory_visit(
     if (is_under_image_mount_base(dir_path))
       return SM_SCAN_TREE_DIR_SKIP_DESCEND;
     if (depth_from_root >= ctx->scan_depth ||
-        directory_has_param_json(dir_path, NULL)) {
+        directory_has_game_param(dir_path, NULL)) {
       return SM_SCAN_TREE_DIR_SKIP_DESCEND;
     }
   }

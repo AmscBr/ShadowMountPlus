@@ -9,7 +9,7 @@ bool get_game_info(const char *base_path, const struct stat *param_st,
                    char *out_id, char *out_name);
 // Accept PPSA/CUSA/LAPY/FAKE followed by five digits for game/homebrew paths.
 bool is_supported_game_title_id(const char *title_id);
-// Check whether a directory contains sce_sys/param.json and stat it.
-bool directory_has_param_json(const char *dir_path, struct stat *param_st_out);
+// Check whether a directory contains sce_sys/param.json or param.sfo and stat it.
+bool directory_has_game_param(const char *dir_path, struct stat *param_st_out);
 
 #endif

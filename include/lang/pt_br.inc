@@ -50,8 +50,8 @@ static const char *const g_pt_br[SM_L10N_COUNT] = {
     [SM_L10N_BATCH_INSTALL_AND_MORE] = "\n... e mais %d",
     /* English: Batch install failed for %d app(s).\ncode=0x%08X */
     [SM_L10N_BATCH_INSTALL_FAILED] = "A instalação em lote falhou para %d aplicativos.\ncódigo=0x%08X",
-    /* English: Missing/invalid param.json:\n%s */
-    [SM_L10N_MISSING_PARAM] = "Arquivo param.json ausente ou inválido:\n%s",
+    /* English: Missing/invalid param.json/param.sfo:\n%s */
+    [SM_L10N_MISSING_PARAM] = "Arquivo param.json/param.sfo ausente ou inválido:\n%s",
     /* English: Found %d new games. Processing... */
     [SM_L10N_FOUND_NEW_GAMES] = "%d novos jogos encontrados. Processando...",
     /* English: Library synchronized.\nFound %d games. */

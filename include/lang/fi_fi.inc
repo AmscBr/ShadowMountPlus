@@ -50,8 +50,8 @@ static const char *const g_fi_fi[SM_L10N_COUNT] = {
     [SM_L10N_BATCH_INSTALL_AND_MORE] = "\n... ja %d lisää",
     /* English: Batch install failed for %d app(s).\ncode=0x%08X */
     [SM_L10N_BATCH_INSTALL_FAILED] = "Eräasennus epäonnistui %d sovellukselle.\nkoodi=0x%08X",
-    /* English: Missing/invalid param.json:\n%s */
-    [SM_L10N_MISSING_PARAM] = "param.json puuttuu tai on virheellinen:\n%s",
+    /* English: Missing/invalid param.json/param.sfo:\n%s */
+    [SM_L10N_MISSING_PARAM] = "param.json/param.sfo puuttuu tai on virheellinen:\n%s",
     /* English: Found %d new games. Processing... */
     [SM_L10N_FOUND_NEW_GAMES] = "Löytyi %d uutta peliä. Käsitellään...",
     /* English: Library synchronized.\nFound %d games. */

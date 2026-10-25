@@ -50,8 +50,8 @@ static const char *const g_ko_kr[SM_L10N_COUNT] = {
     [SM_L10N_BATCH_INSTALL_AND_MORE] = "\n... 외 %d개",
     /* English: Batch install failed for %d app(s).\ncode=0x%08X */
     [SM_L10N_BATCH_INSTALL_FAILED] = "%d개 앱 일괄 설치 실패.\n코드=0x%08X",
-    /* English: Missing/invalid param.json:\n%s */
-    [SM_L10N_MISSING_PARAM] = "param.json 누락 또는 잘못됨:\n%s",
+    /* English: Missing/invalid param.json/param.sfo:\n%s */
+    [SM_L10N_MISSING_PARAM] = "param.json/param.sfo 누락 또는 잘못됨:\n%s",
     /* English: Found %d new games. Processing... */
     [SM_L10N_FOUND_NEW_GAMES] = "새 게임 %d개를 찾았습니다. 처리 중...",
     /* English: Library synchronized.\nFound %d games. */

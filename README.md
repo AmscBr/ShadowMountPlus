@@ -234,7 +234,7 @@ PFSC container mountpoints are created under:
 Image layout requirement (`.ffpkg`, `.exfat`, `.ffpfs`):
 - Game files must be placed at the image root.
 - Do not add an extra top-level folder inside the image.
-- Valid example: `/sce_sys/param.json` exists directly from image root.
+- Valid example: `/sce_sys/param.json` or `/sce_sys/param.sfo` exists directly from image root.
 - Invalid example: `/GAME_FOLDER/sce_sys/param.json` (extra nesting level).
 
 PFSC container layout requirement (`.ffpfsc`):
@@ -350,7 +350,7 @@ checks:
 `/data/shadowmount/manual.lst`
 
 Add one source per line:
-- Path to a game folder, where `sce_sys/param.json` exists inside that folder.
+- Path to a game folder containing `eboot.bin` or `eboot2.bin` and `sce_sys/param.json` or `sce_sys/param.sfo`.
 - Path to a supported image file: `.ffpkg`, `.exfat`, `.ffpfs`, or `.ffpfsc`.
 - Empty lines and lines starting with `#` are ignored.
 
@@ -534,10 +534,10 @@ If a game is not mounted:
   - `recursive_scan=1` is treated as deprecated compatibility mode and forces `scan_depth=2`.
 - If logs show `source not stable yet`, adjust `stability_wait_seconds` (or wait for source copy/write to finish).
 - Verify game structure:
-  - folder game: `<GAME_DIR>/sce_sys/param.json`;
-  - image game (`.ffpkg` / `.exfat` / `.ffpfs`): `sce_sys/param.json` must be at image root (no extra top-level folder);
+  - folder game: `<GAME_DIR>/sce_sys/param.json` or `<GAME_DIR>/sce_sys/param.sfo`;
+  - image game (`.ffpkg` / `.exfat` / `.ffpfs`): `sce_sys/param.json` or `sce_sys/param.sfo` must be at image root (no extra top-level folder);
   - PFSC container (`.ffpfsc`): nested supported image files are scanned; direct game files inside the container are ignored.
-- If you see `missing/invalid param.json` for an image, check via FTP that files are present under `/mnt/shadowmnt/<image_name>_<hash>/` and include `sce_sys/param.json`.
+- If you see `missing/invalid param.json/param.sfo` for an image, check via FTP that files are present under `/mnt/shadowmnt/<image_name>_<hash>/` and include `sce_sys/param.json` or `sce_sys/param.sfo`.
 - If you see image mount failure, check image integrity and filesystem type (`.ffpkg`=UFS, `.exfat`=exFAT, `.ffpfs`=PFS, `.ffpfsc`=PFS container).
 - If you see duplicate titleId notification, keep only one source per `<TITLE_ID>`.
 
