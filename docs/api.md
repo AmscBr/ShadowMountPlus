@@ -62,7 +62,7 @@ device.
 | `/api/v1/games/info` | `{"title_id":"PPSA12345"}` | Detailed app.db and source information for one game; size is always calculated |
 | `/api/v1/games/fakelib` | `{"title_id":"PPSA12345","mode":"emulators"}` | Persist the PS5 game's fakelib policy for its next launch |
 | `/api/v1/games/fakelib` | `{"title_id":"PPSA12345","ignore_global_fakelib":true}` | Ignore the global fakelib overlay for this PS5 game on its next launch |
-| `/api/v1/games/icon?title_id=PPSA12345[&size=thumb]` | GET | Stream the full PNG or a cached 128x128 thumbnail |
+| `/api/v1/games/icon?title_id=PPSA12345[&size=thumb\|card\|cover]` | GET | Stream the original PNG or a cached icon variant |
 | `/api/v1/games/mount` | `{"title_id":"PPSA12345","mode":"ro"}` | Mount a managed game, optionally overriding its image mode with `ro`/`rw` |
 | `/api/v1/games/unmount` | `{"title_id":"PPSA12345"}` | Unmount a managed game |
 | `/api/v1/games/uninstall` | `{"title_id":"PPSA12345"}` | Request uninstallation through AppInstUtil |
@@ -114,7 +114,7 @@ A successful version response has this shape:
   "status": 0,
   "api_version": 1,
   "shadowmount_version": "1.7",
-  "capabilities": ["web_ui", "storage_space", "list_images", "list_games", "game_info", "game_icon", "mount_game", "unmount_game", "uninstall_game", "move_game_source", "copy_game_source", "delete_game_source", "unpack_game_image", "storage_job_status", "storage_job_cancel", "list_manual_sources", "add_manual_source", "remove_manual_source", "manage_settings", "read_debug_log", "read_kernel_log", "rescan"]
+  "capabilities": ["web_ui", "storage_space", "list_images", "list_games", "game_info", "game_data_sizes", "game_icon", "mount_game", "unmount_game", "uninstall_game", "move_game_source", "copy_game_source", "delete_game_source", "unpack_game_image", "storage_job_status", "storage_job_cancel", "list_manual_sources", "add_manual_source", "remove_manual_source", "manage_settings", "read_debug_log", "read_kernel_log", "rescan"]
 }
 ```
 
@@ -134,6 +134,27 @@ combine ShadowMount's game cache with `tbl_contentinfo` from app.db. They expose
 the physical `path`, `runtime_path`, `source_type` (`folder` or `image`), image
 filesystem type, PS4/PS5 platform, title/content IDs, name, last-launch and
 install timestamps, game `version`, relative `icon_url`, app.db size, and runtime state.
+Icon requests without `size` return the original PNG. `size=thumb` retains the
+legacy PNG variant capped at 128 pixels. `size=card` and `size=cover` are capped
+at 256 and 512 pixels: opaque icons use JPEG quality 90 with 4:4:4 sampling;
+icons containing alpha remain PNG. If JPEG would exceed the source PNG size,
+a PNG candidate is compared and retained when smaller (the original bytes
+are reused when no resizing is needed). The response Content-Type is `image/jpeg`
+or `image/png` as appropriate. Aspect ratio is preserved and small sources
+are never enlarged. Resizing averages source areas with premultiplied alpha.
+The web UI selects card/cover using responsive image sizes and screen density,
+loads covers lazily, and falls back to the original if a cached request fails.
+
+Variants are generated only on demand and published through unique temporary
+files plus atomic rename. Cache v3 keys include the variant size and a source
+fingerprint (path, device/inode, size and nanosecond modification time); the
+same fingerprint and cache version also version the public icon URL. A source
+changed during encoding is not published under its old key. On a cache miss,
+obsolete generations and abandoned temporary files older than five minutes
+for that title are removed, while its current variants remain. No worker or
+periodic cache scan is added. Generation stops on shutdown/rest requests, and
+an unavailable cache falls back to serving the original PNG.
+
 `version` comes from `AppInfoJson` (`CONTENT_VERSION`, falling back to `APP_VER`)
 and is an empty string when unavailable.
 The timestamp values from `AppInfoJson` (`#_last_access_time` and
@@ -143,7 +164,39 @@ are present.
 `POST /api/v1/games` does not walk game directories by default. Set
 `include_size=true` to add `size_status` and, on success, `size_bytes` to every
 item. `POST /api/v1/games/info` always performs this calculation. An image uses
-its file size; a folder uses the sum of its regular-file sizes.
+its file size; a folder uses the sum of its regular-file sizes. Details measure
+the physical base `app.pkg` for installed packages. The library list can use
+the recorded installed total for those titles, while `app_db_size_bytes`
+remains the system reference in both responses.
+
+`games/info` also returns `save_data_size_status`, `download_size_status`,
+`patch_size_status` and `dlc_size_status`.
+On success (status `0`), the matching `save_data_size_bytes`,
+`download_size_bytes`, `patch_size_bytes` or `dlc_size_bytes` field contains
+the sum of regular-file lengths. Missing
+directories are successful zero sizes; errors omit the corresponding byte count.
+PS5 saves are read from `/user/home/<8-hex-user>/savedata_prospero/<title_id>`;
+other supported titles use `savedata/<title_id>`. Saves are summed across local
+profiles and include backups within the title directory, but exclude cloud,
+metadata and profile-level backup folders. Download data uses
+`/user/download/<title_id>`. Symlink directories are not followed. Traversal
+cooperatively stops on payload shutdown or rest mode. These counts run only for
+the selected title in `games/info`, never during library listing or scanning.
+Patch and DLC totals walk only the selected title directories under
+`/user/patch` and `/user/addcont`, plus matching paths beneath `/mnt/ext0`,
+`/mnt/ext0/ps5`, `/mnt/ext1` and `/mnt/ext1/ps5`. The same directory identity
+(device/inode) is counted once across these roots. Missing directories return
+zero; any access, cancellation or measurement failure returns that category's
+errno-style status and omits its bytes, without publishing a partial total.
+Symlink directories are not followed. Separate patch files are measured;
+updates merged into the base package remain part of the game's main size.
+
+The web detail dialog shows a compact colored bar and a labeled legend for
+the source, patches, DLC, saves and downloads. Their sum is shown only when
+all five measurements succeed. The app.db figure is displayed separately as
+a system reference and is excluded from this total.
+
+The `game_data_sizes` capability advertises these fields.
 
 `POST /api/v1/storage` returns capacity-bearing mounted filesystems and omits
 virtual mounts such as `devfs`, `nullfs` and `tmpfs`. Each item contains the
@@ -153,7 +206,14 @@ available for new files; `used_bytes` is calculated against that value. The
 `destinations` array contains only writable, currently available managed
 `/data/homebrew`, `/mnt/ext*/homebrew` and `/mnt/usb*/homebrew` paths. Scanned
 `/mnt/ext*` and `/mnt/usb*` roots are included as additional destinations. Each
-item adds the selectable `path` to the same filesystem metadata.
+item adds the selectable `path` to the same filesystem metadata. Writable nullfs
+aliases such as `/data/homebrew` are valid destinations but remain omitted from
+the mount overview to avoid duplicates. `/mnt/ext1/homebrew` is also advertised
+when its writable ext1 mount is available and only the homebrew folder is absent;
+listing storage does not create it. The folder is created on an explicit
+copy/move/unpack request. Other missing destination directories remain invalid.
+For USB game sources, the web picker places `/data/homebrew` and an available
+`/mnt/ext1/homebrew` before other choices.
 
 The web storage overview uses `mounts` to show the internal `/user` filesystem
 and mounted `/mnt/ext0..1` and `/mnt/usb0..7` disks once per filesystem/source.
@@ -161,7 +221,8 @@ System partitions and game mounts are omitted from that overview. The separate
 `destinations` list supplies folder choices for copying, moving and unpacking.
 
 `copy` and `move` preserve the source basename and require an existing
-destination under a configured non-runtime scan root. They and `delete` return
+destination under a configured non-runtime scan root (with the ext1 homebrew
+creation exception above). They and `delete` return
 HTTP 202 with a `job_id` and continue in one background worker;
 only one of these jobs can be active. A second start returns HTTP 409/`EBUSY`.
 `delete` still requires `confirm=true`. If a cached source is already absent
@@ -221,7 +282,7 @@ have `source_type: "pkg"`, `installed_pkg: true`, `managed: false` and
 `mounted: false`. Their `path` points to `app.pkg`; `runtime_path` is empty.
 They support information, icons and uninstall, plus fakelib configuration for
 PS5. Mount/unmount and source copy/move/delete/unpack reject PKGs with HTTP 403
-and `EPERM`. PKG size uses the installed size in `app.db`, falling back to the
+and `EPERM`. Library PKG size uses the installed size in `app.db`, falling back to the
 package file size; folder/image measurement remains unchanged.
 
 Game responses also provide `can_uninstall`, `can_manage_source`,

@@ -14,3 +14,5 @@ docs/api.md
 docs/openapi.yaml
 tools/api_test.py
 web/index.html
+licenses/libjpeg-turbo-LICENSE.md
+licenses/libjpeg-turbo-README.ijg

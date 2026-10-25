@@ -1,6 +1,7 @@
 #include "sm_platform.h"
 
 #include <arpa/inet.h>
+#include <dirent.h>
 #include <json-c/json.h>
 #include <microhttpd.h>
 #include <netinet/in.h>
@@ -621,6 +622,7 @@ static void handle_version(struct MHD_Connection *fd) {
       !append_json_string(capabilities, "installed_pkg_games") ||
       !append_json_string(capabilities, "game_fakelib_settings") ||
       !append_json_string(capabilities, "game_info") ||
+      !append_json_string(capabilities, "game_data_sizes") ||
       !append_json_string(capabilities, "game_icon") ||
       !append_json_string(capabilities, "mount_game") ||
       !append_json_string(capabilities, "unmount_game") ||
@@ -667,7 +669,7 @@ static bool filesystem_has_capacity(const struct statfs *mount) {
   }
 
   static const char *const virtual_types[] = {
-      "devfs", "fdescfs", "linprocfs", "nullfs", "procfs", "tmpfs",
+      "devfs", "fdescfs", "linprocfs", "procfs", "tmpfs",
   };
   for (size_t i = 0; i < sizeof(virtual_types) / sizeof(virtual_types[0]);
        ++i) {
@@ -716,11 +718,20 @@ static int append_storage_destination(struct json_object *items,
   char resolved[MAX_PATH];
   struct stat st;
   struct statfs filesystem;
-  if (!realpath(path, resolved) || stat(resolved, &st) != 0 ||
-      !S_ISDIR(st.st_mode) || !destination_is_managed(resolved) ||
+  bool missing_homebrew = false;
+  if (!realpath(path, resolved)) {
+    if (errno != ENOENT || strcmp(path, "/mnt/ext1/homebrew") != 0 ||
+        !realpath("/mnt/ext1", resolved))
+      return 0;
+    missing_homebrew = true;
+  }
+  if (stat(resolved, &st) != 0 || !S_ISDIR(st.st_mode) ||
+      !destination_is_managed(missing_homebrew ? path : resolved) ||
       statfs(resolved, &filesystem) != 0 ||
       !filesystem_has_capacity(&filesystem) ||
-      (filesystem.f_flags & MNT_RDONLY) != 0) {
+      (filesystem.f_flags & MNT_RDONLY) != 0 ||
+      (missing_homebrew &&
+       strcmp(filesystem.f_mntonname, "/mnt/ext1") != 0)) {
     return 0;
   }
 
@@ -761,7 +772,8 @@ static void handle_storage(struct MHD_Connection *connection) {
 
   size_t count = 0;
   for (int i = 0; i < mount_count; ++i) {
-    if (!filesystem_has_capacity(&mounts[i]))
+    if (!filesystem_has_capacity(&mounts[i]) ||
+        strcmp(mounts[i].f_fstypename, "nullfs") == 0)
       continue;
     struct json_object *item = filesystem_to_json(&mounts[i]);
     if (!item || json_object_array_add(items, item) != 0) {
@@ -1060,7 +1072,7 @@ static struct json_object *game_to_json(
     const sm_game_cache_snapshot_entry_t *source,
     const sm_app_db_game_info_t *metadata, const runtime_config_t *cfg,
     bool installed_pkg, bool include_size,
-    bool thumbnail_icon) {
+    bool library_entry) {
   struct json_object *item = json_object_new_object();
   if (!item)
     return NULL;
@@ -1102,11 +1114,12 @@ static struct json_object *game_to_json(
                              icon_path)) {
     struct stat icon_st;
     if (stat(icon_path, &icon_st) == 0) {
-      const char *size_arg = thumbnail_icon ? "&size=thumb" : "";
+      const char *size_arg = library_entry ? "&size=thumb" : "";
       (void)snprintf(
-          icon_url, sizeof(icon_url), "%s?title_id=%s%s&v=%lld-%lld",
+          icon_url, sizeof(icon_url), "%s?title_id=%s%s&v=%u-%016llx",
           SM_API_ROUTE_GAME_ICON, source->title_id, size_arg,
-          (long long)icon_st.st_mtime, (long long)icon_st.st_size);
+          SM_ICON_CACHE_VERSION,
+          (unsigned long long)sm_icon_source_fingerprint(icon_path, &icon_st));
     }
   }
 
@@ -1156,7 +1169,9 @@ static struct json_object *game_to_json(
     uint64_t size = 0;
     uint64_t file_count = 0;
     int size_status = 0;
-    if (installed_pkg && metadata && metadata->installed_size > 0)
+    // The library uses the recorded total. Details measure the base package
+    // separately so patch and DLC figures do not overlap this source size.
+    if (library_entry && installed_pkg && metadata && metadata->installed_size > 0)
       size = metadata->installed_size;
     else
       size_status = sm_storage_measure_path_progress(
@@ -1377,6 +1392,191 @@ static bool find_game_snapshot_by_title(
   return found;
 }
 
+static int measure_optional_title_directory(const char *parent,
+                                            const char *title_id,
+                                           uint64_t *size_out) {
+  *size_out = 0;
+  if (api_listener_stop_requested(NULL))
+    return ECANCELED;
+  struct stat st;
+  if (lstat(parent, &st) != 0)
+    return errno == ENOENT ? 0 : (errno != 0 ? errno : EIO);
+  if (!S_ISDIR(st.st_mode))
+    return S_ISLNK(st.st_mode) ? ELOOP : ENOTDIR;
+  char path[MAX_PATH];
+  int length = snprintf(path, sizeof(path), "%s/%s", parent, title_id);
+  if (length < 0 || (size_t)length >= sizeof(path))
+    return ENAMETOOLONG;
+  if (lstat(path, &st) != 0)
+    return errno == ENOENT ? 0 : (errno != 0 ? errno : EIO);
+  if (!S_ISDIR(st.st_mode))
+    return S_ISLNK(st.st_mode) ? ELOOP : ENOTDIR;
+  uint64_t size = 0, files = 0;
+  if (sm_storage_measure_path_progress(path, &size, &files,
+                                      api_listener_stop_requested, NULL) != 0)
+    return errno != 0 ? errno : EIO;
+  if (size > INT64_MAX)
+    return EOVERFLOW;
+  *size_out = size;
+  return 0;
+}
+
+static int measure_title_savedata(const char *home_root, const char *title_id,
+                                 uint64_t *size_out) {
+  *size_out = 0;
+  if (api_listener_stop_requested(NULL))
+    return ECANCELED;
+  struct stat st;
+  if (lstat(home_root, &st) != 0)
+    return errno == ENOENT ? 0 : (errno != 0 ? errno : EIO);
+  if (!S_ISDIR(st.st_mode))
+    return S_ISLNK(st.st_mode) ? ELOOP : ENOTDIR;
+  DIR *homes = opendir(home_root);
+  if (!homes)
+    return errno != 0 ? errno : EIO;
+  const char *family = strncmp(title_id, "PPSA", 4) == 0
+                           ? "savedata_prospero" : "savedata";
+  uint64_t total = 0;
+  int status = 0;
+  for (;;) {
+    if (api_listener_stop_requested(NULL)) {
+      status = ECANCELED;
+      break;
+    }
+    errno = 0;
+    struct dirent *entry = readdir(homes);
+    if (!entry) {
+      status = errno;
+      break;
+    }
+    if (strlen(entry->d_name) != 8 ||
+        strspn(entry->d_name, "0123456789abcdefABCDEF") != 8)
+      continue;
+    char parent[MAX_PATH];
+    int length = snprintf(parent, sizeof(parent), "%s/%s", home_root,
+                            entry->d_name);
+    if (length < 0 || (size_t)length >= sizeof(parent)) {
+      status = ENAMETOOLONG;
+      break;
+    }
+    if (lstat(parent, &st) != 0) {
+      if (errno == ENOENT)
+        continue;
+      status = errno != 0 ? errno : EIO;
+      break;
+    }
+    if (!S_ISDIR(st.st_mode))
+      continue;
+    length = snprintf(parent, sizeof(parent), "%s/%s/%s", home_root,
+                        entry->d_name, family);
+    if (length < 0 || (size_t)length >= sizeof(parent)) {
+      status = ENAMETOOLONG;
+      break;
+    }
+    uint64_t size = 0;
+    status = measure_optional_title_directory(parent, title_id, &size);
+    if (status != 0)
+      break;
+    if (total > (uint64_t)INT64_MAX - size) {
+      status = EOVERFLOW;
+      break;
+    }
+    total += size;
+  }
+  if (closedir(homes) != 0 && status == 0)
+    status = errno != 0 ? errno : EIO;
+  if (status == 0)
+    *size_out = total;
+  return status;
+}
+
+static int measure_title_content(const char *const *roots, size_t root_count,
+                                  const char *title_id, uint64_t *size_out) {
+  *size_out = 0;
+  if (root_count == 0)
+    return 0;
+  // Callers provide small, fixed root lists; identity tracking stays local.
+  struct {
+    dev_t device;
+    ino_t inode;
+  } seen[root_count];
+  size_t seen_count = 0;
+  uint64_t total = 0;
+  for (size_t i = 0; i < root_count; ++i) {
+    if (api_listener_stop_requested(NULL))
+      return ECANCELED;
+    struct stat st;
+    if (lstat(roots[i], &st) != 0) {
+      if (errno == ENOENT)
+        continue;
+      return errno != 0 ? errno : EIO;
+    }
+    if (!S_ISDIR(st.st_mode))
+      return S_ISLNK(st.st_mode) ? ELOOP : ENOTDIR;
+    char path[MAX_PATH];
+    int length = snprintf(path, sizeof(path), "%s/%s", roots[i], title_id);
+    if (length < 0 || (size_t)length >= sizeof(path))
+      return ENAMETOOLONG;
+    if (lstat(path, &st) != 0) {
+      if (errno == ENOENT)
+        continue;
+      return errno != 0 ? errno : EIO;
+    }
+    if (!S_ISDIR(st.st_mode))
+      return S_ISLNK(st.st_mode) ? ELOOP : ENOTDIR;
+    bool duplicate = false;
+    for (size_t j = 0; j < seen_count; ++j) {
+      if (seen[j].device == st.st_dev && seen[j].inode == st.st_ino) {
+        duplicate = true;
+        break;
+      }
+    }
+    if (duplicate)
+      continue;
+    seen[seen_count].device = st.st_dev;
+    seen[seen_count++].inode = st.st_ino;
+    uint64_t size = 0;
+    int status = measure_optional_title_directory(roots[i], title_id, &size);
+    if (status != 0)
+      return status;
+    if (total > (uint64_t)INT64_MAX - size)
+      return EOVERFLOW;
+    total += size;
+  }
+  *size_out = total;
+  return 0;
+}
+
+static bool add_game_data_sizes(struct json_object *item,
+                               const char *title_id) {
+  static const char *const patch_roots[] = {
+      "/user/patch", "/mnt/ext0/user/patch", "/mnt/ext0/ps5/user/patch",
+      "/mnt/ext1/user/patch", "/mnt/ext1/ps5/user/patch"};
+  static const char *const dlc_roots[] = {
+      "/user/addcont", "/mnt/ext0/user/addcont", "/mnt/ext0/ps5/user/addcont",
+      "/mnt/ext1/user/addcont", "/mnt/ext1/ps5/user/addcont"};
+  uint64_t saves = 0, downloads = 0, patches = 0, dlc = 0;
+  int save_status = measure_title_savedata("/user/home", title_id, &saves);
+  int download_status = measure_optional_title_directory(
+      "/user/download", title_id, &downloads);
+  int patch_status = measure_title_content(patch_roots,
+      sizeof(patch_roots) / sizeof(patch_roots[0]), title_id, &patches);
+  int dlc_status = measure_title_content(dlc_roots,
+      sizeof(dlc_roots) / sizeof(dlc_roots[0]), title_id, &dlc);
+  return add_json_int(item, "save_data_size_status", save_status) &&
+         (save_status != 0 ||
+          add_json_int(item, "save_data_size_bytes", (int64_t)saves)) &&
+         add_json_int(item, "download_size_status", download_status) &&
+         (download_status != 0 ||
+          add_json_int(item, "download_size_bytes", (int64_t)downloads)) &&
+         add_json_int(item, "patch_size_status", patch_status) &&
+         (patch_status != 0 ||
+          add_json_int(item, "patch_size_bytes", (int64_t)patches)) &&
+         add_json_int(item, "dlc_size_status", dlc_status) &&
+         (dlc_status != 0 ||
+          add_json_int(item, "dlc_size_bytes", (int64_t)dlc));
+}
+
 static void handle_game_info(struct MHD_Connection *connection,
                              struct json_object *request) {
   const char *title_id = get_title_id(request);
@@ -1417,7 +1617,8 @@ static void handle_game_info(struct MHD_Connection *connection,
     send_out_of_memory_response(connection);
     return;
   }
-  if (!add_json_int(response, "status", 0)) {
+  if (!add_game_data_sizes(response, title_id) ||
+      !add_json_int(response, "status", 0)) {
     json_object_put(response);
     send_out_of_memory_response(connection);
     return;
@@ -1436,10 +1637,18 @@ static bool handle_game_icon(struct MHD_Connection *connection) {
   }
   const char *size = MHD_lookup_connection_value(
       connection, MHD_GET_ARGUMENT_KIND, "size");
-  bool want_thumbnail = size && size[0] != '\0';
-  if (want_thumbnail && strcmp(size, "thumb") != 0) {
-    return send_error_response(connection, 400, EINVAL,
-                               "size query parameter must be thumb");
+  uint32_t edge = 0;
+  if (size && size[0] != '\0') {
+    if (strcmp(size, "thumb") == 0)
+      edge = SM_ICON_THUMB_SIZE;
+    else if (strcmp(size, "card") == 0)
+      edge = SM_ICON_CARD_SIZE;
+    else if (strcmp(size, "cover") == 0)
+      edge = SM_ICON_COVER_SIZE;
+    else {
+      return send_error_response(connection, 400, EINVAL,
+                                 "size query parameter must be thumb, card or cover");
+    }
   }
 
   char icon_path[MAX_PATH];
@@ -1475,9 +1684,10 @@ static bool handle_game_icon(struct MHD_Connection *connection) {
     return send_error_response(connection, 404, ENOENT,
                                "game icon is not available");
   }
-  if (want_thumbnail) {
+  const char *content_type = "image/png";
+  if (edge != 0) {
     char thumbnail_path[MAX_PATH];
-    if (sm_icon_thumbnail_path(title_id, icon_path, &st, thumbnail_path)) {
+    if (sm_icon_thumbnail_path(title_id, icon_path, &st, edge, thumbnail_path)) {
       int thumbnail_fd = open(thumbnail_path, O_RDONLY);
       struct stat thumbnail_st;
       if (thumbnail_fd >= 0 && fstat(thumbnail_fd, &thumbnail_st) == 0 &&
@@ -1485,12 +1695,15 @@ static bool handle_game_icon(struct MHD_Connection *connection) {
         (void)close(fd);
         fd = thumbnail_fd;
         st = thumbnail_st;
+        const char *extension = strrchr(thumbnail_path, '.');
+        if (extension && strcmp(extension, ".jpg") == 0)
+          content_type = "image/jpeg";
       } else if (thumbnail_fd >= 0) {
         (void)close(thumbnail_fd);
       }
     }
   }
-  return send_file_response(connection, fd, (uint64_t)st.st_size, "image/png",
+  return send_file_response(connection, fd, (uint64_t)st.st_size, content_type,
                             "public, max-age=86400, immutable");
 }
 
@@ -2469,17 +2682,42 @@ static bool destination_is_managed(const char *destination) {
   return false;
 }
 
-static int build_storage_destination(const char *requested_dir,
-                                     const char *source,
-                                     char destination[MAX_PATH]) {
-  char resolved_dir[MAX_PATH];
-  if (!realpath(requested_dir, resolved_dir))
-    return errno != 0 ? errno : EINVAL;
+static int resolve_storage_destination_dir(const char *requested_dir,
+                                            char resolved_dir[MAX_PATH]) {
+  if (!realpath(requested_dir, resolved_dir)) {
+    if (errno != ENOENT ||
+        strcmp(requested_dir, "/mnt/ext1/homebrew") != 0)
+      return errno != 0 ? errno : EINVAL;
+    struct statfs filesystem;
+    if (statfs("/mnt/ext1", &filesystem) != 0)
+      return errno != 0 ? errno : EIO;
+    if (strcmp(filesystem.f_mntonname, "/mnt/ext1") != 0)
+      return ENODEV;
+    if ((filesystem.f_flags & MNT_RDONLY) != 0)
+      return EROFS;
+    if (!destination_is_managed(requested_dir))
+      return EINVAL;
+    if (mkdir(requested_dir, 0777) != 0 && errno != EEXIST)
+      return errno != 0 ? errno : EIO;
+    if (!realpath(requested_dir, resolved_dir))
+      return errno != 0 ? errno : EINVAL;
+  }
   struct stat st;
   if (stat(resolved_dir, &st) != 0)
     return errno != 0 ? errno : EIO;
   if (!S_ISDIR(st.st_mode) || !destination_is_managed(resolved_dir))
     return EINVAL;
+  return 0;
+}
+
+static int build_storage_destination(const char *requested_dir,
+                                     const char *source,
+                                     char destination[MAX_PATH]) {
+  char resolved_dir[MAX_PATH];
+  int status = resolve_storage_destination_dir(requested_dir, resolved_dir);
+  if (status != 0)
+    return status;
+  struct stat st;
 
   const char *filename = get_filename_component(source);
   if (!filename || filename[0] == '\0' || strcmp(filename, ".") == 0 ||
@@ -2503,13 +2741,10 @@ static int build_unpack_destination(const char *requested_dir,
                                     const char *title_id,
                                     char destination[MAX_PATH]) {
   char resolved_dir[MAX_PATH];
-  if (!realpath(requested_dir, resolved_dir))
-    return errno != 0 ? errno : EINVAL;
+  int status = resolve_storage_destination_dir(requested_dir, resolved_dir);
+  if (status != 0)
+    return status;
   struct stat st;
-  if (stat(resolved_dir, &st) != 0)
-    return errno != 0 ? errno : EIO;
-  if (!S_ISDIR(st.st_mode) || !destination_is_managed(resolved_dir))
-    return EINVAL;
   int written = snprintf(destination, MAX_PATH, "%s/%s", resolved_dir,
                          title_id);
   if (written < 0 || (size_t)written >= MAX_PATH)

@@ -432,7 +432,7 @@ paths:
   /api/v1/games/icon:
     get:
       operationId: getGameIcon
-      summary: Stream a game icon or a cached 128x128 thumbnail
+      summary: Stream an original game icon or a cached responsive variant
       tags: [Games]
       parameters:
         - name: title_id
@@ -443,18 +443,22 @@ paths:
         - name: size
           in: query
           required: false
-          description: Generate and return the cached thumbnail variant
+          description: Optional maximum edge. thumb is a legacy 128px PNG; card (256px) and cover (512px) prefer JPEG for opaque icons and PNG for alpha or more efficient lossless encoding. Smaller sources are not enlarged.
           schema:
             type: string
-            enum: [thumb]
+            enum: [thumb, card, cover]
       responses:
         "200":
-          description: PNG icon
+          description: Original PNG or cached JPEG/PNG icon
           headers:
             Access-Control-Allow-Origin:
               $ref: "#/components/headers/AllowOrigin"
           content:
             image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
               schema:
                 type: string
                 format: binary
@@ -1447,8 +1451,8 @@ components:
           type: array
           items:
             type: string
-            enum: [web_ui, storage_space, list_images, list_games, game_info, game_icon, mount_game, unmount_game, uninstall_game, move_game_source, copy_game_source, delete_game_source, unpack_game_image, storage_job_status, storage_job_cancel, list_manual_sources, add_manual_source, remove_manual_source, manage_settings, read_debug_log, read_kernel_log, rescan]
-          example: [web_ui, storage_space, list_images, list_games, game_info, game_icon, mount_game, unmount_game, uninstall_game, move_game_source, copy_game_source, delete_game_source, unpack_game_image, storage_job_status, storage_job_cancel, list_manual_sources, add_manual_source, remove_manual_source, manage_settings, read_debug_log, read_kernel_log, rescan]
+            enum: [web_ui, storage_space, list_images, list_games, game_info, game_data_sizes, game_icon, mount_game, unmount_game, uninstall_game, move_game_source, copy_game_source, delete_game_source, unpack_game_image, storage_job_status, storage_job_cancel, list_manual_sources, add_manual_source, remove_manual_source, manage_settings, read_debug_log, read_kernel_log, rescan]
+          example: [web_ui, storage_space, list_images, list_games, game_info, game_data_sizes, game_icon, mount_game, unmount_game, uninstall_game, move_game_source, copy_game_source, delete_game_source, unpack_game_image, storage_job_status, storage_job_cancel, list_manual_sources, add_manual_source, remove_manual_source, manage_settings, read_debug_log, read_kernel_log, rescan]
 
     StorageMount:
       type: object
@@ -1719,7 +1723,43 @@ components:
           type: integer
           format: int64
           minimum: 0
-          description: Image file size, sum of folder files or installed PKG size from app.db (package file size when unavailable).
+          description: Physical image, folder or base app.pkg size in games/info. Library listings may use the recorded app.db installed total for PKGs, falling back to package file size.
+        save_data_size_status:
+          type: integer
+          minimum: 0
+          description: games/info only. Errno-style result of counting this title's save files across local profiles. Missing directories succeed with zero bytes.
+        save_data_size_bytes:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Present when save_data_size_status is zero. Includes backups within each title's save directory; excludes cloud and metadata folders.
+        download_size_status:
+          type: integer
+          minimum: 0
+          description: games/info only. Errno-style result of counting /user/download/title_id. Missing directories succeed with zero bytes.
+        download_size_bytes:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Present when download_size_status is zero. Sum of regular-file sizes for the title's download directory.
+        patch_size_status:
+          type: integer
+          minimum: 0
+          description: games/info only. Errno-style result for separate patch files on internal and connected extended storage; missing directories succeed with zero bytes.
+        patch_size_bytes:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Present when patch_size_status is zero. Sum of regular-file lengths; aliased title directories are counted once.
+        dlc_size_status:
+          type: integer
+          minimum: 0
+          description: games/info only. Errno-style result for installed add-on files on internal and connected extended storage; missing directories succeed with zero bytes.
+        dlc_size_bytes:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Present when dlc_size_status is zero. Sum of regular-file lengths below the title's addcont directories; aliases are counted once.
         status:
           type: integer
           const: 0

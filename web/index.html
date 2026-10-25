@@ -88,7 +88,7 @@
       flex-shrink: 0;
     }
 
-    .language-select {
+    .language-button {
       min-width: 110px;
       min-height: 36px;
     }
@@ -261,16 +261,21 @@
     .storage-fill { height: 100%; border-radius: inherit; background: var(--blue); }
     .storage-fill.warning { background: var(--amber); }
     .storage-fill.danger { background: var(--red); }
-    .transfer-details { display: grid; gap: 10px; margin-top: 12px; }
-    .transfer-details[hidden] { display: none; }
-    .fakelib-policy { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-    .fakelib-policy select { max-width: 100%; }
-    .transfer-route { overflow-wrap: anywhere; color: var(--muted); font: 11px/1.45 ui-monospace, monospace; }
-    .transfer-meter { height: 9px; margin-top: 0; }
-    .transfer-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .transfer-stat { padding: 8px 9px; border-radius: 9px; background: #0c111a; }
-    .transfer-stat strong { display: block; margin-top: 2px; font-size: 13px; }
-    .transfer-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .operation-popup { position: fixed; z-index: 10; right: 24px; bottom: 84px; display: flex; align-items: center; gap: 18px; width: 620px; max-width: calc(100vw - 48px); padding: 16px 18px; border: 1px solid #46688d; border-radius: 16px; background: #12243b; box-shadow: 0 12px 40px #0008; }
+    .operation-popup[hidden] { display: none; }
+    .transfer-main { flex: 1; min-width: 0; }
+    .transfer-heading { display: flex; align-items: center; gap: 12px; }
+    .transfer-heading strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 17px; }
+    .transfer-heading .badge { flex-shrink: 0; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .transfer-route { overflow: hidden; margin: 5px 0 10px; color: var(--muted); font: 12px/1.4 ui-monospace, monospace; text-overflow: ellipsis; white-space: nowrap; }
+    .transfer-meter { height: 5px; margin: 0; }
+    .transfer-meter.indeterminate .storage-fill { animation: transfer-progress 1.8s ease-in-out infinite alternate; }
+    @keyframes transfer-progress { from { transform: translateX(0); } to { transform: translateX(250%); } }
+    .transfer-stats { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin-top: 8px; color: var(--muted); font-size: 13px; }
+    .transfer-stats strong { margin-left: auto; color: var(--text); }
+    .operation-popup .btn { flex-shrink: 0; }
+    body.transfer-active .toast { bottom: 260px; }
+    @media (prefers-reduced-motion: reduce) { .transfer-meter.indeterminate .storage-fill { animation: none; } }
     .manual-form { display: flex; gap: 7px; margin-top: 12px; }
     .manual-form input { min-width: 0; width: 100%; }
     .manual-list, .activity-list { display: grid; gap: 7px; margin-top: 12px; }
@@ -324,6 +329,10 @@
     .modal[hidden] { display: none; }
     .modal-card { width: min(720px, 100%); max-height: 90vh; overflow: auto; border-radius: 18px; }
     .modal-card.log-card { width: min(1440px, 96vw); }
+    .log-card .modal-head { flex-wrap: wrap; }
+    .log-actions { align-items: center; justify-content: flex-end; margin-left: auto; max-width: 100%; }
+    .log-actions #copyLog { white-space: normal; padding: 8px 12px; }
+    .clipboard-source { position: fixed; top: 0; left: 0; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; pointer-events: none; }
     .modal-card.destination-card { width: min(560px, 100%); }
     .modal-head { display: flex; align-items: start; justify-content: space-between; gap: 20px; padding: 18px; border-bottom: 1px solid var(--line); }
     .close { width: 36px; min-height: 36px; padding: 0; font-size: 22px; }
@@ -332,6 +341,21 @@
     .detail-grid { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 7px 12px; margin-top: 13px; font-size: 13px; }
     .detail-key { color: var(--muted); }
     .detail-value { min-width: 0; overflow-wrap: anywhere; }
+    .detail-sizes { margin: 0 0 14px; padding: 8px 10px; border: 1px solid #2c415d; border-radius: 10px; background: #0c192b; }
+    .size-total { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 6px; color: var(--muted); font-size: 13px; line-height: 1.2; }
+    .size-total strong { color: var(--text); font-size: 18px; white-space: nowrap; }
+    .size-bar { display: flex; height: 8px; overflow: hidden; border-radius: 6px; background: #31415a; }
+    .size-segment { height: 100%; background: var(--size-color); }
+    .size-source { --size-color: #68b6ff; }
+    .size-patch { --size-color: #ffc878; }
+    .size-dlc { --size-color: #b294ff; }
+    .size-saves { --size-color: #5dd6ac; }
+    .size-download { --size-color: #ff89b7; }
+    .size-legend { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 9px 0 0; }
+    .detail-size { min-width: 0; }
+    .detail-size dt { color: var(--muted); font-size: 12px; line-height: 1.3; overflow-wrap: anywhere; }
+    .detail-size dt::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-inline-end: 5px; border-radius: 50%; background: var(--size-color); vertical-align: middle; }
+    .detail-size dd { margin: 4px 0 0; font-size: 14px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
     .modal-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 18px 18px; }
     .destination-list { display: grid; gap: 8px; padding: 18px; }
     .destination-list .btn { justify-content: space-between; width: 100%; text-align: left; }
@@ -376,6 +400,241 @@
       .details .cover { width: 120px; height: 120px; }
       .detail-grid { grid-template-columns: 105px minmax(0, 1fr); }
     }
+    /* TV layout: keep the library clear and move administration to its own view. */
+    :root { --bg: #080e1b; --surface: #101c30; --surface-2: #192940; --line: #293d58; --muted: #b1bfd3; --blue: #8bc8ff; --radius: 16px; }
+    body { background: radial-gradient(ellipse at 75% 0, #18345a 0, transparent 65%), var(--bg); background-attachment: fixed; font-size: 18px; }
+    [hidden] { display: none !important; }
+    .shell { width: 1600px; max-width: 100%; padding: 24px 40px 100px; }
+    .topbar { gap: 24px; margin-bottom: 18px; }
+    .brand-mark { width: 54px; height: 54px; margin-right: 16px; }
+    h1 { font-size: 23px; font-weight: 650; }
+    h2 { font-size: 24px; font-weight: 650; }
+    .subtle { font-size: 15px; }
+    .brand #version { font-size: 12px; margin-top: 3px; }
+    .view-nav { display: flex; gap: 6px; padding: 4px; border: 1px solid var(--line); border-radius: 30px; background: #0b1628; }
+    .view-nav .view-tab { border: 0; border-radius: 24px; background: transparent; padding: 0 22px; min-height: 44px; color: var(--muted); }
+    .view-tab.active { background: #dceeff; color: #0c2340; }
+    .topbar-actions { gap: 22px; }
+    .connection { font-size: 14px; white-space: nowrap; }
+    .language-button { min-width: 110px; max-width: 155px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .toolbar { grid-template-columns: minmax(200px, 1fr) 190px auto auto; gap: 14px; padding: 0; border: 0; background: none; box-shadow: none; }
+    input, select, .btn { min-height: 50px; border-radius: 12px; }
+    input, select { background: #0c182a; }
+    input::placeholder { color: #9aabc2; }
+    .btn { padding: 0 20px; }
+    .btn.small { min-height: 46px; font-size: 16px; padding: 0 16px; }
+    .btn.primary { background: #c1e2ff; border-color: #c1e2ff; color: #0a2441; font-weight: 650; }
+    .btn.primary:hover { background: #e0f1ff; }
+    .stats { display: flex; flex-wrap: wrap; gap: 12px 26px; margin: 16px 0 18px; }
+    .stat { display: flex; align-items: baseline; gap: 8px; padding: 0; border: 0; background: none; border-radius: 0; }
+    .stat-value { order: -1; margin: 0; font-size: 19px; font-weight: 650; }
+    .stat .subtle { font-size: 14px; }
+    .storage-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 18px; margin-left: auto; color: var(--muted); font-size: 14px; }
+    .storage-summary span { white-space: nowrap; }
+    [dir="rtl"] .storage-summary { margin-left: 0; margin-right: auto; }
+    .layout { display: block; }
+    .section-head { margin: 0 0 18px; }
+    .games { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 26px 20px; }
+    .game-card { display: block; position: relative; min-width: 0; min-height: 0; padding: 9px; border: 2px solid transparent; border-radius: 18px; background: rgba(17, 30, 50, .7); transition: border-color .15s, background .15s; }
+    .game-card:hover { background: #1b304c; }
+    .game-card.is-focused { border-color: #e3f3ff; background: #1c3554; box-shadow: 0 0 0 4px rgba(104, 181, 255, .25), 0 12px 36px #0005; }
+    .game-card .cover { width: 100%; height: 0; padding-bottom: 100%; border: 0; border-radius: 10px; background: linear-gradient(135deg, #2c5381, #12233e); }
+    .game-card .cover-fallback { position: absolute; inset: 0; font-size: 30px; letter-spacing: .08em; }
+    .game-card .cover img { border-radius: 10px; }
+    .game-main { padding: 12px 4px 4px; }
+    .game-heading { display: block; }
+    .game-title { font-size: 18px; font-weight: 600; white-space: normal; line-height: 1.35; height: 2.7em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .game-id { margin-top: 6px; font-size: 12px; }
+    .game-card-size { position: absolute; top: 18px; right: 18px; margin: 0; padding: 4px 8px; border: 1px solid #54708c; border-radius: 8px; background: #0b192de8; color: white; font-size: 13px; }
+    .game-card .badges { gap: 5px; margin: 10px 0 0; }
+    .badge { font-size: 12px; padding: 3px 8px; }
+    .game-card .game-path { display: none; }
+    .game-actions { margin: 0; }
+    .game-open { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; border-radius: 16px; background: transparent; color: transparent; font-size: 0; cursor: pointer; }
+    .game-open:focus { outline: none; }
+    .sidebar { position: static; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+    .panel { padding: 24px; background: #101e32; }
+    .panel h2 { margin-bottom: 8px; }
+    .sidebar .settings-panel { grid-column: 1 / -1; }
+    .console-workbench { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 30px; align-items: start; }
+    .console-nav { display: grid; gap: 8px; position: sticky; top: 20px; padding: 8px; border: 1px solid var(--line); border-radius: 18px; background: #101e32; }
+    .console-section { min-width: 0; text-align: left; border-color: transparent; background: transparent; color: var(--muted); transition: none; }
+    .console-section.active { background: #dceeff; color: #0c2340; font-weight: 650; }
+    .console-content, .console-pane { min-width: 0; }
+    .console-heading { margin-bottom: 18px; }
+    .console-heading h2 { margin-bottom: 5px; font-size: 27px; }
+    .console-heading p { margin: 0; }
+    .console-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
+    .console-grid .panel { min-width: 0; padding: 18px 20px; }
+    .console-grid h3, .console-overview-note h3 { margin: 0 0 10px; font-size: 18px; }
+    .console-wide { grid-column: 1 / -1; }
+    .console-setting { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 64px; margin: 0; border-bottom: 1px solid #263a54; font-size: 16px; line-height: 1.4; white-space: normal; }
+    .console-setting:last-child { border-bottom: 0; }
+    .console-setting > span { min-width: 0; }
+    .console-setting select { width: auto; max-width: 55%; flex-shrink: 0; }
+    .console-setting input[type="number"] { width: 100px; flex-shrink: 0; }
+    .console-setting input[type="checkbox"] { appearance: none; -webkit-appearance: none; width: 46px; height: 28px; min-height: 28px; flex-shrink: 0; margin: 0; padding: 0; border: 1px solid #6e86a4; border-radius: 18px; background: radial-gradient(circle at 13px center, #f4f7fb 0 8px, transparent 9px), #435671; cursor: pointer; }
+    .console-setting input[type="checkbox"]:checked { border-color: #62b9ee; background: radial-gradient(circle at calc(100% - 13px) center, white 0 8px, transparent 9px), #2383c4; }
+    .console-hint { margin: 8px 0 12px; font-size: 14px; line-height: 1.45; }
+    .console-list { max-height: 180px; overflow-y: auto; padding: 5px; scroll-padding: 8px; }
+    .console-list .manual-row { min-width: 0; }
+    .console-save { position: sticky; z-index: 2; bottom: 80px; display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-top: 20px; padding: 14px 18px; border: 1px solid #395273; border-radius: 14px; background: #13263f; }
+    .console-save p { margin: 0; max-width: 520px; font-size: 14px; line-height: 1.4; }
+    .console-save .btn { flex-shrink: 0; }
+    .console-scan { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+    .console-scan .console-setting { border: 0; min-height: 44px; justify-content: start; }
+    .console-scan .console-hint { margin-bottom: 0; }
+    .console-scan > .btn { flex-shrink: 0; }
+    .console-log-actions { display: grid; gap: 12px; margin-top: 16px; }
+    .console-storage { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin: 0; }
+    .console-storage .storage-row { padding: 20px; border: 1px solid var(--line); background: #101e32; border-radius: 14px; }
+    .console-storage .storage-path { font-size: 19px; }
+    .console-storage .storage-space { font-size: 14px; margin-top: 20px; }
+    .console-storage .storage-meta { font-size: 12px; }
+    .console-overview-note { margin-top: 18px; }
+    .console-overview-note p { margin-bottom: 0; line-height: 1.5; }
+    [dir="rtl"] .console-section { text-align: right; }
+    .settings-form { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 30px; }
+    .settings-form .settings-actions { grid-column: 1 / -1; }
+    .check { min-height: 48px; white-space: normal; color: var(--text); }
+    .check input { width: 24px; height: 24px; flex-shrink: 0; }
+    .setting-row, .storage-row, .manual-item { font-size: 16px; }
+    .control-bar { position: fixed; z-index: 5; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 32px; padding: 16px 40px; min-height: 64px; border-top: 1px solid #304563; background: #0b1525; color: #d6e5f6; font-size: 16px; }
+    .control-bar > span { display: inline-flex; align-items: center; gap: 10px; }
+    kbd { font: inherit; font-weight: 600; color: white; }
+    .pad-key { position: relative; display: inline-flex; justify-content: center; align-items: center; width: 28px; height: 28px; border: 1px solid #6e86a4; border-radius: 50%; font-size: 0; }
+    .pad-key.cross::before, .pad-key.cross::after { content: ""; position: absolute; top: 50%; left: 50%; width: 16px; height: 2px; background: currentColor; transform: translate(-50%, -50%) rotate(45deg); }
+    .pad-key.cross::after { transform: translate(-50%, -50%) rotate(-45deg); }
+    .pad-key.circle::before { content: ""; width: 14px; height: 14px; border: 2px solid currentColor; border-radius: 50%; }
+    .control-note { margin-left: auto; color: var(--muted); font-size: 13px; }
+    body.dialog-open { overflow: hidden; }
+    .modal { z-index: 10; grid-template-columns: minmax(0, 1fr); padding: 24px; background: rgba(3, 8, 17, .9); }
+    #destinationModal, #logModal { z-index: 11; }
+    #confirmModal { z-index: 12; }
+    .confirm-message { white-space: pre-wrap; overflow-wrap: anywhere; padding: 24px; }
+    .unpack-option { margin: 0 18px 18px; }
+    .modal-card { display: flex; flex-direction: column; width: 1000px; min-width: 0; max-width: 100%; max-height: 90vh; overflow: hidden; border-color: #536e90; background: #111f34; }
+    .modal-card.details-card { display: grid; grid-template-columns: 272px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; height: calc(100vh - 48px); max-height: 560px; }
+    .modal-head { flex-shrink: 0; padding: 24px; }
+    .modal-head h2 { font-size: 26px; }
+    .details-card .modal-head { grid-column: 2; grid-row: 1; min-width: 0; padding: 16px 20px 16px 0; }
+    .details-card .modal-head > div { min-width: 0; }
+    .details-card .modal-head h2 { font-size: 24px; }
+    .details-card .close { width: 44px; height: 44px; min-height: 44px; }
+    .modal-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 4px; }
+    .modal-meta .badges { margin: 0; }
+    .details { display: block; grid-column: 2; grid-row: 2; min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 12px 20px 12px 0; }
+    .details:focus, .log-view:focus { outline-offset: -4px; }
+    .detail-sidebar { grid-column: 1; grid-row: 1 / 3; min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 16px 20px 12px; }
+    .detail-sidebar .cover { width: 232px; height: 232px; margin: 0 auto; }
+    .fakelib-controls { display: grid; min-width: 0; gap: 8px; margin-top: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: #0b1829; }
+    .fakelib-controls h3 { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+    .fakelib-controls .btn { width: 100%; min-width: 0; min-height: 48px; padding: 9px 12px; text-align: left; font-size: 14px; white-space: normal; overflow-wrap: anywhere; line-height: 1.3; }
+    .fakelib-controls .fakelib-mode { position: relative; padding-right: 30px; }
+    .fakelib-mode::after { content: ""; position: absolute; right: 13px; top: 50%; width: 7px; height: 7px; border-top: 2px solid currentColor; border-right: 2px solid currentColor; transform: translateY(-50%) rotate(45deg); }
+    .fakelib-controls .fakelib-switch { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .switch-label { min-width: 0; }
+    .switch-track { position: relative; width: 34px; height: 20px; flex-shrink: 0; border-radius: 12px; background: #516078; }
+    .switch-track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: white; }
+    [aria-checked="true"] .switch-track { background: #2383c4; }
+    [aria-checked="true"] .switch-track::after { transform: translateX(14px); }
+    .fakelib-controls .fakelib-hint { font-size: 12px; line-height: 1.4; }
+    .detail-grid { margin-top: 0; font-size: 16px; grid-template-columns: 160px minmax(0, 1fr); gap: 8px 16px; }
+    .modal-actions { flex-shrink: 0; gap: 12px; padding: 18px 24px 24px; border-top: 1px solid var(--line); }
+    .details-card .modal-actions { grid-column: 1 / -1; grid-row: 3; display: grid; grid-template-columns: repeat(auto-fit, minmax(125px, 1fr)); gap: 8px; padding: 12px 18px; }
+    .details-card .modal-actions .btn { min-width: 0; min-height: 46px; padding: 8px; font-size: 14px; line-height: 1.3; white-space: normal; }
+    .destination-list { min-height: 0; overflow-y: auto; }
+    .destination-custom { flex-shrink: 0; }
+    .modal-card.language-card { display: grid; grid-template-rows: auto minmax(0, 1fr); width: 840px; height: calc(100vh - 80px); max-height: 600px; }
+    .language-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-content: start; gap: 10px; min-height: 0; overflow-y: auto; padding: 20px; }
+    .language-choice { min-width: 0; min-height: 48px; padding: 10px 12px; font-size: 16px; line-height: 1.3; white-space: normal; }
+    .language-choice[aria-pressed="true"] { border-color: var(--blue); background: #203d5e; }
+    .close { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 50px; height: 50px; min-height: 50px; padding: 0; font-size: 0; line-height: 1; flex-shrink: 0; }
+    .close::before, .close::after { content: ""; position: absolute; top: 50%; left: 50%; width: 18px; height: 2px; background: currentColor; transform: translate(-50%, -50%) rotate(45deg); }
+    .close::after { transform: translate(-50%, -50%) rotate(-45deg); }
+    .toast { bottom: 84px; font-size: 18px; }
+    button:focus, input:focus, select:focus, [tabindex]:focus { outline: 3px solid #e3f3ff; outline-offset: 4px; }
+    .game-open:focus { outline: none; }
+    .is-focused .game-title { color: white; }
+    :focus { scroll-margin: 30px 0 100px; }
+    .log-view { min-height: 0; font-size: 16px; }
+    @media (max-width: 1400px) { .games { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+    @media (max-width: 1250px) {
+      .shell { padding: 24px 30px 100px; }
+      .games { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .connection #connectionText { display: none; }
+      .topbar { gap: 14px; }
+      .view-tab { padding: 0 16px; }
+    }
+    @media (max-width: 850px) {
+      .console-workbench { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+      .console-nav { position: static; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+      .console-section { padding: 8px; text-align: center; white-space: normal; font-size: 14px; }
+      .topbar { flex-wrap: wrap; }
+      .brand { flex: 1; }
+      .brand h1 { font-size: 20px; }
+      .view-nav { order: 3; }
+      .toolbar { grid-template-columns: minmax(0, 1fr) auto auto; }
+      .toolbar #search { grid-column: 1 / -1; }
+      .games { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 14px; }
+      .control-note { display: none !important; }
+      .sidebar, .settings-form { grid-template-columns: 1fr; }
+      .details { grid-template-columns: 160px minmax(0, 1fr); }
+    }
+    @media (max-width: 540px) {
+      .console-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .console-grid, .console-storage { grid-template-columns: minmax(0, 1fr); }
+      .console-save { position: static; flex-direction: column; align-items: stretch; gap: 12px; }
+      .console-setting { font-size: 15px; gap: 12px; }
+      .console-scan { align-items: stretch; flex-direction: column; gap: 14px; }
+      body { font-size: 16px; }
+      .shell { padding: 20px 16px 90px; }
+      .topbar-actions { gap: 10px; }
+      .brand-mark { width: 40px; height: 40px; margin-right: 10px; }
+      .brand h1 { font-size: 17px; }
+      .brand #version { font-size: 10px; }
+      .language-button { min-width: 80px; max-width: 100px; font-size: 13px; }
+      .games { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 10px; }
+      .game-title { font-size: 16px; }
+      .game-id { font-size: 10px; }
+      .game-main { padding: 10px 0 0; }
+      .game-card { padding: 6px; border-radius: 13px; }
+      .stats { gap: 8px 18px; }
+      .stat .subtle { font-size: 12px; }
+      .toolbar { gap: 8px; }
+      .toolbar .btn { padding: 0 12px; }
+      .control-bar { padding: 12px 16px; gap: 20px; font-size: 13px; }
+      .control-bar > span:last-of-type { display: none; }
+      .modal { padding: 12px; }
+      .language-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 14px; }
+      .language-choice { font-size: 14px; }
+      .operation-popup { right: 12px; bottom: 78px; max-width: calc(100vw - 24px); padding: 12px; gap: 12px; }
+      .transfer-heading { align-items: start; flex-direction: column; gap: 4px; }
+      .transfer-heading strong { max-width: 100%; font-size: 15px; }
+      .transfer-heading .badge { max-width: 100%; font-size: 10px; }
+      .transfer-stats { font-size: 12px; gap: 4px 10px; }
+      .operation-popup .btn.small { min-height: 44px; padding: 0 10px; font-size: 14px; }
+      .modal-card.details-card { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto; height: calc(100vh - 24px); }
+      .details-card .modal-head { grid-column: 1; grid-row: 1; padding: 16px 18px; }
+      .detail-sidebar { grid-column: 1; grid-row: 2; display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 12px; align-items: start; max-height: 190px; padding: 12px 18px; }
+      .detail-sidebar .cover { width: 160px; height: 160px; }
+      .detail-sidebar .fakelib-controls { margin-top: 0; }
+      .detail-sidebar .fakelib-controls .btn { padding: 8px; font-size: 12px; }
+      .detail-sidebar .fakelib-switch { flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+      .detail-sidebar .switch-label { flex-basis: 100%; }
+      .details { grid-column: 1; grid-row: 3; }
+      .details-card .modal-actions { grid-row: 4; }
+      .modal-head, .details { padding: 18px; }
+      .modal-head h2 { font-size: 21px; }
+      .details { grid-template-columns: 1fr; }
+      .detail-grid { grid-template-columns: 110px minmax(0, 1fr); font-size: 14px; }
+      .detail-sizes { padding: 9px; }
+      .size-legend { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .detail-size dt { font-size: 12px; }
+      .detail-size dd { font-size: 13px; }
+      .modal-actions { padding: 0 18px 18px; }
+    }
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
   </style>
 </head>
 <body>
@@ -388,44 +647,16 @@
           <p class="subtle" id="version" data-i18n="connecting">Connecting to API…</p>
         </div>
       </div>
+      <nav class="view-nav" aria-label="Navigation" data-i18n-aria-label="navigate">
+        <button class="btn view-tab active" id="libraryTab" type="button" aria-pressed="true" data-i18n="library">Library</button>
+        <button class="btn view-tab" id="consoleTab" type="button" aria-pressed="false" data-i18n="consoleTools">Console</button>
+      </nav>
       <div class="topbar-actions">
         <div class="connection" id="connection" role="status">
           <span class="connection-dot"></span>
           <span id="connectionText" data-i18n="checking">Checking</span>
         </div>
-        <select class="language-select" id="language" aria-label="Language" data-i18n-aria-label="language">
-          <option value="ja-JP">日本語</option>
-          <option value="en-US">English (US)</option>
-          <option value="fr-FR">Français (France)</option>
-          <option value="es-ES">Español (España)</option>
-          <option value="de-DE">Deutsch</option>
-          <option value="it-IT">Italiano</option>
-          <option value="nl-NL">Nederlands</option>
-          <option value="pt-PT">Português (Portugal)</option>
-          <option value="ru-RU">Русский</option>
-          <option value="ko-KR">한국어</option>
-          <option value="zh-TW">繁體中文</option>
-          <option value="zh-CN">简体中文</option>
-          <option value="fi-FI">Suomi</option>
-          <option value="sv-SE">Svenska</option>
-          <option value="da-DK">Dansk</option>
-          <option value="no-NO">Norsk</option>
-          <option value="pl-PL">Polski</option>
-          <option value="pt-BR">Português (Brasil)</option>
-          <option value="en-GB">English (UK)</option>
-          <option value="tr-TR">Türkçe</option>
-          <option value="es-MX">Español (México)</option>
-          <option value="ar-SA">العربية</option>
-          <option value="fr-CA">Français (Canada)</option>
-          <option value="cs-CZ">Čeština</option>
-          <option value="hu-HU">Magyar</option>
-          <option value="el-GR">Ελληνικά</option>
-          <option value="ro-RO">Română</option>
-          <option value="th-TH">ไทย</option>
-          <option value="vi-VN">Tiếng Việt</option>
-          <option value="id-ID">Bahasa Indonesia</option>
-          <option value="uk-UA">Українська</option>
-        </select>
+        <button class="btn language-button" id="language" type="button" aria-label="Language" data-i18n-aria-label="language" aria-haspopup="dialog" aria-expanded="false" aria-controls="languageModal">Language</button>
       </div>
     </header>
 
@@ -439,7 +670,6 @@
         <option value="ps4">PS4</option>
         <option value="ps5">PS5</option>
       </select>
-      <label class="check"><input id="includeSize" type="checkbox"> <span data-i18n="calculateSize">Calculate size</span></label>
       <button class="btn" id="refreshBtn" type="button" data-i18n="refresh">Refresh</button>
       <button class="btn primary" id="scanBtn" type="button" data-i18n="scan">Scan</button>
     </section>
@@ -450,10 +680,11 @@
       <div class="stat"><span class="subtle" data-i18n="folders">Folders</span><strong class="stat-value" id="folderGames">—</strong></div>
       <div class="stat"><span class="subtle">PKG</span><strong class="stat-value" id="pkgGames">—</strong></div>
       <div class="stat"><span class="subtle" data-i18n="mounted">Mounted</span><strong class="stat-value" id="mountedGames">—</strong></div>
+      <div class="storage-summary" id="storageSummary" role="status" aria-label="Storage" data-i18n-aria-label="storage"><span data-i18n="loading">Loading…</span></div>
     </section>
 
     <div class="layout">
-      <section aria-labelledby="gamesHeading">
+      <section class="library-section" aria-labelledby="gamesHeading">
         <div class="section-head">
           <h2 id="gamesHeading" data-i18n="library">Library</h2>
           <span class="subtle" id="visibleCount"></span>
@@ -463,101 +694,123 @@
         </div>
       </section>
 
-      <aside class="sidebar">
-        <section class="panel" aria-labelledby="storageHeading">
-          <h2 id="storageHeading" data-i18n="storage">Storage</h2>
-          <p class="subtle" data-i18n="storageDescription">Free space at available mount points</p>
-          <div class="storage-list" id="storageList" aria-live="polite"><span class="subtle" data-i18n="loading">Loading…</span></div>
-        </section>
-
-        <section class="panel" aria-labelledby="transferHeading">
-          <div class="storage-head">
-            <h2 id="transferHeading" data-i18n="dataOperations">Data operations</h2>
-            <span class="badge" id="transferState" data-i18n="checking">Checking</span>
-          </div>
-          <p class="subtle" id="transferIdle" data-i18n="gettingOperationStatus">Getting operation status…</p>
-          <div class="transfer-details" id="transferDetails" hidden>
-            <strong id="transferSummary"></strong>
-            <div class="transfer-route" id="transferRoute"></div>
-            <div class="storage-meter transfer-meter" id="transferMeter" role="progressbar" aria-label="Operation progress" data-i18n-aria-label="operationProgress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-              <div class="storage-fill" id="transferFill"></div>
+      <aside class="console-workbench" id="consoleView" hidden>
+        <nav class="console-nav" aria-label="Console sections" data-i18n-aria-label="consoleSections">
+          <button class="btn console-section active" type="button" data-console-section="overview" aria-controls="consoleOverview" aria-pressed="true" data-i18n="consoleOverview">Overview</button>
+          <button class="btn console-section" type="button" data-console-section="system" aria-controls="consoleSystem" aria-pressed="false" data-i18n="consoleSystem">System</button>
+          <button class="btn console-section" type="button" data-console-section="library" aria-controls="consoleLibrary" aria-pressed="false" data-i18n="library">Library</button>
+          <button class="btn console-section" type="button" data-console-section="sources" aria-controls="consoleSources" aria-pressed="false" data-i18n="consoleSources">Sources</button>
+          <button class="btn console-section" type="button" data-console-section="logs" aria-controls="consoleLogs" aria-pressed="false" data-i18n="consoleLogs">Logs</button>
+        </nav>
+        <div class="console-content">
+          <form id="settingsForm" hidden novalidate></form>
+          <section class="console-pane" id="consoleOverview" data-console-pane="overview" aria-labelledby="storageHeading">
+            <div class="console-heading"><h2 id="storageHeading" data-i18n="storage">Storage</h2><p class="subtle" data-i18n="consoleOverviewHint">Available space on the console and connected drives</p></div>
+            <div class="storage-list console-storage" id="storageList" aria-live="polite"><span class="subtle" data-i18n="loading">Loading?</span></div>
+            <div class="panel console-overview-note"><h3 id="activityHeading" data-i18n="recentOperations">Recent operations</h3><div class="activity-list console-list" id="activity"><span class="subtle" data-i18n="noOperations">No operations yet</span></div></div>
+          </section>
+          <section class="console-pane" id="consoleSystem" data-console-pane="system" hidden aria-labelledby="systemHeading">
+            <div class="console-heading"><h2 id="systemHeading" data-i18n="consoleSystem">System</h2><p class="subtle" data-i18n="consoleSystemHint">Notifications, network access and cooling</p></div>
+            <div class="console-grid">
+              <div class="panel"><h3 data-i18n="consoleNotifications">Notifications</h3>
+                <label class="check console-setting"><span data-i18n="quietMode">Quiet mode</span><input id="quietMode" form="settingsForm" type="checkbox" role="switch"></label>
+              </div>
+              <div class="panel"><h3 data-i18n="consoleNetwork">Network</h3>
+                <label class="check console-setting"><span data-i18n="allowLanAccess">Allow local network access</span><input id="allowLanAccess" form="settingsForm" type="checkbox" role="switch"></label>
+              </div>
+              <div class="panel console-wide"><h3 data-i18n="consoleCooling">Cooling</h3>
+                <label class="setting-row console-setting"><span data-i18n="fanTemperature">Fan target</span><select id="fanTemperature" form="settingsForm"><option value="0" data-i18n="systemControlled">System controlled</option></select></label>
+              </div>
             </div>
-            <div class="transfer-stats">
-              <div class="transfer-stat"><span class="subtle" data-i18n="size">Size</span><strong id="transferBytes">—</strong></div>
-              <div class="transfer-stat"><span class="subtle" data-i18n="files">Files</span><strong id="transferFiles">—</strong></div>
-              <div class="transfer-stat"><span class="subtle" data-i18n="speed">Speed</span><strong id="transferSpeed">—</strong></div>
-              <div class="transfer-stat"><span class="subtle" data-i18n="time">Time</span><strong id="transferElapsed">—</strong></div>
+          </section>
+          <section class="console-pane" id="consoleLibrary" data-console-pane="library" hidden aria-labelledby="librarySettingsHeading">
+            <div class="console-heading"><h2 id="librarySettingsHeading" data-i18n="library">Library</h2><p class="subtle" data-i18n="consoleLibraryHint">Mounting, emulators and library maintenance</p></div>
+            <div class="console-grid">
+              <div class="panel"><h3 data-i18n="consoleMounting">Mounting and emulators</h3>
+                <label class="setting-row console-setting"><span data-i18n="fakelibDefaultMode">Default fakelib mode</span><select id="fakelibDefaultMode" form="settingsForm">
+                  <option value="full" data-i18n="fakelibFull">Full</option><option value="emulators" data-i18n="fakelibEmulators">Emulators only</option><option value="disabled" data-i18n="fakelibDisabled">Disabled</option>
+                </select></label>
+                <p class="subtle console-hint" data-i18n="fakelibNextLaunch">Changes apply on the next game launch.</p>
+                <label class="check console-setting"><span data-i18n="updateFakelibEmulators">Update game fakelib emulators</span><input id="updateEmulators" form="settingsForm" type="checkbox" role="switch"></label>
+                <label class="check console-setting"><span data-i18n="autoUpdateAmpr">Update AMPR emulator from GitHub</span><input id="autoUpdateAmpr" form="settingsForm" type="checkbox" role="switch"></label>
+              </div>
+              <div class="panel"><h3 data-i18n="consoleMaintenance">Library maintenance</h3>
+                <label class="check console-setting"><span data-i18n="autoRemoveMissingGames">Remove unavailable app icons</span><input id="autoRemoveMissingGames" form="settingsForm" type="checkbox" role="switch"></label>
+                <label class="setting-row console-setting"><span data-i18n="autoRemoveDelay">Removal delay (seconds)</span><input id="autoRemoveMissingDelay" form="settingsForm" type="number" min="1" max="86400" step="1" value="300" required></label>
+                <label class="check console-setting"><span data-i18n="calculateSize">Calculate size</span><input id="includeSize" type="checkbox" role="switch"></label>
+              </div>
             </div>
-            <div class="transfer-actions">
-              <strong id="transferPercent">0%</strong>
-              <button class="btn small danger" id="cancelTransfer" type="button" data-i18n="cancel">Cancel</button>
+          </section>
+          <section class="console-pane" id="consoleSources" data-console-pane="sources" hidden aria-labelledby="sourcesHeading">
+            <div class="console-heading"><h2 id="sourcesHeading" data-i18n="consoleSources">Sources</h2><p class="subtle" data-i18n="consoleSourcesHint">Scan folders or add an individual game</p></div>
+            <div class="console-grid">
+              <div class="panel"><h3 data-i18n="scanPaths">Scan paths</h3><p class="subtle console-hint" data-i18n="scanPathsDescription">Custom recursive roots; an empty list uses built-in defaults</p>
+                <form class="manual-form" id="scanPathForm"><input id="scanPath" required placeholder="/mnt/usb0/games" aria-label="Scan path" data-i18n-aria-label="scanPaths"><button class="btn small" type="submit" data-i18n="add">Add</button></form>
+                <div class="manual-list console-list" id="scanPathList"><span class="subtle" data-i18n="loading">Loading?</span></div>
+              </div>
+              <div class="panel"><h3 id="manualHeading" data-i18n="consoleIndividualGames">Individual games</h3><p class="subtle console-hint" data-i18n="manualDescription">Direct paths to individual game folders or images</p>
+                <form class="manual-form" id="manualForm"><input id="manualPath" required placeholder="/mnt/usb0/games/PPSA12345" aria-label="Game source" data-i18n-aria-label="source"><button class="btn small" type="submit" data-i18n="add">Add</button></form>
+                <div class="manual-list console-list" id="manualList"><span class="subtle" data-i18n="loading">Loading?</span></div>
+              </div>
+              <div class="panel console-wide console-scan"><div><label class="check console-setting"><span data-i18n="resetAttempts">Reset attempt counters</span><input id="resetAttempts" type="checkbox" role="switch"></label><p class="subtle console-hint" data-i18n="resetAttemptsDescription">This option applies only to the next forced scan.</p></div><button class="btn primary" id="consoleScan" type="button" data-i18n="scan">Scan</button></div>
             </div>
-          </div>
-        </section>
-
-        <section class="panel" aria-labelledby="settingsHeading">
-          <h2 id="settingsHeading" data-i18n="settings">Settings</h2>
-          <form class="settings-form" id="settingsForm">
-            <label class="check"><input id="debugEnabled" type="checkbox"> <span data-i18n="debugLog">Debug log</span></label>
-            <label class="check"><input id="quietMode" type="checkbox"> <span data-i18n="quietMode">Quiet mode</span></label>
-            <label class="setting-row fakelib-default"><span data-i18n="fakelibDefaultMode">Default fakelib mode</span><select id="fakelibDefaultMode">
-              <option value="full" data-i18n="fakelibFull">Full</option>
-              <option value="emulators" data-i18n="fakelibEmulators">Emulators only</option>
-              <option value="disabled" data-i18n="fakelibDisabled">Disabled</option>
-            </select></label>
-            <div class="subtle" data-i18n="fakelibNextLaunch">Changes apply on the next game launch.</div>
-            <label class="check"><input id="updateEmulators" type="checkbox"> <span data-i18n="updateFakelibEmulators">Update game fakelib emulators</span></label>
-            <label class="check"><input id="autoUpdateAmpr" type="checkbox"> <span data-i18n="autoUpdateAmpr">Update AMPR emulator from GitHub</span></label>
-            <label class="check"><input id="autoRemoveMissingGames" type="checkbox"> <span data-i18n="autoRemoveMissingGames">Remove unavailable app icons</span></label>
-            <label class="setting-row"><span data-i18n="autoRemoveDelay">Removal delay (seconds)</span><input id="autoRemoveMissingDelay" type="number" min="1" max="86400" step="1" value="300" required></label>
-            <label class="check"><input id="allowLanAccess" type="checkbox"> <span data-i18n="allowLanAccess">Allow local network access</span></label>
-            <label class="setting-row"><span data-i18n="fanTemperature">Fan target</span><select id="fanTemperature"><option value="0" data-i18n="systemControlled">System controlled</option></select></label>
-            <div class="settings-actions">
-              <button class="btn small primary" type="submit" data-i18n="saveSettings">Save settings</button>
-              <button class="btn small" id="viewLog" type="button" data-i18n="viewLog">View debug log</button>
-              <button class="btn small" id="viewKernelLog" type="button" data-i18n="viewKernelLog">View kernel log</button>
+          </section>
+          <section class="console-pane" id="consoleLogs" data-console-pane="logs" hidden aria-labelledby="logsHeading">
+            <div class="console-heading"><h2 id="logsHeading" data-i18n="consoleLogs">Logs</h2><p class="subtle" data-i18n="consoleLogsHint">View and copy logs, or check recent actions</p></div>
+            <div class="console-grid">
+              <div class="panel"><h3 data-i18n="debugLog">Debug log</h3><label class="check console-setting"><span data-i18n="consoleRecordLog">Write debug log</span><input id="debugEnabled" form="settingsForm" type="checkbox" role="switch"></label>
+                <div class="console-log-actions"><button class="btn" id="viewLog" type="button" data-i18n="viewLog">View debug log</button></div>
+              </div>
+              <div class="panel"><h3 data-i18n="kernelLogTitle">Kernel log</h3><p class="subtle console-hint" data-i18n="consoleKernelHint">System events and diagnostic messages from the console.</p><div class="console-log-actions"><button class="btn" id="viewKernelLog" type="button" data-i18n="viewKernelLog">View kernel log</button></div></div>
             </div>
-          </form>
-          <h3 class="subheading" data-i18n="scanPaths">Scan paths</h3>
-          <p class="subtle" data-i18n="scanPathsDescription">Custom recursive roots; defaults stay hidden</p>
-          <form class="manual-form" id="scanPathForm">
-            <input id="scanPath" required placeholder="/mnt/usb0/games">
-            <button class="btn small" type="submit" data-i18n="add">Add</button>
-          </form>
-          <div class="manual-list" id="scanPathList"><span class="subtle" data-i18n="loading">Loading…</span></div>
-          <h3 class="subheading" id="manualHeading">manual.lst</h3>
-          <p class="subtle" data-i18n="manualDescription">Direct paths to individual game folders or images</p>
-          <form class="manual-form" id="manualForm">
-            <input id="manualPath" required placeholder="/mnt/usb0/games/PPSA12345">
-            <button class="btn small" type="submit" data-i18n="add">Add</button>
-          </form>
-          <div class="manual-list" id="manualList"><span class="subtle" data-i18n="loading">Loading…</span></div>
-        </section>
-
-        <section class="panel" aria-labelledby="scanHeading">
-          <h2 id="scanHeading" data-i18n="scanOptions">Scan options</h2>
-          <label class="check"><input id="resetAttempts" type="checkbox"> <span data-i18n="resetAttempts">Reset attempt counters</span></label>
-          <p class="subtle" data-i18n="resetAttemptsDescription">This option applies only to the next forced scan.</p>
-        </section>
-
-        <section class="panel" aria-labelledby="activityHeading">
-          <h2 id="activityHeading" data-i18n="recentOperations">Recent operations</h2>
-          <div class="activity-list" id="activity"><span class="subtle" data-i18n="noOperations">No operations yet</span></div>
-        </section>
+          </section>
+          <div class="console-save" id="consoleSave" hidden><p class="subtle" data-i18n="consoleSaveHint">Save applies settings from all sections and the scan paths.</p><button class="btn primary" id="saveSettings" type="submit" form="settingsForm" data-i18n="saveSettings">Save settings</button></div>
+        </div>
       </aside>
     </div>
   </main>
 
+  <footer class="control-bar" id="controlBar">
+    <span><kbd class="pad-key cross" aria-hidden="true"></kbd> <span data-i18n="selectAction">Select</span></span>
+    <span><kbd class="pad-key circle" aria-hidden="true"></kbd> <span data-i18n="back">Back</span></span>
+    <span><kbd>↑ ↓ ← →</kbd> <span data-i18n="navigate">Navigate</span></span>
+    <span class="control-note" data-i18n="controllerHint">D-pad / left stick · Enter / Esc</span>
+  </footer>
+
+  <section class="operation-popup" id="transferPopup" hidden aria-labelledby="transferSummary">
+    <div class="transfer-main">
+      <div class="transfer-heading" role="status" aria-atomic="true">
+        <strong id="transferSummary"></strong>
+        <span class="badge live" id="transferState"></span>
+      </div>
+      <div class="transfer-route" id="transferRoute"></div>
+      <div class="storage-meter transfer-meter" id="transferMeter" role="progressbar" aria-label="Operation progress" data-i18n-aria-label="operationProgress" aria-valuemin="0" aria-valuemax="100">
+        <div class="storage-fill" id="transferFill"></div>
+      </div>
+      <div class="transfer-stats">
+        <span id="transferBytes"></span>
+        <span id="transferSpeed"></span>
+        <span id="transferElapsed"></span>
+        <strong id="transferPercent"></strong>
+      </div>
+    </div>
+    <button class="btn small danger" id="cancelTransfer" type="button" data-i18n="cancel">Cancel</button>
+  </section>
+
   <div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-    <div class="modal-card">
+    <div class="modal-card details-card">
       <div class="modal-head">
         <div>
           <h2 id="modalTitle" data-i18n="gameInformation">Game information</h2>
-          <p class="subtle" id="modalSubtitle"></p>
+          <div class="modal-meta">
+            <p class="subtle" id="modalSubtitle"></p>
+            <div class="badges" id="modalBadges"></div>
+          </div>
         </div>
         <button class="btn close" id="closeModal" type="button" aria-label="Close" data-i18n-aria-label="close">&times;</button>
       </div>
-      <div class="details" id="details"></div>
+      <div class="detail-sidebar" id="detailSidebar"></div>
+      <div class="details" id="details" tabindex="-1" aria-label="Game information" data-i18n-aria-label="gameInformation"></div>
       <div class="modal-actions" id="modalActions"></div>
     </div>
   </div>
@@ -572,6 +825,7 @@
         <button class="btn close" id="closeDestination" type="button" aria-label="Close" data-i18n-aria-label="close">&times;</button>
       </div>
       <div class="destination-list" id="destinationChoices"></div>
+      <label class="check unpack-option" id="unpackOption" hidden><input id="unpackDeleteSource" type="checkbox"> <span data-i18n="deleteAfterUnpack">Delete image after unpacking</span></label>
       <form class="destination-custom" id="destinationForm">
         <input id="customDestination" required placeholder="/mnt/usb0/homebrew" data-i18n-placeholder="customDestination">
         <button class="btn small" type="submit" data-i18n="useDestination">Use path</button>
@@ -586,15 +840,68 @@
           <h2 id="logTitle" data-i18n="debugLogTitle">Debug log</h2>
           <p class="subtle" id="logSubtitle"></p>
         </div>
-        <div class="settings-actions">
+        <div class="settings-actions log-actions">
+          <button class="btn small" id="copyLog" type="button" data-i18n="copyToClipboard" disabled>Copy to clipboard</button>
           <button class="btn small" id="refreshLog" type="button" data-i18n="refresh">Refresh</button>
           <button class="btn close" id="closeLog" type="button" aria-label="Close" data-i18n-aria-label="close">&times;</button>
         </div>
       </div>
-      <pre class="log-view" id="logContent"></pre>
+      <pre class="log-view" id="logContent" tabindex="0"></pre>
     </div>
   </div>
 
+  <div class="modal" id="languageModal" hidden role="dialog" aria-modal="true" aria-labelledby="languageTitle">
+    <div class="modal-card language-card">
+      <div class="modal-head">
+        <h2 id="languageTitle" data-i18n="language">Language</h2>
+        <button class="btn close" id="closeLanguage" type="button" aria-label="Close" data-i18n-aria-label="close">&times;</button>
+      </div>
+      <div class="language-grid" id="languageChoices">
+        <button class="btn language-choice" type="button" data-language="ja-JP" lang="ja-JP" dir="auto" aria-pressed="false">日本語</button>
+        <button class="btn language-choice" type="button" data-language="en-US" lang="en-US" dir="auto" aria-pressed="false">English (US)</button>
+        <button class="btn language-choice" type="button" data-language="fr-FR" lang="fr-FR" dir="auto" aria-pressed="false">Français (France)</button>
+        <button class="btn language-choice" type="button" data-language="es-ES" lang="es-ES" dir="auto" aria-pressed="false">Español (España)</button>
+        <button class="btn language-choice" type="button" data-language="de-DE" lang="de-DE" dir="auto" aria-pressed="false">Deutsch</button>
+        <button class="btn language-choice" type="button" data-language="it-IT" lang="it-IT" dir="auto" aria-pressed="false">Italiano</button>
+        <button class="btn language-choice" type="button" data-language="nl-NL" lang="nl-NL" dir="auto" aria-pressed="false">Nederlands</button>
+        <button class="btn language-choice" type="button" data-language="pt-PT" lang="pt-PT" dir="auto" aria-pressed="false">Português (Portugal)</button>
+        <button class="btn language-choice" type="button" data-language="ru-RU" lang="ru-RU" dir="auto" aria-pressed="false">Русский</button>
+        <button class="btn language-choice" type="button" data-language="ko-KR" lang="ko-KR" dir="auto" aria-pressed="false">한국어</button>
+        <button class="btn language-choice" type="button" data-language="zh-TW" lang="zh-TW" dir="auto" aria-pressed="false">繁體中文</button>
+        <button class="btn language-choice" type="button" data-language="zh-CN" lang="zh-CN" dir="auto" aria-pressed="false">简体中文</button>
+        <button class="btn language-choice" type="button" data-language="fi-FI" lang="fi-FI" dir="auto" aria-pressed="false">Suomi</button>
+        <button class="btn language-choice" type="button" data-language="sv-SE" lang="sv-SE" dir="auto" aria-pressed="false">Svenska</button>
+        <button class="btn language-choice" type="button" data-language="da-DK" lang="da-DK" dir="auto" aria-pressed="false">Dansk</button>
+        <button class="btn language-choice" type="button" data-language="no-NO" lang="no-NO" dir="auto" aria-pressed="false">Norsk</button>
+        <button class="btn language-choice" type="button" data-language="pl-PL" lang="pl-PL" dir="auto" aria-pressed="false">Polski</button>
+        <button class="btn language-choice" type="button" data-language="pt-BR" lang="pt-BR" dir="auto" aria-pressed="false">Português (Brasil)</button>
+        <button class="btn language-choice" type="button" data-language="en-GB" lang="en-GB" dir="auto" aria-pressed="false">English (UK)</button>
+        <button class="btn language-choice" type="button" data-language="tr-TR" lang="tr-TR" dir="auto" aria-pressed="false">Türkçe</button>
+        <button class="btn language-choice" type="button" data-language="es-MX" lang="es-MX" dir="auto" aria-pressed="false">Español (México)</button>
+        <button class="btn language-choice" type="button" data-language="ar-SA" lang="ar-SA" dir="auto" aria-pressed="false">العربية</button>
+        <button class="btn language-choice" type="button" data-language="fr-CA" lang="fr-CA" dir="auto" aria-pressed="false">Français (Canada)</button>
+        <button class="btn language-choice" type="button" data-language="cs-CZ" lang="cs-CZ" dir="auto" aria-pressed="false">Čeština</button>
+        <button class="btn language-choice" type="button" data-language="hu-HU" lang="hu-HU" dir="auto" aria-pressed="false">Magyar</button>
+        <button class="btn language-choice" type="button" data-language="el-GR" lang="el-GR" dir="auto" aria-pressed="false">Ελληνικά</button>
+        <button class="btn language-choice" type="button" data-language="ro-RO" lang="ro-RO" dir="auto" aria-pressed="false">Română</button>
+        <button class="btn language-choice" type="button" data-language="th-TH" lang="th-TH" dir="auto" aria-pressed="false">ไทย</button>
+        <button class="btn language-choice" type="button" data-language="vi-VN" lang="vi-VN" dir="auto" aria-pressed="false">Tiếng Việt</button>
+        <button class="btn language-choice" type="button" data-language="id-ID" lang="id-ID" dir="auto" aria-pressed="false">Bahasa Indonesia</button>
+        <button class="btn language-choice" type="button" data-language="uk-UA" lang="uk-UA" dir="auto" aria-pressed="false">Українська</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="confirmModal" hidden role="dialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmMessage">
+    <div class="modal-card destination-card">
+      <div class="modal-head"><h2 id="confirmTitle" data-i18n="confirmation">Confirmation</h2></div>
+      <p class="confirm-message" id="confirmMessage"></p>
+      <div class="modal-actions">
+        <button class="btn" id="confirmCancel" type="button" data-cancel data-i18n="cancel">Cancel</button>
+        <button class="btn danger" id="confirmAccept" type="button" data-i18n="continueAction">Continue</button>
+      </div>
+    </div>
+  </div>
   <div class="toast" id="toast" hidden role="status"></div>
 
   <script>
@@ -602,6 +909,7 @@
       "use strict";
 
       const API = "/api/v1";
+      const playStationBrowser = /PlayStation (?:4|5)\b/i.test(navigator.userAgent);
       const state = {
         games: [],
         selected: null,
@@ -620,13 +928,23 @@
         connectionKey: "checking",
         logRoute: "/debug-log",
         logTitleKey: "debugLogTitle",
-        logTriggerId: "viewLog"
+        logTriggerId: "viewLog",
+        logText: null,
+        logRequest: 0
       };
       const $ = (id) => document.getElementById(id);
+      const navigation = {
+        view: "library", lastGame: "", dialogs: [],
+        padFrame: 0, padCommand: "", padRepeatAt: 0, padScrollAt: 0, keyboardAt: 0,
+        focusNavigation: false, focusTarget: null, pointerX: null, pointerY: null, activatedAt: -1000
+      };
+      let confirmResolve = null;
 
       const translations = {
         "en-US": {
+          totalSize: "Total size",
           fakelibMode: "Fakelib mounting",
+          changeFakelibMode: "Select to cycle modes",
           ignoreGlobalFakelib: "Ignore global fakelib",
           fakelibDefaultMode: "Default fakelib mode",
           fakelibDefault: "Default ({mode})",
@@ -636,6 +954,34 @@
           gameVersion: "Version",
           contentId: "Content ID",
           pageTitle: "Shadow Mount+ Library",
+          consoleTools: "Console",
+          consoleSections: "Console sections",
+          consoleOverview: "Overview",
+          consoleSystem: "System",
+          consoleSources: "Sources",
+          consoleLogs: "Logs",
+          consoleOverviewHint: "Available space on the console and connected drives",
+          consoleSystemHint: "Notifications, network access and cooling",
+          consoleNotifications: "Notifications",
+          consoleNetwork: "Network",
+          consoleCooling: "Cooling",
+          consoleLibraryHint: "Mounting, emulators and library maintenance",
+          consoleMounting: "Mounting and emulators",
+          consoleMaintenance: "Library maintenance",
+          consoleSourcesHint: "Scan folders or add an individual game",
+          consoleIndividualGames: "Individual games",
+          consoleLogsHint: "View and copy debug and system logs",
+          consoleKernelHint: "System events and diagnostic messages from the console.",
+          consoleRecordLog: "Write debug log",
+          consoleSaveHint: "Save applies settings from all sections and the scan paths.",
+          back: "Back",
+          navigate: "Navigate",
+          controllerHint: "D-pad / left stick · Enter / Esc",
+          confirmation: "Confirmation",
+          continueAction: "Continue",
+          chooseUnpackDestination: "Unpack destination",
+          deleteAfterUnpack: "Delete image after unpacking",
+          selectAction: "Select",
           connecting: "Connecting to API…",
           checking: "Checking",
           libraryControls: "Library controls",
@@ -660,6 +1006,18 @@
           gettingOperationStatus: "Getting operation status…",
           operationProgress: "Operation progress",
           size: "Size",
+          saveDataSize: "Save data",
+          downloadSize: "Download",
+          saveDataSizeHint: "Files for this title across all local users, including backups stored with saves.",
+          detailSizes: "Storage sizes",
+          sourceSize: "Game / image",
+          patchSize: "Patch",
+          dlcSize: "DLC",
+          systemSize: "app.db",
+          sourceSizeHint: "Size of the source folder, image or base app.pkg file.",
+          patchSizeHint: "Separate patch files for this title. Updates merged into the game are part of its main size.",
+          dlcSizeHint: "Installed add-on files for this title across internal and connected extended storage.",
+          systemSizeHint: "System reference size. It may overlap the game size and is not an additional amount.",
           files: "Files",
           speed: "Speed",
           perSecond: "/s",
@@ -684,6 +1042,9 @@
           debugLogTitle: "Debug log",
           kernelLogTitle: "Kernel log",
           logBytes: "Showing {shown} of {total}",
+          copyToClipboard: "Copy to clipboard",
+          logCopied: "Log copied to clipboard",
+          clipboardUnavailable: "This browser could not copy the log to the clipboard",
           scanPaths: "Scan paths",
           scanPathsDescription: "Custom recursive roots; an empty list uses built-in defaults",
           scanPathAdded: "Scan path added locally; save settings to apply",
@@ -767,6 +1128,7 @@
           copyDestination: "Destination folder for copying:",
           moveDestination: "Destination folder for moving:",
           chooseCopyDestination: "Copy destination",
+          noOtherDestinations: "No other preset folders. Enter a custom path below.",
           chooseMoveDestination: "Move destination",
           destinationDescription: "Choose an available Homebrew folder or enter a custom path",
           customDestination: "Custom absolute path",
@@ -800,7 +1162,9 @@
           busyStorageUnavailable: "The storage service is stopping or unavailable"
         },
         "ru-RU": {
+          totalSize: "Общий размер",
           fakelibMode: "Монтирование fakelib",
+          changeFakelibMode: "Нажмите для смены режима",
           ignoreGlobalFakelib: "Игнорировать глобальный fakelib",
           fakelibDefaultMode: "Режим fakelib по умолчанию",
           fakelibDefault: "По умолчанию ({mode})",
@@ -810,6 +1174,34 @@
           gameVersion: "Версия",
           contentId: "Content ID",
           pageTitle: "Библиотека Shadow Mount+",
+          consoleTools: "Приставка",
+          consoleSections: "Разделы приставки",
+          consoleOverview: "Обзор",
+          consoleSystem: "Система",
+          consoleSources: "Источники",
+          consoleLogs: "Журналы",
+          consoleOverviewHint: "Свободное место на приставке и подключённых дисках",
+          consoleSystemHint: "Уведомления, доступ по сети и охлаждение",
+          consoleNotifications: "Уведомления",
+          consoleNetwork: "Сеть",
+          consoleCooling: "Охлаждение",
+          consoleLibraryHint: "Монтирование, эмуляторы и обслуживание библиотеки",
+          consoleMounting: "Монтирование и эмуляторы",
+          consoleMaintenance: "Обслуживание библиотеки",
+          consoleSourcesHint: "Папки для сканирования и отдельные игры",
+          consoleIndividualGames: "Отдельные игры",
+          consoleLogsHint: "Просмотр и копирование журнала отладки и журнала ядра",
+          consoleKernelHint: "Системные события и диагностические сообщения приставки.",
+          consoleRecordLog: "Записывать журнал отладки",
+          consoleSaveHint: "Сохранение применяет настройки всех разделов и пути сканирования.",
+          back: "Назад",
+          navigate: "Навигация",
+          controllerHint: "Крестовина / левый стик · Enter / Esc",
+          confirmation: "Подтверждение",
+          continueAction: "Продолжить",
+          chooseUnpackDestination: "Куда распаковать",
+          deleteAfterUnpack: "Удалить образ после распаковки",
+          selectAction: "Выбрать",
           connecting: "Подключение к API…",
           checking: "Проверка",
           libraryControls: "Управление библиотекой",
@@ -834,6 +1226,18 @@
           gettingOperationStatus: "Получение статуса операции…",
           operationProgress: "Прогресс операции",
           size: "Размер",
+          saveDataSize: "Сохранения",
+          downloadSize: "Загрузки",
+          saveDataSizeHint: "Файлы этой игры по всем локальным профилям, включая копии в каталоге сохранений.",
+          detailSizes: "Размеры данных",
+          sourceSize: "Игра / образ",
+          patchSize: "Патчи",
+          dlcSize: "DLC",
+          systemSize: "app.db",
+          sourceSizeHint: "Размер папки, образа игры или основного файла app.pkg.",
+          patchSizeHint: "Отдельные файлы patch этой игры. Обновления внутри основного пакета входят в размер игры.",
+          dlcSizeHint: "Установленные файлы дополнений на внутреннем и подключённом расширенном хранилищах.",
+          systemSizeHint: "Справочный размер из базы системы. Может пересекаться с размером игры и не прибавляется к нему.",
           files: "Файлы",
           speed: "Скорость",
           perSecond: "/с",
@@ -858,6 +1262,9 @@
           debugLogTitle: "Журнал отладки",
           kernelLogTitle: "Журнал ядра",
           logBytes: "Показано {shown} из {total}",
+          copyToClipboard: "Копировать в буфер обмена",
+          logCopied: "Журнал скопирован в буфер обмена",
+          clipboardUnavailable: "Браузеру не удалось скопировать журнал в буфер обмена",
           scanPaths: "Точки сканирования",
           scanPathsDescription: "Пользовательские корни; при пустом списке используются встроенные пути",
           scanPathAdded: "Точка добавлена локально; сохраните настройки для применения",
@@ -924,7 +1331,7 @@
           unmountedTitle: "Размонтировано {title}",
           remountConfirm: "Уже смонтировано: {current}. Размонтировать и смонтировать {target}?",
           source: "Источник",
-          runtimePath: "Runtime path",
+          runtimePath: "Путь запуска",
           sizeError: "Ошибка {status}",
           installed: "Установлена",
           lastLaunch: "Последний запуск",
@@ -941,6 +1348,7 @@
           copyDestination: "Папка назначения для копирования:",
           moveDestination: "Папка назначения для перемещения:",
           chooseCopyDestination: "Куда копировать",
+          noOtherDestinations: "Других папок в пресетах нет. Укажите свой путь ниже.",
           chooseMoveDestination: "Куда переставить",
           destinationDescription: "Выберите доступную папку Homebrew или введите свой путь",
           customDestination: "Свой абсолютный путь",
@@ -1007,6 +1415,403 @@
         if (values.length !== translationKeys.length) throw new Error(`Invalid translation catalog: ${locale}`);
         translations[locale] = Object.fromEntries(translationKeys.map((key, index) => [key, values[index]]));
       }
+      const extendedTranslationKeys = ["changeFakelibMode","consoleTools","consoleSections","consoleOverview","consoleSystem","consoleSources","consoleLogs","consoleOverviewHint","consoleSystemHint","consoleNotifications","consoleNetwork","consoleCooling","consoleLibraryHint","consoleMounting","consoleMaintenance","consoleSourcesHint","consoleIndividualGames","consoleLogsHint","consoleKernelHint","consoleRecordLog","consoleSaveHint","back","navigate","controllerHint","confirmation","continueAction","chooseUnpackDestination","deleteAfterUnpack","selectAction","saveDataSize","downloadSize","saveDataSizeHint","detailSizes","sourceSize","patchSize","dlcSize","systemSize","sourceSizeHint","patchSizeHint","dlcSizeHint","systemSizeHint","copyToClipboard","logCopied","clipboardUnavailable","remountConfirm","chooseCopyDestination","noOtherDestinations","chooseMoveDestination","destinationDescription","customDestination","useDestination","totalSize"];
+      const extendedTranslationCatalogs = {
+        "ja-JP": [
+          "選択してモードを切り替え", "本体", "本体の設定項目", "概要",
+          "システム", "ソース", "ログ", "本体と接続されたドライブの空き容量",
+          "通知、ネットワークアクセス、冷却", "通知", "ネットワーク", "冷却",
+          "マウント、エミュレーター、ライブラリーの管理", "マウントとエミュレーター", "ライブラリーの管理", "フォルダーをスキャンするか、ゲームを個別に追加",
+          "個別のゲーム", "デバッグログとシステムログの表示・コピー", "本体のシステムイベントと診断メッセージ。", "デバッグログを記録",
+          "すべての項目の設定とスキャンパスを保存します。", "戻る", "移動", "方向キー / 左スティック · Enter / Esc",
+          "確認", "続行", "展開先", "展開後にイメージを削除",
+          "選択", "セーブデータ", "ダウンロード", "全ローカルユーザーのこのタイトルのファイル。セーブと同じ場所にあるバックアップも含みます。",
+          "使用容量", "ゲーム / イメージ", "パッチ", "DLC",
+          "app.db", "ソースフォルダー、イメージ、または基本 app.pkg ファイルのサイズ。", "このタイトルの独立したパッチファイル。ゲームに統合された更新はゲーム本体のサイズに含まれます。", "内蔵ストレージと接続された拡張ストレージにある、このタイトルの追加コンテンツ。",
+          "システムの参考値。ゲームのサイズと重複する場合があり、追加容量ではありません。", "クリップボードにコピー", "ログをクリップボードにコピーしました", "このブラウザーではログをクリップボードにコピーできませんでした",
+          "{current} はすでにマウントされています。解除して {target} をマウントしますか？", "コピー先", "ほかの候補フォルダーはありません。下に任意のパスを入力してください。", "移動先",
+          "利用可能な Homebrew フォルダーを選ぶか、任意のパスを入力", "任意の絶対パス", "このパスを使用", "合計サイズ"
+        ],
+        "fr-FR": [
+          "Sélectionner pour changer de mode", "Console", "Rubriques de la console", "Vue d’ensemble",
+          "Système", "Sources", "Journaux", "Espace disponible sur la console et les lecteurs connectés",
+          "Notifications, accès réseau et refroidissement", "Notifications", "Réseau", "Refroidissement",
+          "Montage, émulateurs et entretien de la bibliothèque", "Montage et émulateurs", "Entretien de la bibliothèque", "Analyser des dossiers ou ajouter un jeu individuel",
+          "Jeux individuels", "Consulter et copier les journaux de débogage et du système", "Événements système et messages de diagnostic de la console.", "Enregistrer le journal de débogage",
+          "L’enregistrement applique les paramètres de toutes les rubriques et les chemins d’analyse.", "Retour", "Naviguer", "Croix directionnelle / stick gauche · Entrée / Échap",
+          "Confirmation", "Continuer", "Destination d’extraction", "Supprimer l’image après extraction",
+          "Sélectionner", "Sauvegardes", "Téléchargements", "Fichiers de ce titre pour tous les utilisateurs locaux, y compris les copies de secours stockées avec les sauvegardes.",
+          "Espace occupé", "Jeu / image", "Correctif", "DLC",
+          "app.db", "Taille du dossier source, de l’image ou du fichier app.pkg de base.", "Fichiers de correctif distincts pour ce titre. Les mises à jour intégrées au jeu font partie de sa taille principale.", "Fichiers des extensions de ce titre installés sur le stockage interne et le stockage étendu connecté.",
+          "Taille de référence du système. Elle peut recouper celle du jeu et ne représente pas un espace supplémentaire.", "Copier dans le presse-papiers", "Journal copié dans le presse-papiers", "Ce navigateur n’a pas pu copier le journal dans le presse-papiers",
+          "{current} est déjà monté. Le démonter et monter {target} à la place ?", "Destination de copie", "Aucun autre dossier prédéfini. Saisissez un chemin personnalisé ci-dessous.", "Destination de déplacement",
+          "Choisissez un dossier Homebrew disponible ou saisissez un chemin personnalisé", "Chemin absolu personnalisé", "Utiliser ce chemin", "Taille totale"
+        ],
+        "es-ES": [
+          "Selecciona para cambiar de modo", "Consola", "Secciones de la consola", "Resumen",
+          "Sistema", "Orígenes", "Registros", "Espacio disponible en la consola y las unidades conectadas",
+          "Notificaciones, acceso a la red y refrigeración", "Notificaciones", "Red", "Refrigeración",
+          "Montaje, emuladores y mantenimiento de la biblioteca", "Montaje y emuladores", "Mantenimiento de la biblioteca", "Escanea carpetas o añade un juego individual",
+          "Juegos individuales", "Ver y copiar los registros de depuración y del sistema", "Eventos del sistema y mensajes de diagnóstico de la consola.", "Guardar registro de depuración",
+          "Se guardan los ajustes de todas las secciones y las rutas de escaneo.", "Atrás", "Navegar", "Cruceta / stick izquierdo · Intro / Esc",
+          "Confirmación", "Continuar", "Destino de extracción", "Eliminar imagen tras la extracción",
+          "Seleccionar", "Datos guardados", "Descargas", "Archivos de este título de todos los usuarios locales, incluidas las copias de seguridad almacenadas con las partidas guardadas.",
+          "Espacio ocupado", "Juego / imagen", "Parche", "DLC",
+          "app.db", "Tamaño de la carpeta de origen, la imagen o el archivo app.pkg base.", "Archivos de parche independientes de este título. Las actualizaciones integradas en el juego forman parte de su tamaño principal.", "Archivos de complementos de este título instalados en el almacenamiento interno y ampliado conectado.",
+          "Tamaño de referencia del sistema. Puede solaparse con el tamaño del juego y no es espacio adicional.", "Copiar al portapapeles", "Registro copiado al portapapeles", "Este navegador no pudo copiar el registro al portapapeles",
+          "{current} ya está montado. ¿Desmontarlo y montar {target} en su lugar?", "Destino de copia", "No hay otras carpetas predefinidas. Introduce una ruta personalizada abajo.", "Destino de traslado",
+          "Elige una carpeta Homebrew disponible o introduce una ruta personalizada", "Ruta absoluta personalizada", "Usar ruta", "Tamaño total"
+        ],
+        "de-DE": [
+          "Auswählen, um den Modus zu wechseln", "Konsole", "Konsolenbereiche", "Übersicht",
+          "System", "Quellen", "Protokolle", "Freier Speicher auf der Konsole und angeschlossenen Laufwerken",
+          "Benachrichtigungen, Netzwerkzugriff und Kühlung", "Benachrichtigungen", "Netzwerk", "Kühlung",
+          "Einbinden, Emulatoren und Bibliothekspflege", "Einbinden und Emulatoren", "Bibliothekspflege", "Ordner durchsuchen oder ein einzelnes Spiel hinzufügen",
+          "Einzelne Spiele", "Debug- und Systemprotokolle anzeigen und kopieren", "Systemereignisse und Diagnosemeldungen der Konsole.", "Debug-Protokoll aufzeichnen",
+          "Speichert die Einstellungen aller Bereiche und die Suchpfade.", "Zurück", "Navigieren", "Steuerkreuz / linker Stick · Eingabe / Esc",
+          "Bestätigung", "Weiter", "Entpackziel", "Abbild nach dem Entpacken löschen",
+          "Auswählen", "Speicherdaten", "Downloads", "Dateien dieses Titels für alle lokalen Benutzer, einschließlich Sicherungskopien im Speicherstandordner.",
+          "Speicherbelegung", "Spiel / Abbild", "Patch", "DLC",
+          "app.db", "Größe des Quellordners, Abbilds oder der Basisdatei app.pkg.", "Separate Patch-Dateien dieses Titels. In das Spiel integrierte Updates zählen zur Hauptgröße.", "Installierte Zusatzinhalte dieses Titels im internen und angeschlossenen erweiterten Speicher.",
+          "Referenzgröße des Systems. Sie kann sich mit der Spielgröße überschneiden und ist kein zusätzlicher Speicherbedarf.", "In die Zwischenablage kopieren", "Protokoll in die Zwischenablage kopiert", "Dieser Browser konnte das Protokoll nicht in die Zwischenablage kopieren",
+          "{current} ist bereits eingebunden. Aushängen und stattdessen {target} einbinden?", "Kopierziel", "Keine weiteren voreingestellten Ordner. Unten einen eigenen Pfad eingeben.", "Verschiebeziel",
+          "Einen verfügbaren Homebrew-Ordner wählen oder einen eigenen Pfad eingeben", "Eigener absoluter Pfad", "Pfad verwenden", "Gesamtgröße"
+        ],
+        "it-IT": [
+          "Seleziona per cambiare modalità", "Console", "Sezioni della console", "Panoramica",
+          "Sistema", "Origini", "Registri", "Spazio disponibile sulla console e sulle unità collegate",
+          "Notifiche, accesso alla rete e raffreddamento", "Notifiche", "Rete", "Raffreddamento",
+          "Montaggio, emulatori e manutenzione della raccolta", "Montaggio ed emulatori", "Manutenzione della raccolta", "Scansiona cartelle o aggiungi un singolo gioco",
+          "Singoli giochi", "Visualizza e copia i registri di debug e di sistema", "Eventi di sistema e messaggi diagnostici della console.", "Registra il log di debug",
+          "Il salvataggio applica le impostazioni di tutte le sezioni e i percorsi di scansione.", "Indietro", "Naviga", "Croce direzionale / stick sinistro · Invio / Esc",
+          "Conferma", "Continua", "Destinazione di estrazione", "Elimina immagine dopo l’estrazione",
+          "Seleziona", "Dati salvati", "Download", "File di questo titolo per tutti gli utenti locali, inclusi i backup conservati con i salvataggi.",
+          "Spazio occupato", "Gioco / immagine", "Patch", "DLC",
+          "app.db", "Dimensione della cartella di origine, dell’immagine o del file app.pkg di base.", "File patch separati per questo titolo. Gli aggiornamenti integrati nel gioco fanno parte della dimensione principale.", "File dei contenuti aggiuntivi di questo titolo installati nella memoria interna e nella memoria estesa collegata.",
+          "Dimensione di riferimento del sistema. Può sovrapporsi a quella del gioco e non è spazio aggiuntivo.", "Copia negli appunti", "Registro copiato negli appunti", "Questo browser non ha potuto copiare il registro negli appunti",
+          "{current} è già montato. Smontarlo e montare {target} al suo posto?", "Destinazione di copia", "Nessun’altra cartella predefinita. Inserisci un percorso personalizzato qui sotto.", "Destinazione di spostamento",
+          "Scegli una cartella Homebrew disponibile o inserisci un percorso personalizzato", "Percorso assoluto personalizzato", "Usa percorso", "Dimensione totale"
+        ],
+        "nl-NL": [
+          "Selecteer om van modus te wisselen", "Console", "Consoleonderdelen", "Overzicht",
+          "Systeem", "Bronnen", "Logboeken", "Vrije ruimte op de console en aangesloten schijven",
+          "Meldingen, netwerktoegang en koeling", "Meldingen", "Netwerk", "Koeling",
+          "Koppelen, emulators en bibliotheekonderhoud", "Koppelen en emulators", "Bibliotheekonderhoud", "Mappen scannen of een afzonderlijk spel toevoegen",
+          "Afzonderlijke spellen", "Debug- en systeemlogboeken bekijken en kopiëren", "Systeemgebeurtenissen en diagnostische berichten van de console.", "Debuglogboek vastleggen",
+          "Opslaan past de instellingen van alle onderdelen en de scanpaden toe.", "Terug", "Navigeren", "Richtingsknoppen / linker stick · Enter / Esc",
+          "Bevestiging", "Doorgaan", "Uitpakbestemming", "Schijfkopie verwijderen na uitpakken",
+          "Selecteren", "Opgeslagen gegevens", "Downloads", "Bestanden van deze titel voor alle lokale gebruikers, inclusief reservekopieën die bij de opgeslagen spellen staan.",
+          "Opslaggebruik", "Spel / schijfkopie", "Patch", "DLC",
+          "app.db", "Grootte van de bronmap, schijfkopie of het basisbestand app.pkg.", "Afzonderlijke patchbestanden voor deze titel. Updates die in het spel zijn geïntegreerd, tellen mee bij de hoofdgrootte.", "Geïnstalleerde uitbreidingsbestanden voor deze titel op interne en aangesloten uitgebreide opslag.",
+          "Referentiegrootte van het systeem. Kan overlappen met de spelgrootte en is geen extra opslaggebruik.", "Naar klembord kopiëren", "Logboek naar klembord gekopieerd", "Deze browser kon het logboek niet naar het klembord kopiëren",
+          "{current} is al gekoppeld. Ontkoppelen en in plaats daarvan {target} koppelen?", "Kopieerbestemming", "Geen andere vooraf ingestelde mappen. Voer hieronder een eigen pad in.", "Verplaatsbestemming",
+          "Kies een beschikbare Homebrew-map of voer een eigen pad in", "Eigen absoluut pad", "Pad gebruiken", "Totale grootte"
+        ],
+        "pt-PT": [
+          "Selecionar para mudar de modo", "Consola", "Secções da consola", "Visão geral",
+          "Sistema", "Origens", "Registos", "Espaço disponível na consola e nas unidades ligadas",
+          "Notificações, acesso à rede e arrefecimento", "Notificações", "Rede", "Arrefecimento",
+          "Montagem, emuladores e manutenção da biblioteca", "Montagem e emuladores", "Manutenção da biblioteca", "Analisar pastas ou adicionar um jogo individual",
+          "Jogos individuais", "Ver e copiar os registos de depuração e do sistema", "Eventos do sistema e mensagens de diagnóstico da consola.", "Gravar registo de depuração",
+          "Guardar aplica as definições de todas as secções e os caminhos de análise.", "Voltar", "Navegar", "Botões direcionais / manípulo esquerdo · Enter / Esc",
+          "Confirmação", "Continuar", "Destino de extração", "Eliminar imagem após a extração",
+          "Selecionar", "Dados guardados", "Transferências", "Ficheiros deste título de todos os utilizadores locais, incluindo cópias de segurança guardadas com os dados de jogo.",
+          "Espaço ocupado", "Jogo / imagem", "Atualização", "DLC",
+          "app.db", "Tamanho da pasta de origem, imagem ou ficheiro app.pkg base.", "Ficheiros de atualização separados deste título. As atualizações integradas no jogo fazem parte do tamanho principal.", "Ficheiros de conteúdos adicionais deste título instalados no armazenamento interno e expandido ligado.",
+          "Tamanho de referência do sistema. Pode sobrepor-se ao tamanho do jogo e não representa espaço adicional.", "Copiar para a área de transferência", "Registo copiado para a área de transferência", "Este navegador não conseguiu copiar o registo para a área de transferência",
+          "{current} já está montado. Desmontar e montar {target} em seu lugar?", "Destino da cópia", "Não há outras pastas predefinidas. Introduza um caminho personalizado abaixo.", "Destino da movimentação",
+          "Escolha uma pasta Homebrew disponível ou introduza um caminho personalizado", "Caminho absoluto personalizado", "Usar caminho", "Tamanho total"
+        ],
+        "ko-KR": [
+          "선택하여 모드 전환", "콘솔", "콘솔 메뉴", "개요",
+          "시스템", "소스", "로그", "콘솔 및 연결된 드라이브의 여유 공간",
+          "알림, 네트워크 접근 및 냉각", "알림", "네트워크", "냉각",
+          "마운트, 에뮬레이터 및 라이브러리 관리", "마운트 및 에뮬레이터", "라이브러리 관리", "폴더를 검색하거나 개별 게임 추가",
+          "개별 게임", "디버그 및 시스템 로그 보기와 복사", "콘솔의 시스템 이벤트 및 진단 메시지.", "디버그 로그 기록",
+          "모든 메뉴의 설정과 검색 경로를 저장합니다.", "뒤로", "이동", "방향키 / 왼쪽 스틱 · Enter / Esc",
+          "확인", "계속", "압축 해제 대상", "압축 해제 후 이미지 삭제",
+          "선택", "저장 데이터", "다운로드", "모든 로컬 사용자의 해당 타이틀 파일이며, 저장 데이터와 함께 보관된 백업을 포함합니다.",
+          "저장 공간 사용량", "게임 / 이미지", "패치", "DLC",
+          "app.db", "소스 폴더, 이미지 또는 기본 app.pkg 파일의 크기.", "해당 타이틀의 별도 패치 파일. 게임에 통합된 업데이트는 게임 본체 크기에 포함됩니다.", "내부 저장소 및 연결된 확장 저장소에 설치된 해당 타이틀의 추가 콘텐츠 파일.",
+          "시스템 참고 크기. 게임 크기와 중복될 수 있으며 추가 용량이 아닙니다.", "클립보드에 복사", "로그를 클립보드에 복사했습니다", "이 브라우저에서 로그를 클립보드에 복사하지 못했습니다",
+          "{current}이(가) 이미 마운트되어 있습니다. 해제하고 대신 {target}을(를) 마운트하시겠습니까?", "복사 대상", "다른 사전 설정 폴더가 없습니다. 아래에 사용자 지정 경로를 입력하세요.", "이동 대상",
+          "사용 가능한 Homebrew 폴더를 선택하거나 사용자 지정 경로 입력", "사용자 지정 절대 경로", "경로 사용", "전체 크기"
+        ],
+        "zh-TW": [
+          "選取以切換模式", "主機", "主機選單", "概覽",
+          "系統", "來源", "記錄", "主機與已連接磁碟的可用空間",
+          "通知、網路存取與散熱", "通知", "網路", "散熱",
+          "掛載、模擬器與遊戲庫維護", "掛載與模擬器", "遊戲庫維護", "掃描資料夾或新增個別遊戲",
+          "個別遊戲", "檢視並複製偵錯和系統記錄", "主機的系統事件與診斷訊息。", "寫入偵錯記錄",
+          "儲存所有選單的設定與掃描路徑。", "返回", "導覽", "方向鍵 / 左搖桿 · Enter / Esc",
+          "確認", "繼續", "解壓縮目的地", "解壓縮後刪除映像檔",
+          "選取", "保存資料", "下載", "所有本機使用者的此遊戲檔案，包括與保存資料一起存放的備份。",
+          "儲存空間用量", "遊戲 / 映像檔", "更新檔", "DLC",
+          "app.db", "來源資料夾、映像檔或基礎 app.pkg 檔案的大小。", "此遊戲的獨立更新檔。已整合進遊戲的更新包含在遊戲主體大小中。", "內部儲存空間及已連接擴充儲存空間中，此遊戲已安裝的追加內容檔案。",
+          "系統參考大小。可能與遊戲大小重疊，並非額外用量。", "複製到剪貼簿", "已將記錄複製到剪貼簿", "此瀏覽器無法將記錄複製到剪貼簿",
+          "{current} 已掛載。是否卸載並改為掛載 {target}？", "複製目的地", "沒有其他預設資料夾。請在下方輸入自訂路徑。", "移動目的地",
+          "選擇可用的 Homebrew 資料夾或輸入自訂路徑", "自訂絕對路徑", "使用路徑", "總大小"
+        ],
+        "zh-CN": [
+          "选择以切换模式", "主机", "主机菜单", "概览",
+          "系统", "来源", "日志", "主机和已连接磁盘的可用空间",
+          "通知、网络访问和散热", "通知", "网络", "散热",
+          "挂载、模拟器和游戏库维护", "挂载和模拟器", "游戏库维护", "扫描文件夹或添加单个游戏",
+          "单个游戏", "查看并复制调试和系统日志", "主机的系统事件和诊断消息。", "写入调试日志",
+          "保存所有菜单的设置和扫描路径。", "返回", "导航", "方向键 / 左摇杆 · Enter / Esc",
+          "确认", "继续", "解压目标", "解压后删除镜像",
+          "选择", "保存数据", "下载", "所有本地用户的此游戏文件，包括与保存数据一起存放的备份。",
+          "存储空间用量", "游戏 / 镜像", "补丁", "DLC",
+          "app.db", "来源文件夹、镜像或基础 app.pkg 文件的大小。", "此游戏的独立补丁文件。已整合到游戏中的更新包含在游戏主体大小中。", "内部存储和已连接扩展存储中，此游戏已安装的追加内容文件。",
+          "系统参考大小。可能与游戏大小重叠，并非额外用量。", "复制到剪贴板", "已将日志复制到剪贴板", "此浏览器无法将日志复制到剪贴板",
+          "{current} 已挂载。是否卸载并改为挂载 {target}？", "复制目标", "没有其他预设文件夹。请在下方输入自定义路径。", "移动目标",
+          "选择可用的 Homebrew 文件夹或输入自定义路径", "自定义绝对路径", "使用路径", "总大小"
+        ],
+        "fi-FI": [
+          "Vaihda tilaa valitsemalla", "Konsoli", "Konsolin osiot", "Yleiskatsaus",
+          "Järjestelmä", "Lähteet", "Lokit", "Konsolin ja liitettyjen asemien vapaa tila",
+          "Ilmoitukset, verkkoyhteydet ja jäähdytys", "Ilmoitukset", "Verkko", "Jäähdytys",
+          "Liittäminen, emulaattorit ja kirjaston ylläpito", "Liittäminen ja emulaattorit", "Kirjaston ylläpito", "Skannaa kansioita tai lisää yksittäinen peli",
+          "Yksittäiset pelit", "Näytä ja kopioi virheenjäljitys- ja järjestelmälokeja", "Konsolin järjestelmätapahtumat ja diagnostiikkaviestit.", "Tallenna virheenjäljitysloki",
+          "Tallennus ottaa käyttöön kaikkien osioiden asetukset ja skannauspolut.", "Takaisin", "Siirry", "Suuntapainikkeet / vasen sauva · Enter / Esc",
+          "Vahvistus", "Jatka", "Purkamisen kohde", "Poista levykuva purkamisen jälkeen",
+          "Valitse", "Tallennustiedot", "Lataukset", "Tämän pelin tiedostot kaikilta paikallisilta käyttäjiltä, myös tallennusten yhteydessä säilytetyt varmuuskopiot.",
+          "Tallennustilan käyttö", "Peli / levykuva", "Päivitys", "DLC",
+          "app.db", "Lähdekansion, levykuvan tai peruspelin app.pkg-tiedoston koko.", "Tämän pelin erilliset päivitystiedostot. Peliin yhdistetyt päivitykset sisältyvät pelin pääkokoon.", "Tämän pelin asennetut lisäosat sisäisessä ja liitetyssä laajennetussa tallennustilassa.",
+          "Järjestelmän viitekoko. Se voi olla päällekkäinen pelin koon kanssa eikä tarkoita lisätilaa.", "Kopioi leikepöydälle", "Loki kopioitu leikepöydälle", "Selain ei voinut kopioida lokia leikepöydälle",
+          "{current} on jo liitetty. Irrotetaanko se ja liitetäänkö {target} sen tilalle?", "Kopioinnin kohde", "Muita valmiita kansioita ei ole. Anna oma polku alla.", "Siirron kohde",
+          "Valitse käytettävissä oleva Homebrew-kansio tai anna oma polku", "Oma absoluuttinen polku", "Käytä polkua", "Yhteiskoko"
+        ],
+        "sv-SE": [
+          "Välj för att byta läge", "Konsol", "Konsolavsnitt", "Översikt",
+          "System", "Källor", "Loggar", "Ledigt utrymme på konsolen och anslutna enheter",
+          "Aviseringar, nätverksåtkomst och kylning", "Aviseringar", "Nätverk", "Kylning",
+          "Montering, emulatorer och biblioteksunderhåll", "Montering och emulatorer", "Biblioteksunderhåll", "Sök igenom mappar eller lägg till ett enskilt spel",
+          "Enskilda spel", "Visa och kopiera felsöknings- och systemloggar", "Systemhändelser och diagnostikmeddelanden från konsolen.", "Skriv felsökningslogg",
+          "Sparandet tillämpar inställningarna i alla avsnitt och sökvägarna för skanning.", "Tillbaka", "Navigera", "Styrkors / vänster spak · Enter / Esc",
+          "Bekräftelse", "Fortsätt", "Uppackningsmål", "Ta bort avbilden efter uppackning",
+          "Välj", "Sparade data", "Nedladdningar", "Filer för denna titel för alla lokala användare, inklusive säkerhetskopior som lagras med sparfilerna.",
+          "Lagringsutrymme", "Spel / avbild", "Uppdatering", "DLC",
+          "app.db", "Storlek på källmappen, avbilden eller grundfilen app.pkg.", "Separata uppdateringsfiler för denna titel. Uppdateringar som integrerats i spelet ingår i dess huvudstorlek.", "Installerade tilläggsfiler för denna titel på intern och ansluten utökad lagring.",
+          "Systemets referensstorlek. Den kan överlappa spelstorleken och är inget extra utrymme.", "Kopiera till urklipp", "Loggen har kopierats till urklipp", "Webbläsaren kunde inte kopiera loggen till urklipp",
+          "{current} är redan monterad. Avmontera den och montera {target} i stället?", "Kopieringsmål", "Inga andra förinställda mappar. Ange en egen sökväg nedan.", "Flyttmål",
+          "Välj en tillgänglig Homebrew-mapp eller ange en egen sökväg", "Egen absolut sökväg", "Använd sökväg", "Total storlek"
+        ],
+        "da-DK": [
+          "Vælg for at skifte tilstand", "Konsol", "Konsolafsnit", "Oversigt",
+          "System", "Kilder", "Logfiler", "Ledig plads på konsollen og tilsluttede drev",
+          "Meddelelser, netværksadgang og køling", "Meddelelser", "Netværk", "Køling",
+          "Montering, emulatorer og vedligeholdelse af biblioteket", "Montering og emulatorer", "Vedligeholdelse af biblioteket", "Scan mapper, eller tilføj et enkelt spil",
+          "Enkelte spil", "Se og kopiér fejlfindings- og systemlogfiler", "Systemhændelser og diagnosticeringsmeddelelser fra konsollen.", "Skriv fejlfindingslog",
+          "Gem anvender indstillingerne fra alle afsnit og scanningsstierne.", "Tilbage", "Naviger", "Retningsknapper / venstre pind · Enter / Esc",
+          "Bekræftelse", "Fortsæt", "Udpakningsdestination", "Slet diskbillede efter udpakning",
+          "Vælg", "Gemte data", "Downloads", "Filer til denne titel for alle lokale brugere, inklusive sikkerhedskopier gemt sammen med spildata.",
+          "Lagerforbrug", "Spil / diskbillede", "Opdatering", "DLC",
+          "app.db", "Størrelsen på kildemappen, diskbilledet eller den grundlæggende app.pkg-fil.", "Separate opdateringsfiler til denne titel. Opdateringer integreret i spillet er en del af dets hovedstørrelse.", "Installerede tilføjelsesfiler til denne titel på internt og tilsluttet udvidet lager.",
+          "Systemets referencestørrelse. Den kan overlappe spillets størrelse og er ikke ekstra plads.", "Kopiér til udklipsholder", "Logfil kopieret til udklipsholder", "Browseren kunne ikke kopiere logfilen til udklipsholderen",
+          "{current} er allerede monteret. Afmonter den, og monter {target} i stedet?", "Kopieringsdestination", "Ingen andre forudindstillede mapper. Indtast en brugerdefineret sti nedenfor.", "Flyttedestination",
+          "Vælg en tilgængelig Homebrew-mappe, eller indtast en brugerdefineret sti", "Brugerdefineret absolut sti", "Brug sti", "Samlet størrelse"
+        ],
+        "no-NO": [
+          "Velg for å bytte modus", "Konsoll", "Konsollseksjoner", "Oversikt",
+          "System", "Kilder", "Logger", "Ledig plass på konsollen og tilkoblede stasjoner",
+          "Varsler, nettverkstilgang og kjøling", "Varsler", "Nettverk", "Kjøling",
+          "Montering, emulatorer og bibliotekvedlikehold", "Montering og emulatorer", "Bibliotekvedlikehold", "Skann mapper eller legg til et enkelt spill",
+          "Enkeltspill", "Vis og kopier feilsøkings- og systemlogger", "Systemhendelser og diagnostikkmeldinger fra konsollen.", "Skriv feilsøkingslogg",
+          "Lagring bruker innstillingene fra alle seksjoner og skannebanene.", "Tilbake", "Naviger", "Retningsknapper / venstre spak · Enter / Esc",
+          "Bekreftelse", "Fortsett", "Utpakkingsmål", "Slett diskbildet etter utpakking",
+          "Velg", "Lagrede data", "Nedlastinger", "Filer for denne tittelen for alle lokale brukere, inkludert sikkerhetskopier lagret sammen med spillagringene.",
+          "Lagringsbruk", "Spill / diskbilde", "Oppdatering", "DLC",
+          "app.db", "Størrelsen på kildemappen, diskbildet eller grunnfilen app.pkg.", "Separate oppdateringsfiler for denne tittelen. Oppdateringer integrert i spillet inngår i hovedstørrelsen.", "Installerte tilleggsfiler for denne tittelen på intern og tilkoblet utvidet lagring.",
+          "Systemets referansestørrelse. Den kan overlappe spillstørrelsen og er ikke ekstra plass.", "Kopier til utklippstavlen", "Loggen er kopiert til utklippstavlen", "Nettleseren kunne ikke kopiere loggen til utklippstavlen",
+          "{current} er allerede montert. Avmontere den og montere {target} i stedet?", "Kopieringsmål", "Ingen andre forhåndsdefinerte mapper. Skriv inn en egendefinert bane nedenfor.", "Flyttemål",
+          "Velg en tilgjengelig Homebrew-mappe eller skriv inn en egendefinert bane", "Egendefinert absolutt bane", "Bruk bane", "Samlet størrelse"
+        ],
+        "pl-PL": [
+          "Wybierz, aby zmienić tryb", "Konsola", "Sekcje konsoli", "Przegląd",
+          "System", "Źródła", "Dzienniki", "Wolne miejsce na konsoli i podłączonych dyskach",
+          "Powiadomienia, dostęp do sieci i chłodzenie", "Powiadomienia", "Sieć", "Chłodzenie",
+          "Montowanie, emulatory i konserwacja biblioteki", "Montowanie i emulatory", "Konserwacja biblioteki", "Skanuj foldery lub dodaj pojedynczą grę",
+          "Pojedyncze gry", "Wyświetlaj i kopiuj dzienniki debugowania i systemu", "Zdarzenia systemowe i komunikaty diagnostyczne konsoli.", "Zapisuj dziennik debugowania",
+          "Zapis stosuje ustawienia ze wszystkich sekcji i ścieżki skanowania.", "Wstecz", "Nawigacja", "Krzyżak / lewy drążek · Enter / Esc",
+          "Potwierdzenie", "Kontynuuj", "Miejsce wypakowania", "Usuń obraz po wypakowaniu",
+          "Wybierz", "Zapisane dane", "Pobrane pliki", "Pliki tego tytułu dla wszystkich użytkowników lokalnych, w tym kopie zapasowe przechowywane z zapisami gry.",
+          "Zajęte miejsce", "Gra / obraz", "Aktualizacja", "DLC",
+          "app.db", "Rozmiar folderu źródłowego, obrazu lub podstawowego pliku app.pkg.", "Oddzielne pliki aktualizacji tego tytułu. Aktualizacje scalone z grą są wliczone w jej główny rozmiar.", "Zainstalowane dodatki do tego tytułu w pamięci wewnętrznej i podłączonej pamięci rozszerzonej.",
+          "Rozmiar referencyjny systemu. Może pokrywać się z rozmiarem gry i nie oznacza dodatkowego miejsca.", "Kopiuj do schowka", "Dziennik skopiowany do schowka", "Przeglądarka nie mogła skopiować dziennika do schowka",
+          "{current} jest już zamontowane. Odmontować i zamontować {target} w zamian?", "Miejsce kopiowania", "Brak innych gotowych folderów. Wpisz własną ścieżkę poniżej.", "Miejsce przenoszenia",
+          "Wybierz dostępny folder Homebrew lub wpisz własną ścieżkę", "Własna ścieżka bezwzględna", "Użyj ścieżki", "Łączny rozmiar"
+        ],
+        "pt-BR": [
+          "Selecione para alternar o modo", "Console", "Seções do console", "Visão geral",
+          "Sistema", "Origens", "Logs", "Espaço disponível no console e nas unidades conectadas",
+          "Notificações, acesso à rede e resfriamento", "Notificações", "Rede", "Resfriamento",
+          "Montagem, emuladores e manutenção da biblioteca", "Montagem e emuladores", "Manutenção da biblioteca", "Verifique pastas ou adicione um jogo individual",
+          "Jogos individuais", "Veja e copie os logs de depuração e do sistema", "Eventos do sistema e mensagens de diagnóstico do console.", "Gravar log de depuração",
+          "Salvar aplica as configurações de todas as seções e os caminhos de verificação.", "Voltar", "Navegar", "Direcional / analógico esquerdo · Enter / Esc",
+          "Confirmação", "Continuar", "Destino da extração", "Excluir imagem após extrair",
+          "Selecionar", "Dados salvos", "Downloads", "Arquivos deste título de todos os usuários locais, incluindo backups armazenados junto aos dados salvos.",
+          "Espaço ocupado", "Jogo / imagem", "Atualização", "DLC",
+          "app.db", "Tamanho da pasta de origem, imagem ou arquivo app.pkg base.", "Arquivos de atualização separados deste título. Atualizações integradas ao jogo fazem parte do tamanho principal.", "Arquivos de conteúdo adicional deste título instalados no armazenamento interno e expandido conectado.",
+          "Tamanho de referência do sistema. Pode se sobrepor ao tamanho do jogo e não representa espaço adicional.", "Copiar para a área de transferência", "Log copiado para a área de transferência", "Este navegador não conseguiu copiar o log para a área de transferência",
+          "{current} já está montado. Desmontar e montar {target} no lugar?", "Destino da cópia", "Não há outras pastas predefinidas. Digite um caminho personalizado abaixo.", "Destino da movimentação",
+          "Escolha uma pasta Homebrew disponível ou digite um caminho personalizado", "Caminho absoluto personalizado", "Usar caminho", "Tamanho total"
+        ],
+        "tr-TR": [
+          "Mod değiştirmek için seçin", "Konsol", "Konsol bölümleri", "Genel bakış",
+          "Sistem", "Kaynaklar", "Günlükler", "Konsolda ve bağlı sürücülerde kullanılabilir alan",
+          "Bildirimler, ağ erişimi ve soğutma", "Bildirimler", "Ağ", "Soğutma",
+          "Bağlama, emülatörler ve kitaplık bakımı", "Bağlama ve emülatörler", "Kitaplık bakımı", "Klasörleri tarayın veya tek bir oyun ekleyin",
+          "Tekil oyunlar", "Hata ayıklama ve sistem günlüklerini görüntüleyin ve kopyalayın", "Konsolun sistem olayları ve tanılama iletileri.", "Hata ayıklama günlüğü yaz",
+          "Kaydetme, tüm bölümlerin ayarlarını ve tarama yollarını uygular.", "Geri", "Gezinme", "Yön tuşları / sol çubuk · Enter / Esc",
+          "Onay", "Devam", "Çıkarma hedefi", "Çıkardıktan sonra imajı sil",
+          "Seç", "Kayıt verileri", "İndirilenler", "Kayıtlarla birlikte saklanan yedekler dahil, tüm yerel kullanıcıların bu oyuna ait dosyaları.",
+          "Depolama kullanımı", "Oyun / imaj", "Yama", "DLC",
+          "app.db", "Kaynak klasörün, imajın veya temel app.pkg dosyasının boyutu.", "Bu oyuna ait ayrı yama dosyaları. Oyuna birleştirilen güncellemeler ana boyuta dahildir.", "Dahili ve bağlı genişletilmiş depolamada bu oyuna ait kurulu eklenti dosyaları.",
+          "Sistemin referans boyutu. Oyun boyutuyla örtüşebilir ve ek alan değildir.", "Panoya kopyala", "Günlük panoya kopyalandı", "Bu tarayıcı günlüğü panoya kopyalayamadı",
+          "{current} zaten bağlı. Bağlantısı kesilip yerine {target} bağlansın mı?", "Kopyalama hedefi", "Başka hazır klasör yok. Aşağıya özel bir yol girin.", "Taşıma hedefi",
+          "Kullanılabilir bir Homebrew klasörü seçin veya özel bir yol girin", "Özel mutlak yol", "Yolu kullan", "Toplam boyut"
+        ],
+        "ar-SA": [
+          "اختر لتغيير الوضع", "الجهاز", "أقسام الجهاز", "نظرة عامة",
+          "النظام", "المصادر", "السجلات", "المساحة المتاحة على الجهاز ومحركات الأقراص المتصلة",
+          "الإشعارات والوصول إلى الشبكة والتبريد", "الإشعارات", "الشبكة", "التبريد",
+          "التركيب والمحاكيات وصيانة المكتبة", "التركيب والمحاكيات", "صيانة المكتبة", "افحص المجلدات أو أضف لعبة منفردة",
+          "ألعاب منفردة", "عرض سجلات تصحيح الأخطاء والنظام ونسخها", "أحداث النظام ورسائل التشخيص من الجهاز.", "كتابة سجل تصحيح الأخطاء",
+          "يطبّق الحفظ إعدادات جميع الأقسام ومسارات الفحص.", "رجوع", "تنقّل", "أزرار الاتجاهات / العصا اليسرى · Enter / Esc",
+          "تأكيد", "متابعة", "وجهة فك الضغط", "حذف الصورة بعد فك الضغط",
+          "اختيار", "بيانات الحفظ", "التنزيلات", "ملفات هذا العنوان لجميع المستخدمين المحليين، بما فيها النسخ الاحتياطية المخزنة مع بيانات الحفظ.",
+          "استخدام مساحة التخزين", "اللعبة / الصورة", "التحديث", "DLC",
+          "app.db", "حجم مجلد المصدر أو الصورة أو ملف app.pkg الأساسي.", "ملفات التحديث المنفصلة لهذا العنوان. التحديثات المدمجة في اللعبة مشمولة في حجمها الأساسي.", "ملفات الإضافات المثبتة لهذا العنوان في التخزين الداخلي والتخزين الموسع المتصل.",
+          "حجم مرجعي من النظام. قد يتداخل مع حجم اللعبة ولا يمثل مساحة إضافية.", "نسخ إلى الحافظة", "تم نسخ السجل إلى الحافظة", "تعذر على هذا المتصفح نسخ السجل إلى الحافظة",
+          "‏{current} مركّب بالفعل. هل تريد إلغاء تركيبه وتركيب {target} بدلاً منه؟", "وجهة النسخ", "لا توجد مجلدات أخرى محددة مسبقًا. أدخل مسارًا مخصصًا أدناه.", "وجهة النقل",
+          "اختر مجلد Homebrew متاحًا أو أدخل مسارًا مخصصًا", "مسار مطلق مخصص", "استخدام المسار", "الحجم الإجمالي"
+        ],
+        "cs-CZ": [
+          "Vyberte pro změnu režimu", "Konzole", "Sekce konzole", "Přehled",
+          "Systém", "Zdroje", "Protokoly", "Volné místo na konzoli a připojených discích",
+          "Oznámení, síťový přístup a chlazení", "Oznámení", "Síť", "Chlazení",
+          "Připojování, emulátory a údržba knihovny", "Připojování a emulátory", "Údržba knihovny", "Prohledejte složky nebo přidejte jednotlivou hru",
+          "Jednotlivé hry", "Zobrazení a kopírování ladicích a systémových protokolů", "Systémové události a diagnostické zprávy konzole.", "Zapisovat ladicí protokol",
+          "Uložení použije nastavení ze všech sekcí a cesty prohledávání.", "Zpět", "Navigace", "Směrová tlačítka / levá páčka · Enter / Esc",
+          "Potvrzení", "Pokračovat", "Cíl rozbalení", "Po rozbalení smazat obraz",
+          "Vybrat", "Uložená data", "Stažené soubory", "Soubory tohoto titulu pro všechny místní uživatele včetně záloh uložených s herními pozicemi.",
+          "Využití úložiště", "Hra / obraz", "Aktualizace", "DLC",
+          "app.db", "Velikost zdrojové složky, obrazu nebo základního souboru app.pkg.", "Samostatné soubory aktualizací tohoto titulu. Aktualizace sloučené se hrou jsou zahrnuty v její hlavní velikosti.", "Nainstalované doplňky tohoto titulu v interním a připojeném rozšířeném úložišti.",
+          "Referenční velikost systému. Může se překrývat s velikostí hry a nepředstavuje další místo.", "Kopírovat do schránky", "Protokol zkopírován do schránky", "Prohlížeč nemohl zkopírovat protokol do schránky",
+          "{current} je již připojeno. Odpojit a místo něj připojit {target}?", "Cíl kopírování", "Žádné další přednastavené složky. Níže zadejte vlastní cestu.", "Cíl přesunu",
+          "Vyberte dostupnou složku Homebrew nebo zadejte vlastní cestu", "Vlastní absolutní cesta", "Použít cestu", "Celková velikost"
+        ],
+        "hu-HU": [
+          "Válaszd ki a mód váltásához", "Konzol", "Konzol szakaszai", "Áttekintés",
+          "Rendszer", "Források", "Naplók", "Szabad hely a konzolon és a csatlakoztatott meghajtókon",
+          "Értesítések, hálózati hozzáférés és hűtés", "Értesítések", "Hálózat", "Hűtés",
+          "Csatolás, emulátorok és könyvtárkarbantartás", "Csatolás és emulátorok", "Könyvtárkarbantartás", "Mappák vizsgálata vagy egyedi játék hozzáadása",
+          "Egyedi játékok", "Hibakeresési és rendszernaplók megtekintése és másolása", "A konzol rendszereseményei és diagnosztikai üzenetei.", "Hibakeresési napló írása",
+          "A mentés az összes szakasz beállításait és a keresési útvonalakat alkalmazza.", "Vissza", "Navigáció", "Iránygombok / bal kar · Enter / Esc",
+          "Megerősítés", "Folytatás", "Kicsomagolás célja", "Lemezkép törlése kicsomagolás után",
+          "Kiválasztás", "Mentett adatok", "Letöltések", "A játék fájljai minden helyi felhasználónál, beleértve a mentésekkel együtt tárolt biztonsági másolatokat.",
+          "Tárhelyhasználat", "Játék / lemezkép", "Frissítés", "DLC",
+          "app.db", "A forrásmappa, lemezkép vagy alap app.pkg fájl mérete.", "A játék különálló frissítési fájljai. A játékba beépített frissítések a fő méret részét képezik.", "A játék telepített kiegészítőfájljai a belső és a csatlakoztatott bővített tárhelyen.",
+          "A rendszer referenciaértéke. Átfedhet a játék méretével, és nem jelent további helyigényt.", "Másolás a vágólapra", "Napló a vágólapra másolva", "A böngésző nem tudta a naplót a vágólapra másolni",
+          "A(z) {current} már csatolva van. Leválasztod, és helyette csatolod a(z) {target} elemet?", "Másolás célja", "Nincs más előre megadott mappa. Adj meg egyéni útvonalat alább.", "Áthelyezés célja",
+          "Válassz elérhető Homebrew mappát, vagy adj meg egyéni útvonalat", "Egyéni abszolút útvonal", "Útvonal használata", "Teljes méret"
+        ],
+        "el-GR": [
+          "Επιλέξτε για αλλαγή λειτουργίας", "Κονσόλα", "Ενότητες κονσόλας", "Επισκόπηση",
+          "Σύστημα", "Πηγές", "Αρχεία καταγραφής", "Διαθέσιμος χώρος στην κονσόλα και στις συνδεδεμένες μονάδες",
+          "Ειδοποιήσεις, πρόσβαση δικτύου και ψύξη", "Ειδοποιήσεις", "Δίκτυο", "Ψύξη",
+          "Προσάρτηση, εξομοιωτές και συντήρηση βιβλιοθήκης", "Προσάρτηση και εξομοιωτές", "Συντήρηση βιβλιοθήκης", "Σάρωση φακέλων ή προσθήκη μεμονωμένου παιχνιδιού",
+          "Μεμονωμένα παιχνίδια", "Προβολή και αντιγραφή αρχείων αποσφαλμάτωσης και συστήματος", "Συμβάντα συστήματος και διαγνωστικά μηνύματα της κονσόλας.", "Εγγραφή αρχείου αποσφαλμάτωσης",
+          "Η αποθήκευση εφαρμόζει τις ρυθμίσεις όλων των ενοτήτων και τις διαδρομές σάρωσης.", "Πίσω", "Πλοήγηση", "Πλήκτρα κατεύθυνσης / αριστερός μοχλός · Enter / Esc",
+          "Επιβεβαίωση", "Συνέχεια", "Προορισμός αποσυμπίεσης", "Διαγραφή εικόνας μετά την αποσυμπίεση",
+          "Επιλογή", "Αποθηκεύσεις", "Λήψεις", "Αρχεία αυτού του τίτλου για όλους τους τοπικούς χρήστες, μαζί με τα αντίγραφα ασφαλείας που φυλάσσονται με τις αποθηκεύσεις.",
+          "Χρήση αποθηκευτικού χώρου", "Παιχνίδι / εικόνα", "Ενημέρωση", "DLC",
+          "app.db", "Μέγεθος φακέλου πηγής, εικόνας ή βασικού αρχείου app.pkg.", "Ξεχωριστά αρχεία ενημερώσεων αυτού του τίτλου. Οι ενημερώσεις που έχουν ενσωματωθεί στο παιχνίδι περιλαμβάνονται στο κύριο μέγεθός του.", "Εγκατεστημένα αρχεία πρόσθετου περιεχομένου αυτού του τίτλου στον εσωτερικό και συνδεδεμένο εκτεταμένο χώρο.",
+          "Μέγεθος αναφοράς του συστήματος. Μπορεί να επικαλύπτεται με το μέγεθος του παιχνιδιού και δεν αποτελεί πρόσθετο χώρο.", "Αντιγραφή στο πρόχειρο", "Το αρχείο καταγραφής αντιγράφηκε στο πρόχειρο", "Το πρόγραμμα περιήγησης δεν μπόρεσε να αντιγράψει το αρχείο καταγραφής στο πρόχειρο",
+          "Το {current} είναι ήδη προσαρτημένο. Να αποπροσαρτηθεί και να προσαρτηθεί το {target} στη θέση του;", "Προορισμός αντιγραφής", "Δεν υπάρχουν άλλοι προκαθορισμένοι φάκελοι. Εισαγάγετε προσαρμοσμένη διαδρομή παρακάτω.", "Προορισμός μετακίνησης",
+          "Επιλέξτε διαθέσιμο φάκελο Homebrew ή εισαγάγετε προσαρμοσμένη διαδρομή", "Προσαρμοσμένη απόλυτη διαδρομή", "Χρήση διαδρομής", "Συνολικό μέγεθος"
+        ],
+        "ro-RO": [
+          "Selectează pentru a schimba modul", "Consolă", "Secțiunile consolei", "Prezentare generală",
+          "Sistem", "Surse", "Jurnale", "Spațiu disponibil pe consolă și pe unitățile conectate",
+          "Notificări, acces la rețea și răcire", "Notificări", "Rețea", "Răcire",
+          "Montare, emulatoare și întreținerea bibliotecii", "Montare și emulatoare", "Întreținerea bibliotecii", "Scanează dosare sau adaugă un joc individual",
+          "Jocuri individuale", "Vizualizează și copiază jurnalele de depanare și de sistem", "Evenimente de sistem și mesaje de diagnosticare ale consolei.", "Scrie jurnalul de depanare",
+          "Salvarea aplică setările tuturor secțiunilor și căile de scanare.", "Înapoi", "Navigare", "Butoane direcționale / stick stâng · Enter / Esc",
+          "Confirmare", "Continuă", "Destinația dezarhivării", "Șterge imaginea după dezarhivare",
+          "Selectează", "Date salvate", "Descărcări", "Fișierele acestui titlu pentru toți utilizatorii locali, inclusiv copiile de siguranță păstrate cu salvările.",
+          "Spațiu ocupat", "Joc / imagine", "Actualizare", "DLC",
+          "app.db", "Dimensiunea dosarului sursă, a imaginii sau a fișierului app.pkg de bază.", "Fișiere de actualizare separate pentru acest titlu. Actualizările integrate în joc fac parte din dimensiunea principală.", "Fișierele extensiilor acestui titlu instalate pe stocarea internă și extinsă conectată.",
+          "Dimensiune de referință a sistemului. Se poate suprapune cu dimensiunea jocului și nu reprezintă spațiu suplimentar.", "Copiază în clipboard", "Jurnal copiat în clipboard", "Acest browser nu a putut copia jurnalul în clipboard",
+          "{current} este deja montat. Îl demontezi și montezi {target} în locul lui?", "Destinația copierii", "Nu există alte dosare predefinite. Introdu o cale personalizată mai jos.", "Destinația mutării",
+          "Alege un dosar Homebrew disponibil sau introdu o cale personalizată", "Cale absolută personalizată", "Folosește calea", "Dimensiune totală"
+        ],
+        "th-TH": [
+          "เลือกเพื่อเปลี่ยนโหมด", "คอนโซล", "ส่วนต่าง ๆ ของคอนโซล", "ภาพรวม",
+          "ระบบ", "แหล่งที่มา", "บันทึก", "พื้นที่ว่างบนคอนโซลและไดรฟ์ที่เชื่อมต่อ",
+          "การแจ้งเตือน การเข้าถึงเครือข่าย และการระบายความร้อน", "การแจ้งเตือน", "เครือข่าย", "การระบายความร้อน",
+          "การเมานต์ อีมูเลเตอร์ และการดูแลคลังเกม", "การเมานต์และอีมูเลเตอร์", "การดูแลคลังเกม", "สแกนโฟลเดอร์หรือเพิ่มเกมทีละรายการ",
+          "เกมแต่ละรายการ", "ดูและคัดลอกบันทึกการแก้จุดบกพร่องและระบบ", "เหตุการณ์ของระบบและข้อความวินิจฉัยจากคอนโซล", "เขียนบันทึกการแก้จุดบกพร่อง",
+          "การบันทึกจะใช้การตั้งค่าของทุกส่วนและเส้นทางการสแกน", "กลับ", "นำทาง", "ปุ่มทิศทาง / ก้านซ้าย · Enter / Esc",
+          "ยืนยัน", "ดำเนินการต่อ", "ปลายทางการแตกไฟล์", "ลบอิมเมจหลังแตกไฟล์",
+          "เลือก", "ข้อมูลบันทึกเกม", "ดาวน์โหลด", "ไฟล์ของเกมนี้จากผู้ใช้ในเครื่องทุกคน รวมถึงข้อมูลสำรองที่เก็บไว้กับข้อมูลบันทึกเกม",
+          "การใช้พื้นที่จัดเก็บ", "เกม / อิมเมจ", "แพตช์", "DLC",
+          "app.db", "ขนาดของโฟลเดอร์ต้นทาง อิมเมจ หรือไฟล์ app.pkg หลัก", "ไฟล์แพตช์แยกของเกมนี้ การอัปเดตที่รวมเข้ากับเกมแล้วจะนับในขนาดหลักของเกม", "ไฟล์เนื้อหาเสริมที่ติดตั้งสำหรับเกมนี้บนที่จัดเก็บภายในและที่จัดเก็บเสริมที่เชื่อมต่อ",
+          "ขนาดอ้างอิงของระบบ อาจซ้ำซ้อนกับขนาดเกมและไม่ใช่พื้นที่เพิ่มเติม", "คัดลอกไปยังคลิปบอร์ด", "คัดลอกบันทึกไปยังคลิปบอร์ดแล้ว", "เบราว์เซอร์นี้ไม่สามารถคัดลอกบันทึกไปยังคลิปบอร์ดได้",
+          "เมานต์ {current} อยู่แล้ว ต้องการยกเลิกการเมานต์แล้วเมานต์ {target} แทนหรือไม่?", "ปลายทางการคัดลอก", "ไม่มีโฟลเดอร์ที่ตั้งไว้ล่วงหน้าอื่น ๆ ป้อนเส้นทางที่กำหนดเองด้านล่าง", "ปลายทางการย้าย",
+          "เลือกโฟลเดอร์ Homebrew ที่ใช้ได้หรือป้อนเส้นทางที่กำหนดเอง", "เส้นทางแบบเต็มที่กำหนดเอง", "ใช้เส้นทาง", "ขนาดรวม"
+        ],
+        "vi-VN": [
+          "Chọn để chuyển chế độ", "Máy chơi game", "Các mục của máy chơi game", "Tổng quan",
+          "Hệ thống", "Nguồn", "Nhật ký", "Dung lượng trống trên máy và các ổ đĩa được kết nối",
+          "Thông báo, truy cập mạng và làm mát", "Thông báo", "Mạng", "Làm mát",
+          "Gắn kết, trình giả lập và bảo trì thư viện", "Gắn kết và trình giả lập", "Bảo trì thư viện", "Quét thư mục hoặc thêm từng trò chơi",
+          "Trò chơi riêng lẻ", "Xem và sao chép nhật ký gỡ lỗi và hệ thống", "Sự kiện hệ thống và thông báo chẩn đoán của máy.", "Ghi nhật ký gỡ lỗi",
+          "Lưu sẽ áp dụng cài đặt của tất cả các mục và đường dẫn quét.", "Quay lại", "Điều hướng", "Phím điều hướng / cần trái · Enter / Esc",
+          "Xác nhận", "Tiếp tục", "Đích giải nén", "Xóa ảnh đĩa sau khi giải nén",
+          "Chọn", "Dữ liệu lưu", "Tải xuống", "Tệp của trò chơi này cho mọi người dùng cục bộ, bao gồm bản sao lưu được lưu cùng dữ liệu trò chơi.",
+          "Dung lượng sử dụng", "Trò chơi / ảnh đĩa", "Bản vá", "DLC",
+          "app.db", "Kích thước thư mục nguồn, ảnh đĩa hoặc tệp app.pkg cơ bản.", "Các tệp bản vá riêng của trò chơi này. Bản cập nhật đã tích hợp vào trò chơi được tính trong kích thước chính.", "Các tệp nội dung bổ sung của trò chơi này được cài trên bộ nhớ trong và bộ nhớ mở rộng được kết nối.",
+          "Kích thước tham chiếu của hệ thống. Có thể trùng với kích thước trò chơi và không phải dung lượng bổ sung.", "Sao chép vào bảng nhớ tạm", "Đã sao chép nhật ký vào bảng nhớ tạm", "Trình duyệt này không thể sao chép nhật ký vào bảng nhớ tạm",
+          "{current} đã được gắn kết. Bạn có muốn ngắt gắn kết và gắn kết {target} thay thế không?", "Đích sao chép", "Không có thư mục đặt sẵn nào khác. Nhập đường dẫn tùy chỉnh bên dưới.", "Đích di chuyển",
+          "Chọn thư mục Homebrew khả dụng hoặc nhập đường dẫn tùy chỉnh", "Đường dẫn tuyệt đối tùy chỉnh", "Dùng đường dẫn", "Tổng dung lượng"
+        ],
+        "id-ID": [
+          "Pilih untuk mengganti mode", "Konsol", "Bagian konsol", "Ringkasan",
+          "Sistem", "Sumber", "Log", "Ruang kosong di konsol dan drive yang terhubung",
+          "Notifikasi, akses jaringan, dan pendinginan", "Notifikasi", "Jaringan", "Pendinginan",
+          "Pemasangan, emulator, dan pemeliharaan pustaka", "Pemasangan dan emulator", "Pemeliharaan pustaka", "Pindai folder atau tambahkan game satu per satu",
+          "Game individual", "Lihat dan salin log debug dan sistem", "Peristiwa sistem dan pesan diagnostik konsol.", "Tulis log debug",
+          "Penyimpanan menerapkan pengaturan dari semua bagian dan jalur pemindaian.", "Kembali", "Navigasi", "Tombol arah / stik kiri · Enter / Esc",
+          "Konfirmasi", "Lanjutkan", "Tujuan ekstraksi", "Hapus citra setelah ekstraksi",
+          "Pilih", "Data tersimpan", "Unduhan", "File judul ini untuk semua pengguna lokal, termasuk cadangan yang disimpan bersama data game.",
+          "Penggunaan penyimpanan", "Game / citra", "Patch", "DLC",
+          "app.db", "Ukuran folder sumber, citra, atau file app.pkg dasar.", "File patch terpisah untuk judul ini. Pembaruan yang digabungkan ke dalam game termasuk dalam ukuran utamanya.", "File konten tambahan judul ini yang terpasang di penyimpanan internal dan penyimpanan tambahan yang terhubung.",
+          "Ukuran referensi sistem. Dapat tumpang tindih dengan ukuran game dan bukan ruang tambahan.", "Salin ke papan klip", "Log disalin ke papan klip", "Browser ini tidak dapat menyalin log ke papan klip",
+          "{current} sudah terpasang. Lepaskan dan pasang {target} sebagai gantinya?", "Tujuan penyalinan", "Tidak ada folder prasetel lain. Masukkan jalur khusus di bawah.", "Tujuan pemindahan",
+          "Pilih folder Homebrew yang tersedia atau masukkan jalur khusus", "Jalur absolut khusus", "Gunakan jalur", "Ukuran total"
+        ],
+        "uk-UA": [
+          "Натисніть, щоб змінити режим", "Приставка", "Розділи приставки", "Огляд",
+          "Система", "Джерела", "Журнали", "Вільне місце на приставці та підключених накопичувачах",
+          "Сповіщення, доступ до мережі та охолодження", "Сповіщення", "Мережа", "Охолодження",
+          "Монтування, емулятори та обслуговування бібліотеки", "Монтування та емулятори", "Обслуговування бібліотеки", "Скануйте папки або додайте окрему гру",
+          "Окремі ігри", "Перегляд і копіювання журналів налагодження та системи", "Системні події та діагностичні повідомлення приставки.", "Записувати журнал налагодження",
+          "Збереження застосовує налаштування всіх розділів і шляхи сканування.", "Назад", "Навігація", "Хрестовина / лівий стік · Enter / Esc",
+          "Підтвердження", "Продовжити", "Місце розпакування", "Видалити образ після розпакування",
+          "Вибрати", "Збереження", "Завантаження", "Файли цієї гри для всіх локальних користувачів, включно з резервними копіями, що зберігаються разом зі збереженнями.",
+          "Використання сховища", "Гра / образ", "Патч", "DLC",
+          "app.db", "Розмір вихідної папки, образу або базового файлу app.pkg.", "Окремі файли патчів цієї гри. Оновлення, об’єднані з грою, входять до її основного розміру.", "Встановлені файли доповнень цієї гри на внутрішньому та підключеному розширеному сховищі.",
+          "Довідковий розмір системи. Може перекриватися з розміром гри та не є додатковим обсягом.", "Копіювати до буфера обміну", "Журнал скопійовано до буфера обміну", "Цей браузер не зміг скопіювати журнал до буфера обміну",
+          "{current} уже змонтовано. Демонтувати його та змонтувати {target} натомість?", "Місце копіювання", "Інших готових папок немає. Введіть власний шлях нижче.", "Місце переміщення",
+          "Виберіть доступну папку Homebrew або введіть власний шлях", "Власний абсолютний шлях", "Використати шлях", "Загальний розмір"
+        ],
+      };
+      for (const [locale, values] of Object.entries(extendedTranslationCatalogs)) {
+        if (values.length !== extendedTranslationKeys.length) throw new Error(`Invalid extended translation catalog: ${locale}`);
+        Object.assign(translations[locale], Object.fromEntries(extendedTranslationKeys.map((key, index) => [key, values[index]])));
+      }
       translations["en-GB"] = translations["en-US"];
       translations["es-MX"] = translations["es-ES"];
       translations["fr-CA"] = translations["fr-FR"];
@@ -1072,7 +1877,12 @@
         document.documentElement.lang = currentLanguage;
         document.documentElement.dir = currentLanguage === "ar-SA" ? "rtl" : "ltr";
         document.title = t("pageTitle");
-        $("language").value = currentLanguage;
+        const choices = document.querySelectorAll(".language-choice");
+        choices.forEach(choice => {
+          const selected = choice.dataset.language === currentLanguage;
+          choice.setAttribute("aria-pressed", String(selected));
+          if (selected) $("language").textContent = choice.textContent;
+        });
         document.querySelectorAll("[data-i18n]").forEach((item) => {
           item.textContent = t(item.dataset.i18n);
         });
@@ -1202,9 +2012,21 @@
           const image = new Image();
           image.alt = large ? t("coverAlt", { title: game.title_name || game.title_id }) : "";
           image.addEventListener("load", () => fallback.remove(), { once: true });
-          image.addEventListener("error", () => image.remove(), { once: true });
+          image.addEventListener("error", () => {
+            if (image.dataset.originalFallback) { image.remove(); return; }
+            image.dataset.originalFallback = "true";
+            image.removeAttribute("srcset");
+            image.src = game.icon_url.replace(/&size=thumb\b/, "");
+          });
           cover.append(image);
-          image.src = game.icon_url;
+          image.loading = large ? "eager" : "lazy";
+          const original = game.icon_url.replace(/&size=thumb\b/, "");
+          const separator = original.includes("?") ? "&" : "?";
+          const card = `${original}${separator}size=card`;
+          const full = `${original}${separator}size=cover`;
+          image.sizes = large ? "(max-width: 540px) 160px, 232px" : "(max-width: 540px) calc(50vw - 37px), (max-width: 850px) calc(33.334vw - 51.334px), (max-width: 1250px) calc(25vw - 52px), (max-width: 1400px) calc(20vw - 53.6px), calc(16.667vw - 52px)";
+          image.srcset = `${card} 256w, ${full} 512w`;
+          image.src = card;
         }
         return cover;
       }
@@ -1257,10 +2079,13 @@
 
         const actions = node("div", "game-actions");
         const details = node("button", "btn small", t("details"));
+        details.className = "game-open";
         details.type = "button";
+        details.setAttribute("data-title-id", game.title_id);
+        details.setAttribute("aria-label", `${game.title_name || game.title_id} · ${t("details")}`);
+        details.tabIndex = playStationBrowser ? 0 : -1;
         details.addEventListener("click", () => showDetails(game.title_id));
         actions.append(details);
-        appendRuntimeActions(actions, game);
         body.append(actions);
         card.append(body);
         return card;
@@ -1285,6 +2110,10 @@
       function renderGames() {
         const games = filteredGames();
         const list = $("games");
+        const active = document.activeElement;
+        const hadFocus = list.contains(active);
+        const titleId = hadFocus ? active.getAttribute("data-title-id") : navigation.lastGame;
+        const oldIndex = Math.max(0, Array.from(list.querySelectorAll(".game-open")).indexOf(active));
         replaceContent(list);
         if (!games.length) {
           list.append(node("div", "empty", t(state.games.length ? "nothingFound" : "libraryEmpty")));
@@ -1292,6 +2121,12 @@
           games.forEach((game) => list.append(gameCard(game)));
         }
         $("visibleCount").textContent = t("shown", { count: games.length });
+        const buttons = Array.from(list.querySelectorAll(".game-open"));
+        const selected = buttons.find(button => button.getAttribute("data-title-id") === titleId) || buttons[Math.min(oldIndex, buttons.length - 1)];
+        if (selected) {
+          selected.tabIndex = 0;
+          if (hadFocus || active === document.body) focusControl(selected);
+        } else if (hadFocus) focusControl($("search"));
       }
 
       function renderStats() {
@@ -1327,33 +2162,44 @@
 
       function renderStorageJob(job) {
         state.storageJob = job;
-        const hasJob = job && Number(job.job_id) > 0;
-        $("transferState").textContent = hasJob ? storageJobStateLabel(job) : t("jobIdle");
-        $("transferState").className = `badge ${job && job.active ? "live" : ""}`.trim();
-        $("transferIdle").hidden = hasJob;
-        $("transferIdle").textContent = t("noActiveOperations");
-        $("transferDetails").hidden = !hasJob;
-        if (!hasJob) return;
+        const popup = $("transferPopup");
+        const active = Boolean(job && job.active && Number(job.job_id) > 0);
+        const restoreFocus = !active && popup.contains(document.activeElement);
+        popup.hidden = !active;
+        document.body.classList.toggle("transfer-active", active);
+        if (!active) {
+          if (restoreFocus) {
+            const selected = Array.from($("games").querySelectorAll(".game-open"))
+              .find(item => item.getAttribute("data-title-id") === navigation.lastGame);
+            focusControl(activeDialog() ? focusableControls()[0] : navigation.view === "console"
+              ? $("consoleTab") : selected || $("libraryTab"));
+          }
+          return;
+        }
 
         const percent = Math.max(0, Math.min(100, Number(job.progress_percent) || 0));
         const operation = storageOperationLabel(job.operation);
-        $("transferSummary").textContent = `${operation} ${job.title_id}`;
+        const game = state.games.find(item => item.title_id === job.title_id);
+        $("transferSummary").textContent = `${operation} · ${game?.title_name || job.title_id}`;
+        $("transferSummary").title = $("transferSummary").textContent;
+        $("transferState").textContent = job.cancel_requested ? t("cancelling") : storageJobStateLabel(job);
         $("transferRoute").textContent = job.operation === "delete"
           ? job.source
           : `${job.source} → ${job.destination}`;
-        $("transferFill").style.width = `${percent}%`;
-        $("transferMeter").setAttribute("aria-valuenow", String(Math.round(percent)));
+        $("transferRoute").title = $("transferRoute").textContent;
+        const measuring = job.state === "preparing" || job.state === "measuring";
+        $("transferMeter").classList.toggle("indeterminate", measuring);
+        $("transferFill").style.width = measuring ? "28%" : `${percent}%`;
+        if (measuring) $("transferMeter").removeAttribute("aria-valuenow");
+        else $("transferMeter").setAttribute("aria-valuenow", String(Math.round(percent)));
         $("transferBytes").textContent = job.total_bytes > 0
           ? `${formatBytes(Number(job.processed_bytes))} / ${formatBytes(Number(job.total_bytes))}`
           : job.state === "measuring" ? t("calculating") : formatBytes(Number(job.processed_bytes));
-        $("transferFiles").textContent = job.total_files > 0
-          ? `${job.processed_files} / ${job.total_files}`
-          : job.state === "measuring" ? t("calculating") : String(job.processed_files || 0);
         $("transferSpeed").textContent = job.speed_bytes_per_second > 0
           ? `${formatBytes(Number(job.speed_bytes_per_second))}${t("perSecond")}`
           : "—";
         $("transferElapsed").textContent = formatDuration(job.elapsed_ms);
-        $("transferPercent").textContent = `${percent.toFixed(percent < 10 && percent > 0 ? 1 : 0)}%`;
+        $("transferPercent").textContent = measuring ? "" : `${percent.toFixed(percent < 10 && percent > 0 ? 1 : 0)}%`;
         $("cancelTransfer").disabled = !job.cancellable || job.cancel_requested;
         $("cancelTransfer").textContent = job.cancel_requested ? t("cancelling") : t("cancel");
       }
@@ -1385,15 +2231,17 @@
       }
 
       async function refreshStorageJob() {
+        const previous = state.storageJob;
         try {
-          const wasActive = Boolean(state.storageJob && state.storageJob.active);
+          const wasActive = Boolean(previous && previous.active);
           const job = await api("/games/storage/status");
+          if (state.storageJob !== previous) return;
           renderStorageJob(job);
           if (wasActive && !job.active) reportStorageJob(job);
         } catch (error) {
-          if (!state.storageJob) {
+          if (state.storageJob === previous && previous?.active) {
             $("transferState").textContent = t("unavailable");
-            $("transferIdle").textContent = errorMessage(error);
+            $("cancelTransfer").disabled = true;
           }
         } finally {
           scheduleStorageJobPoll();
@@ -1416,6 +2264,7 @@
 
       async function refreshStorage() {
         const list = $("storageList");
+        const summary = $("storageSummary");
         try {
           const data = await api("/storage");
           state.storageDestinations = (data.destinations || []).slice().sort((left, right) =>
@@ -1435,14 +2284,17 @@
           });
           if (!$("destinationModal").hidden) renderDestinationPicker();
           replaceContent(list);
+          replaceContent(summary);
           if (!mounts.length) {
             list.append(node("span", "subtle", t("storageNotFound")));
+            summary.append(node("span", "", t("storageNotFound")));
             return;
           }
 
           mounts.forEach((mount) => {
             const total = Number(mount.total_bytes) || 0;
             const available = Number(mount.available_bytes) || 0;
+            summary.append(node("span", "", `${mount.mount_point} · ${t("freeSpace", { size: formatBytes(available) })}`));
             const usedPercent = total > 0 ? Math.max(0, Math.min(100, ((total - available) / total) * 100)) : 0;
             const freePercent = 100 - usedPercent;
             const row = node("div", "storage-row");
@@ -1475,6 +2327,7 @@
           state.storageDestinations = [];
           if (!$("destinationModal").hidden) renderDestinationPicker();
           replaceContent(list, node("span", "subtle", errorMessage(error)));
+          replaceContent(summary, node("span", "", t("unavailable")));
         }
       }
 
@@ -1595,7 +2448,17 @@
 
       async function saveSettings(event) {
         event.preventDefault();
-        const submit = $("settingsForm").querySelector('button[type="submit"]');
+        const form = $("settingsForm");
+        if (form.checkValidity && !form.checkValidity()) {
+          const invalid = Array.from(form.elements).find(item => !item.validity.valid);
+          if (invalid) {
+            selectConsolePane(invalid.closest("[data-console-pane]").dataset.consolePane);
+            focusControl(invalid);
+            invalid.reportValidity();
+          }
+          return;
+        }
+        const submit = $("saveSettings");
         submit.disabled = true;
         try {
           await api("/settings/update", {
@@ -1612,7 +2475,7 @@
           });
           logActivity(t("settingsSaved"));
           toast(t("settingsSaved"));
-          setTimeout(() => { refreshSettings(); refreshLibrary(); }, 1200);
+          setTimeout(refreshLibrary, 1200);
         } catch (error) {
           logActivity(errorMessage(error), "error");
           toast(errorMessage(error), true);
@@ -1622,10 +2485,15 @@
       }
 
       async function refreshLog() {
+        const request = ++state.logRequest;
         $("refreshLog").disabled = true;
+        $("copyLog").disabled = true;
+        state.logText = null;
         try {
           const result = await api(state.logRoute, { max_bytes: 262144 });
-          $("logContent").textContent = result.content || "";
+          if (request !== state.logRequest) return;
+          state.logText = result.content || "";
+          $("logContent").textContent = state.logText;
           $("logSubtitle").textContent = t("logBytes", {
             shown: formatBytes(Number(result.returned_bytes)),
             total: formatBytes(Number(result.total_bytes !== undefined
@@ -1633,10 +2501,53 @@
           });
           $("logContent").scrollTop = $("logContent").scrollHeight;
         } catch (error) {
+          if (request !== state.logRequest) return;
           $("logContent").textContent = errorMessage(error);
           $("logSubtitle").textContent = "";
         } finally {
-          $("refreshLog").disabled = false;
+          if (request === state.logRequest) {
+            $("refreshLog").disabled = false;
+            $("copyLog").disabled = !state.logText;
+          }
+        }
+      }
+
+      function copyLogLegacy(text) {
+        const source = node("textarea", "clipboard-source");
+        source.value = text;
+        source.readOnly = true;
+        source.tabIndex = -1;
+        source.setAttribute("aria-hidden", "true");
+        const previous = document.activeElement;
+        $("logModal").querySelector(".modal-card").append(source);
+        try {
+          source.focus({ preventScroll: true });
+          source.select();
+          source.setSelectionRange(0, text.length);
+          return document.execCommand("copy");
+        } finally {
+          source.remove();
+          if (previous && !$("logModal").hidden) focusControl(previous);
+        }
+      }
+
+      async function copyLog() {
+        const text = state.logText;
+        if (!text || $("copyLog").disabled) return;
+        $("copyLog").disabled = true;
+        try {
+          let copied = false;
+          if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+            try { await navigator.clipboard.writeText(text); copied = true; }
+            catch (_) { /* HTTP and older browsers can use selection-based copying. */ }
+          }
+          if (!copied) copied = copyLogLegacy(text);
+          toast(t(copied ? "logCopied" : "clipboardUnavailable"), !copied);
+        } catch (_) {
+          toast(t("clipboardUnavailable"), true);
+        } finally {
+          $("copyLog").disabled = !state.logText;
+          if (!$("logModal").hidden && document.activeElement === document.body) focusControl($("copyLog"));
         }
       }
 
@@ -1655,6 +2566,8 @@
       function showKernelLog() { showLog("/kernel-log", "kernelLogTitle", "viewKernelLog"); }
 
       function closeDebugLog() {
+        ++state.logRequest;
+        state.logText = null;
         $("logModal").hidden = true;
         $(state.logTriggerId).focus();
       }
@@ -1676,7 +2589,7 @@
       }
 
       async function removeManual(path) {
-        if (!confirm(t("removeManualConfirm", { path }))) return;
+        if (!await confirmAction(t("removeManualConfirm", { path }))) return;
         try {
           await api("/manual/remove", { path });
           logActivity(t("manualRemoved"));
@@ -1690,6 +2603,7 @@
       async function requestScan() {
         const resetAttempts = $("resetAttempts").checked;
         $("scanBtn").disabled = true;
+        $("consoleScan").disabled = true;
         try {
           const result = await api("/scan", { reset_attempts: resetAttempts });
           const message = scanQueueMessage(result, resetAttempts);
@@ -1701,6 +2615,7 @@
           toast(errorMessage(error), true);
         } finally {
           $("scanBtn").disabled = false;
+          $("consoleScan").disabled = false;
         }
       }
 
@@ -1728,7 +2643,7 @@
         }
       }
 
-      function titleRuntime(game, operation, mode) {
+      async function titleRuntime(game, operation, mode) {
         const payload = { title_id: game.title_id };
         if (mode) payload.mode = mode;
         const mountedGames = operation === "mount"
@@ -1736,7 +2651,7 @@
           : [];
         if (mountedGames.length) {
           const current = mountedGames.map((item) => gameLabel(item)).join(", ");
-          if (!confirm(t("remountConfirm", { current, target: gameLabel(game) }))) return;
+          if (!await confirmAction(t("remountConfirm", { current, target: gameLabel(game) }))) return;
         }
         const label = operation === "mount"
           ? t("mountedTitle", { title: game.title_id, mode: mode ? ` (${mode})` : "" })
@@ -1768,9 +2683,10 @@
         return button;
       }
 
-      function detailRow(grid, key, value) {
-        grid.append(node("div", "detail-key", key));
-        grid.append(node("div", "detail-value", value || "—"));
+      function detailRow(grid, key, value, hint = "") {
+        const item = node("div", "detail-value", value || "—");
+        if (hint) item.title = hint;
+        grid.append(node("div", "detail-key", key), item);
       }
 
       function renderDetails(game, focusRuntimeAction = false) {
@@ -1779,59 +2695,95 @@
         $("modalSubtitle").textContent = `${game.title_id} · ${(game.platform || t("unknown")).toUpperCase()}`;
         const details = $("details");
         replaceContent(details);
-        details.append(coverFor(game, true));
+        const sidebar = $("detailSidebar");
+        replaceContent(sidebar);
+        sidebar.append(coverFor(game, true));
         const content = node("div");
-        const badges = node("div", "badges");
+        const badges = $("modalBadges");
+        replaceContent(badges);
         badges.append(badge(game.source_type === "folder" ? t("folder") : game.source_type === "image" ? t("image") : game.source_type));
         if (game.image_type) badges.append(badge(game.image_type, "image"));
         if (game.mounted) badges.append(badge(t("mounted"), "live"));
-        content.append(badges);
         const grid = node("div", "detail-grid");
+        const sizes = node("section", "detail-sizes");
+        sizes.setAttribute("aria-label", t("detailSizes"));
+        const sizeItems = [
+          ["sourceSize", "size", "sourceSizeHint", "source"],
+          ["patchSize", "patch_size", "patchSizeHint", "patch"],
+          ["dlcSize", "dlc_size", "dlcSizeHint", "dlc"],
+          ["saveDataSize", "save_data_size", "saveDataSizeHint", "saves"],
+          ["downloadSize", "download_size", "", "download"]
+        ];
+        const measured = prefix => game[`${prefix}_status`] === 0 &&
+          Number.isFinite(game[`${prefix}_bytes`]) && game[`${prefix}_bytes`] >= 0
+            ? game[`${prefix}_bytes`] : null;
+        const values = sizeItems.map(([, prefix]) => measured(prefix));
+        const knownTotal = values.reduce((total, value) => total + (value || 0), 0);
+        const totalText = values.every(value => value !== null) ? formatBytes(knownTotal) : t("unavailable");
+        const total = node("div", "size-total");
+        total.append(node("span", "", t("totalSize")), node("strong", "", totalText));
+        const bar = node("div", "size-bar");
+        bar.setAttribute("aria-hidden", "true");
+        const legend = node("dl", "size-legend");
+        sizeItems.forEach(([label, , hint, color], index) => {
+          const value = values[index];
+          const item = node("div", `detail-size size-${color}`);
+          if (hint) item.title = t(hint);
+          item.append(node("dt", "", t(label)), node("dd", "", value === null ? t("unavailable") : formatBytes(value)));
+          legend.append(item);
+          if (knownTotal > 0 && value > 0) {
+            const segment = node("span", `size-segment size-${color}`);
+            segment.style.width = `${value / knownTotal * 100}%`;
+            segment.title = `${t(label)}: ${formatBytes(value)}`;
+            bar.append(segment);
+          }
+        });
+        sizes.append(total, bar, legend);
         detailRow(grid, t("contentId"), game.content_id);
         detailRow(grid, t("gameVersion"), game.version);
         detailRow(grid, t("source"), game.path);
         detailRow(grid, t("runtimePath"), game.runtime_path);
-        detailRow(grid, t("size"), game.size_status === 0 ? formatBytes(game.size_bytes) : t("sizeError", { status: game.size_status }));
-        detailRow(grid, "app.db", formatBytes(game.app_db_size_bytes));
+        detailRow(grid, t("systemSize"), formatBytes(game.app_db_size_bytes), t("systemSizeHint"));
         detailRow(grid, t("installed"), game.install_time);
         detailRow(grid, t("lastLaunch"), game.last_access_time);
-        content.append(grid);
+        content.append(sizes, grid);
         if (game.can_toggle_fakelib) {
-          const policy = node("div", "transfer-details");
-          const label = node("label", "fakelib-policy");
-          const select = node("select");
-          const defaultModeKey = { full: "fakelibFull", emulators: "fakelibEmulators", disabled: "fakelibDisabled" }[game.fakelib_default_mode || "full"];
-          for (const [value, key] of [["default", "fakelibDefault"], ["full", "fakelibFull"], ["emulators", "fakelibEmulators"], ["disabled", "fakelibDisabled"]]) {
-            const option = node("option", "", t(key, { mode: t(defaultModeKey) }));
-            option.value = value;
-            select.append(option);
-          }
-          select.value = game.fakelib_mode_override || game.fakelib_mode || (game.fakelib_enabled ? "full" : "disabled");
-          select.disabled = Boolean(state.fakelibSaving);
-          label.append(node("span", "subtle", t("fakelibMode")), select);
-          select.addEventListener("change", () => setGameFakelib(game, select));
-          const ignoreLabel = node("label", "check");
-          const ignore = node("input");
-          ignore.type = "checkbox";
-          ignore.checked = Boolean(game.ignore_global_fakelib);
-          ignore.disabled = select.disabled;
-          ignore.addEventListener("change", () => setGameFakelib(game, ignore));
-          ignoreLabel.append(ignore, node("span", "", t("ignoreGlobalFakelib")));
-          policy.append(label, ignoreLabel, node("div", "subtle", t("fakelibNextLaunch")));
+          const policy = node("section", "fakelib-controls");
+          policy.append(node("h3", "subtle", t("fakelibMode")));
+          const mode = game.fakelib_mode_override || game.fakelib_mode || (game.fakelib_enabled ? "full" : "disabled");
+          const modes = ["default", "full", "emulators", "disabled"];
+          const modeKeys = { default: "fakelibDefault", full: "fakelibFull", emulators: "fakelibEmulators", disabled: "fakelibDisabled" };
+          const defaultModeKey = modeKeys[game.fakelib_default_mode || "full"];
+          const modeButton = actionButton(t(modeKeys[mode], { mode: t(defaultModeKey) }), () =>
+            setGameFakelib(game, modeButton, { mode: modes[(modes.indexOf(mode) + 1) % modes.length] }), "fakelib-mode");
+          modeButton.value = mode;
+          modeButton.title = t("changeFakelibMode");
+          modeButton.setAttribute("aria-label", `${t("fakelibMode")}: ${modeButton.textContent}. ${t("changeFakelibMode")}`);
+          const ignore = actionButton("", () => setGameFakelib(game, ignore, { ignore_global_fakelib: !game.ignore_global_fakelib }), "fakelib-switch");
+          ignore.setAttribute("role", "switch");
+          ignore.setAttribute("aria-checked", String(Boolean(game.ignore_global_fakelib)));
+          ignore.append(node("span", "switch-label", t("ignoreGlobalFakelib")), node("span", "switch-track"));
+          for (const control of [modeButton, ignore]) control.disabled = Boolean(state.fakelibSaving);
+          policy.append(modeButton, ignore, node("p", "subtle fakelib-hint", t("fakelibNextLaunch")));
           if (game.fakelib_enabled && !game.fakelib_effective_enabled) {
-            policy.append(node("div", "subtle", t("fakelibGloballyDisabled")));
+            policy.append(node("p", "subtle fakelib-hint", t("fakelibGloballyDisabled")));
           }
-          content.append(policy);
+          sidebar.append(policy);
         }
         details.append(content);
 
         const actions = $("modalActions");
         replaceContent(actions);
         const runtimeAction = appendRuntimeActions(actions, game);
+        if (runtimeAction) runtimeAction.className += " primary";
+        const destructive = [];
         if (game.can_uninstall !== false) {
-          actions.append(actionButton(t("uninstall"), () => uninstallGame(game), "danger"));
+          destructive.push(actionButton(t("uninstall"), () => uninstallGame(game), "danger"));
         }
-        if (game.installed_pkg || game.can_manage_source === false) return;
+        if (game.installed_pkg || game.can_manage_source === false) {
+          actions.append(...destructive);
+          return;
+        }
         const storageBusy = Boolean(state.storageJob && state.storageJob.active);
         const copy = actionButton(t("copy"), () => storageOperation(game, "copy"));
         const move = actionButton(t("move"), () => storageOperation(game, "move"));
@@ -1851,7 +2803,7 @@
         }
         actions.append(copy, move);
         if (unpack) actions.append(unpack);
-        actions.append(remove);
+        actions.append(...destructive, remove);
         if (focusRuntimeAction && runtimeAction) runtimeAction.focus();
       }
 
@@ -1859,14 +2811,16 @@
         const request = {};
         state.detailRequest = request;
         state.selected = null;
+        replaceContent($("detailSidebar"));
         $("modal").hidden = false;
         $("modalTitle").textContent = t("loading");
         $("modalSubtitle").textContent = titleId;
+        replaceContent($("modalBadges"));
         replaceContent($("details"), node("div", "empty", t("loadingSource")));
         replaceContent($("modalActions"));
         try {
           const game = await api("/games/info", { title_id: titleId });
-          if (state.detailRequest === request) renderDetails(game, true);
+          if (state.detailRequest === request) renderDetails(game);
         } catch (error) {
           if (state.detailRequest === request) {
             replaceContent($("details"), node("div", "empty", errorMessage(error)));
@@ -1888,19 +2842,29 @@
       function renderDestinationPicker() {
         const request = state.destinationRequest;
         if (!request) return;
-        $("destinationTitle").textContent = t(request.operation === "copy"
-          ? "chooseCopyDestination"
-          : "chooseMoveDestination");
+        $("destinationTitle").textContent = t({ copy: "chooseCopyDestination", move: "chooseMoveDestination", unpack: "chooseUnpackDestination" }[request.operation]);
         const choices = $("destinationChoices");
         replaceContent(choices);
-        if (!state.storageDestinations.length) {
-          choices.append(node("span", "subtle", t("storageNotFound")));
+        const fromUsb = /^\/mnt\/usb[0-7](?:\/|$)/.test(request.game.path || "");
+        const priority = path => path === "/data/homebrew" ? 0 : path === "/mnt/ext1/homebrew" ? 1 : 2;
+        const normalize = path => String(path || "").replace(/\/+/g, "/").replace(/\/+$/, "") || "/";
+        const source = normalize(request.game.path);
+        const parent = source.slice(0, source.lastIndexOf("/")) || "/";
+        const transfer = request.operation === "copy" || request.operation === "move";
+        const destinations = state.storageDestinations.filter(destination =>
+          !transfer || !request.game.path || normalize(destination.path) !== parent
+        );
+        if (!destinations.length) {
+          choices.append(node("span", "subtle", t(state.storageDestinations.length ? "noOtherDestinations" : "storageNotFound")));
         }
-        state.storageDestinations.forEach((destination) => {
-          choices.append(actionButton(
+        if (fromUsb) destinations.sort((left, right) => priority(left.path) - priority(right.path));
+        destinations.forEach((destination) => {
+          const button = actionButton(
             `${destination.path} · ${t("freeSpace", { size: formatBytes(Number(destination.available_bytes)) })}`,
             () => chooseStorageDestination(destination.path)
-          ));
+          );
+          button.setAttribute("data-destination", destination.path);
+          choices.append(button);
         });
       }
 
@@ -1910,6 +2874,8 @@
           return;
         }
         state.destinationRequest = { game, operation };
+        $("unpackOption").hidden = operation !== "unpack";
+        $("unpackDeleteSource").checked = false;
         $("customDestination").value = "";
         renderDestinationPicker();
         $("destinationModal").hidden = false;
@@ -1919,11 +2885,15 @@
         const request = state.destinationRequest;
         const path = String(destination || "").trim();
         if (!request || !path) return;
+        const deleteSource = request.operation === "unpack" && $("unpackDeleteSource").checked;
+        if (deleteSource && !await confirmAction(t("unpackDeleteConfirm"))) return;
         closeDestinationPicker();
-        await startStorageJob(request.game, request.operation, {
+        const payload = {
           title_id: request.game.title_id,
           destination_dir: path
-        });
+        };
+        if (request.operation === "unpack") payload.delete_source = deleteSource;
+        await startStorageJob(request.game, request.operation, payload);
       }
 
       function submitCustomDestination(event) {
@@ -1931,19 +2901,8 @@
         chooseStorageDestination($("customDestination").value);
       }
 
-      async function unpackImage(game) {
-        if (state.storageJob && state.storageJob.active) {
-          toast(t("storageBusy"), true);
-          return;
-        }
-        const destination = prompt(t("unpackDestination", { title: game.title_id }), "/mnt/usb0");
-        if (!destination) return;
-        const deleteSourceAfter = confirm(t("unpackDeleteConfirm"));
-        await startStorageJob(game, "unpack", {
-          title_id: game.title_id,
-          destination_dir: destination,
-          delete_source: deleteSourceAfter
-        });
+      function unpackImage(game) {
+        storageOperation(game, "unpack");
       }
 
       async function startStorageJob(game, operation, payload) {
@@ -1972,13 +2931,10 @@
         }
       }
 
-      async function setGameFakelib(game, select) {
+      async function setGameFakelib(game, trigger, setting) {
         if (state.fakelibSaving) return;
-        const updateGlobal = select.type === "checkbox";
-        const previousMode = game.fakelib_mode_override || game.fakelib_mode || (game.fakelib_enabled ? "full" : "disabled");
-        const previousGlobal = Boolean(game.ignore_global_fakelib);
-        const setting = updateGlobal ? { ignore_global_fakelib: select.checked } : { mode: select.value };
-        const controls = select.closest(".transfer-details").querySelectorAll("select, input");
+        const controls = trigger.closest(".fakelib-controls").querySelectorAll("button");
+        const focusedIndex = Array.from(controls).indexOf(document.activeElement);
         state.fakelibSaving = true;
         controls.forEach(control => { control.disabled = true; });
         try {
@@ -2000,19 +2956,23 @@
           logActivity(message);
           toast(message);
         } catch (error) {
-          if (updateGlobal) select.checked = previousGlobal;
-          else select.value = previousMode;
           logActivity(errorMessage(error), "error");
           toast(errorMessage(error), true);
         } finally {
+          const restoreFocus = focusedIndex >= 0 && (document.activeElement === document.body || Array.from(controls).includes(document.activeElement));
           state.fakelibSaving = false;
           controls.forEach(control => { control.disabled = false; });
-          if (state.selected && !$("modal").hidden) renderDetails(state.selected);
+          if (state.selected && !$("modal").hidden) {
+            renderDetails(state.selected);
+            if (restoreFocus && state.selected.title_id === game.title_id) {
+              focusControl($("detailSidebar").querySelectorAll(".fakelib-controls button")[focusedIndex]);
+            }
+          }
         }
       }
 
-      function uninstallGame(game) {
-        if (!confirm(t(game.installed_pkg ? "uninstallPkgConfirm" : "uninstallConfirm", { game: gameLabel(game) }))) return;
+      async function uninstallGame(game) {
+        if (!await confirmAction(t(game.installed_pkg ? "uninstallPkgConfirm" : "uninstallConfirm", { game: gameLabel(game) }))) return;
         runMutation(t("uninstallAccepted", { title: game.title_id }), () => api("/games/uninstall", { title_id: game.title_id }), true);
       }
 
@@ -2021,22 +2981,416 @@
           toast(t("storageBusy"), true);
           return;
         }
-        if (!confirm(t("deleteConfirm", { game: gameLabel(game) }))) return;
+        if (!await confirmAction(t("deleteConfirm", { game: gameLabel(game) }))) return;
         await startStorageJob(game, "delete", { title_id: game.title_id, confirm: true });
       }
 
+      function confirmAction(message) {
+        if (confirmResolve) return Promise.resolve(false);
+        $("confirmMessage").textContent = message;
+        $("confirmModal").hidden = false;
+        return new Promise(resolve => { confirmResolve = resolve; });
+      }
+
+      function finishConfirmation(accepted) {
+        const resolve = confirmResolve;
+        confirmResolve = null;
+        $("confirmModal").hidden = true;
+        if (resolve) resolve(accepted);
+      }
+
+      function activeDialog() {
+        return ["confirmModal", "languageModal", "destinationModal", "logModal", "modal"]
+          .map(id => $(id)).find(item => item && !item.hidden) || null;
+      }
+
+      function focusableControls(root = activeDialog() || document) {
+        return Array.from(root.querySelectorAll("button, input, select, [tabindex]"))
+          .filter(item => item.id !== "details" && !item.disabled && !item.closest("[hidden]") && item.getClientRects().length);
+      }
+
+      function focusControl(item) {
+        if (!item) return;
+        const dialog = activeDialog();
+        const pageX = window.scrollX, pageY = window.scrollY;
+        try { item.focus({ preventScroll: true }); } catch (_) { item.focus(); }
+        const list = item.closest(".console-list");
+        if (list) {
+          const box = item.getBoundingClientRect(), bounds = list.getBoundingClientRect();
+          if (box.bottom > bounds.bottom - 8) list.scrollTop += box.bottom - bounds.bottom + 8;
+          else if (box.top < bounds.top + 8) list.scrollTop += box.top - bounds.top - 8;
+        }
+        if (dialog && dialog.contains(item)) {
+          // Older WebKit scrolls overflow:hidden ancestors when focusing controls.
+          // Keep the dialog frame still and reveal controls only inside its body.
+          const card = item.closest(".modal-card");
+          if (card) { card.scrollTop = 0; card.scrollLeft = 0; }
+          dialog.scrollTop = 0;
+          if (window.scrollX !== pageX || window.scrollY !== pageY) window.scrollTo(pageX, pageY);
+          const pane = item.closest("#detailSidebar, #details, #logContent, #destinationChoices, #languageChoices");
+          if (pane && pane !== item) {
+            const box = item.getBoundingClientRect(), bounds = pane.getBoundingClientRect();
+            if (box.bottom > bounds.bottom - 12) pane.scrollTop += box.bottom - bounds.bottom + 12;
+            else if (box.top < bounds.top + 12) pane.scrollTop += box.top - bounds.top - 12;
+          }
+          return;
+        }
+        const box = (item.closest(".game-card") || item).getBoundingClientRect();
+        let bottom = window.innerHeight - $("controlBar").offsetHeight - 22;
+        if (!$("transferPopup").hidden && !$("transferPopup").contains(item)) {
+          const popup = $("transferPopup").getBoundingClientRect();
+          if (box.right > popup.left && box.left < popup.right) bottom = Math.min(bottom, popup.top - 22);
+        }
+        if (box.bottom > bottom) window.scrollBy(0, box.bottom - bottom);
+        else if (box.top < 22) window.scrollBy(0, box.top - 22);
+      }
+
+      function selectConsolePane(section) {
+        const pane = document.querySelector(`[data-console-pane="${section}"]`);
+        if (!pane) return;
+        for (const item of document.querySelectorAll("[data-console-pane]")) item.hidden = item !== pane;
+        for (const button of document.querySelectorAll("[data-console-section]")) {
+          const selected = button.dataset.consoleSection === section;
+          button.classList.toggle("active", selected);
+          button.setAttribute("aria-pressed", String(selected));
+        }
+        $("consoleSave").hidden = section === "overview";
+        if (!$("consoleView").hidden) window.scrollTo(0, 0);
+      }
+
+      function switchView(view) {
+        navigation.view = view;
+        const library = view === "library";
+        document.querySelector(".library-section").hidden = !library;
+        document.querySelector(".toolbar").hidden = !library;
+        document.querySelector(".stats").hidden = !library;
+        $("consoleView").hidden = library;
+        for (const [id, selected] of [["libraryTab", library], ["consoleTab", !library]]) {
+          $(id).classList.toggle("active", selected);
+          $(id).setAttribute("aria-pressed", String(selected));
+        }
+        window.scrollTo(0, 0);
+        focusControl($(library ? "libraryTab" : "consoleTab"));
+      }
+
+      function navigate(direction) {
+        navigation.focusNavigation = true;
+        const controls = focusableControls();
+        const current = document.activeElement;
+        if (!controls.includes(current)) {
+          focusControl(controls.find(item => item.classList.contains("game-open")) || controls[0]);
+          return;
+        }
+        if (current.id === "logContent" && (direction === "up" || direction === "down")) {
+          const canScroll = direction === "down"
+            ? current.scrollTop + current.clientHeight < current.scrollHeight - 2 : current.scrollTop > 0;
+          if (canScroll) {
+            current.scrollTop += (direction === "down" ? 1 : -1) * Math.max(80, current.clientHeight * .6);
+            return;
+          }
+        }
+        if (current.tagName === "SELECT" && (direction === "left" || direction === "right")) {
+          const step = direction === "right" ? 1 : -1;
+          const index = Math.max(0, Math.min(current.options.length - 1, current.selectedIndex + step));
+          if (index !== current.selectedIndex) {
+            current.selectedIndex = index;
+            current.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+          return;
+        }
+        const rect = current.getBoundingClientRect();
+        const horizontal = direction === "left" || direction === "right";
+        const sign = direction === "left" || direction === "up" ? -1 : 1;
+        let best = null, bestScore = Infinity;
+        for (const item of controls) {
+          if (item === current) continue;
+          const box = item.getBoundingClientRect();
+          const dx = (box.left + box.right - rect.left - rect.right) / 2;
+          const dy = (box.top + box.bottom - rect.top - rect.bottom) / 2;
+          const forward = (horizontal ? dx : dy) * sign;
+          if (forward < 4) continue;
+          const overlap = horizontal
+            ? box.bottom > rect.top + 4 && box.top < rect.bottom - 4
+            : box.right > rect.left + 4 && box.left < rect.right - 4;
+          const sideways = Math.abs(horizontal ? dy : dx);
+          const score = forward + sideways * 3 + (overlap ? 0 : 10000);
+          if (score < bestScore) { best = item; bestScore = score; }
+        }
+        focusControl(best);
+      }
+
+      function closeLanguagePicker() {
+        $("languageModal").hidden = true;
+        $("language").setAttribute("aria-expanded", "false");
+      }
+
+      function selectLanguage(language) {
+        if (!supportedLanguages.includes(language)) return;
+        if (language !== currentLanguage) {
+          applyLanguage(language, true);
+          renderStats();
+          renderGames();
+          if (state.storageJob) renderStorageJob(state.storageJob);
+          renderScanPaths();
+          refreshStorage();
+          refreshManual();
+        }
+        closeLanguagePicker();
+      }
+
+      function goBack() {
+        if (!$("confirmModal").hidden) finishConfirmation(false);
+        else if (!$("languageModal").hidden) closeLanguagePicker();
+        else if (!$("destinationModal").hidden) closeDestinationPicker();
+        else if (!$("logModal").hidden) closeDebugLog();
+        else if (!$("modal").hidden) closeModal();
+        else {
+          if (navigation.view !== "library") switchView("library");
+          const selected = Array.from($("games").querySelectorAll(".game-open"))
+            .find(item => item.getAttribute("data-title-id") === navigation.lastGame);
+          focusControl(selected || $("libraryTab"));
+        }
+      }
+
+      function syncDialogFocus() {
+        const dialog = activeDialog();
+        if (playStationBrowser) {
+          if (dialog) dialog.inert = false;
+          else {
+            document.querySelector(".shell").inert = false;
+            $("transferPopup").inert = false;
+          }
+        }
+        while (navigation.dialogs.length && navigation.dialogs[navigation.dialogs.length - 1].dialog.hidden) {
+          const previous = navigation.dialogs.pop();
+          if (previous.trigger && document.contains(previous.trigger) && !previous.trigger.closest("[hidden]")) focusControl(previous.trigger);
+          else if (!dialog) {
+            const buttons = Array.from($("games").querySelectorAll(".game-open"));
+            focusControl(buttons.find(item => item.getAttribute("data-title-id") === navigation.lastGame) || $("libraryTab"));
+          }
+        }
+        if (dialog && !navigation.dialogs.some(entry => entry.dialog === dialog)) {
+          navigation.dialogs.push({ dialog, trigger: document.activeElement });
+          focusControl(dialog.querySelector("[data-cancel], .language-choice[aria-pressed=\"true\"]") || dialog.querySelector(".close") || focusableControls(dialog)[0]);
+        }
+        for (const item of document.querySelectorAll(".modal")) {
+          if (item.hidden || item === dialog) item.removeAttribute("aria-hidden");
+          else item.setAttribute("aria-hidden", "true");
+        }
+        document.querySelector(".shell").setAttribute("aria-hidden", String(Boolean(dialog)));
+        if (playStationBrowser) {
+          document.querySelector(".shell").inert = Boolean(dialog);
+          $("transferPopup").inert = Boolean(dialog);
+          document.querySelectorAll(".modal").forEach(item => { item.inert = item !== dialog; });
+        }
+        document.body.classList.toggle("dialog-open", Boolean(dialog));
+      }
+
+      function handleNavigationKey(event) {
+        navigation.keyboardAt = performance.now();
+        const dialog = activeDialog();
+        const aliases = { Left: "ArrowLeft", Right: "ArrowRight", Up: "ArrowUp", Down: "ArrowDown", Esc: "Escape", Spacebar: " " };
+        const legacyKeys = { 9: "Tab", 13: "Enter", 27: "Escape", 32: " ", 33: "PageUp", 34: "PageDown", 37: "ArrowLeft", 38: "ArrowUp", 39: "ArrowRight", 40: "ArrowDown" };
+        const key = aliases[event.key] || (event.key && event.key !== "Unidentified" ? event.key : legacyKeys[event.keyCode]);
+        if (key === "Escape" || key === "BrowserBack") {
+          event.preventDefault();
+          goBack();
+          return;
+        }
+        // PlayStation moves its real browser cursor after an unconsumed arrow
+        // event. Preventing it moves only DOM focus and leaves Cross aimed at
+        // the old position, where a synthetic click cannot start native IME.
+        if (playStationBrowser && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Enter", " ", "Tab"].includes(key)) return;
+        if (key === "Tab" && dialog) {
+          navigation.focusNavigation = true;
+          const controls = focusableControls(dialog).filter(item => item.tabIndex >= 0);
+          const index = controls.indexOf(document.activeElement);
+          event.preventDefault();
+          focusControl(controls[(index + (event.shiftKey ? -1 : 1) + controls.length) % controls.length]);
+          return;
+        }
+        if (event.altKey || event.ctrlKey || event.metaKey) return;
+        if ((key === "Enter" || key === " ") && (document.activeElement.tagName === "BUTTON" || document.activeElement.matches('input[type="checkbox"]'))) {
+          event.preventDefault();
+          if (!event.repeat && !document.activeElement.disabled) {
+            navigation.activatedAt = performance.now();
+            document.activeElement.click();
+          }
+          return;
+        }
+        if (dialog === $("modal") && (key === "PageUp" || key === "PageDown")) {
+          event.preventDefault();
+          const pane = document.activeElement.closest("#detailSidebar") || $("details");
+          pane.scrollTop += (key === "PageDown" ? 1 : -1) * pane.clientHeight * .65;
+          return;
+        }
+        const direction = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down" }[key];
+        const editing = document.activeElement.tagName === "INPUT" && !["checkbox", "radio"].includes(document.activeElement.type);
+        if (direction && !(editing && (direction === "left" || direction === "right"))) {
+          event.preventDefault();
+          navigate(direction);
+        }
+      }
+
+      function pollGamepad(now) {
+        navigation.padFrame = 0;
+        if (playStationBrowser || document.hidden || !navigator.getGamepads) return;
+        let pads;
+        try { pads = Array.from(navigator.getGamepads()).filter(pad => pad && pad.connected && pad.mapping === "standard"); }
+        catch (_) { return; }
+        if (!pads.length) { navigation.padCommand = ""; return; }
+        const pad = pads[0];
+        if (activeDialog() === $("modal") && Math.abs(pad.axes[3] || 0) > .55 && now >= navigation.padScrollAt) {
+          const pane = document.activeElement.closest("#detailSidebar") || $("details");
+          pane.scrollTop += pad.axes[3] * 80;
+          navigation.padScrollAt = now + 80;
+        }
+        const pressed = index => pad.buttons[index] && pad.buttons[index].pressed;
+        let command = "";
+        if (pressed(1)) command = "back";
+        else if (pressed(0)) command = "accept";
+        else if (pressed(12) || pad.axes[1] < -.55) command = "up";
+        else if (pressed(13) || pad.axes[1] > .55) command = "down";
+        else if (pressed(14) || pad.axes[0] < -.55) command = "left";
+        else if (pressed(15) || pad.axes[0] > .55) command = "right";
+        const changed = command !== navigation.padCommand;
+        if (command && (changed || (now >= navigation.padRepeatAt && command !== "accept" && command !== "back"))) {
+          if (now - navigation.keyboardAt > 100) {
+            if (command === "back") goBack();
+            else if (command === "accept") {
+              const target = document.activeElement;
+              if (now - navigation.activatedAt >= 150) {
+                if (focusableControls().includes(target)) {
+                  if (!isNativeEditor(target)) {
+                    navigation.activatedAt = now;
+                    target.click();
+                  }
+                } else navigate("down");
+              }
+            } else navigate(command);
+          }
+          navigation.padRepeatAt = now + (changed ? 360 : 140);
+        }
+        navigation.padCommand = command;
+        navigation.padFrame = requestAnimationFrame(pollGamepad);
+      }
+
+      function startGamepad() {
+        if (!playStationBrowser && !navigation.padFrame && !document.hidden && navigator.getGamepads)
+          navigation.padFrame = requestAnimationFrame(pollGamepad);
+      }
+
+      function isNativeEditor(target) {
+        return target && (target.tagName === "SELECT" || target.tagName === "TEXTAREA" ||
+          (target.tagName === "INPUT" && !["checkbox", "radio"].includes(target.type)));
+      }
+
+      function activateNativeEditor(target) {
+        const start = target.selectionStart, end = target.selectionEnd;
+        // Refocus inside the trusted Cross gesture, where WebKit can open its IME.
+        // A synthetic click does not have the native editor's default action.
+        target.blur();
+        focusControl(target);
+        if (typeof start === "number" && typeof end === "number") target.setSelectionRange(start, end);
+        if (target.tagName === "SELECT" && typeof target.showPicker === "function") {
+          try { target.showPicker(); } catch (_) { /* Older browsers retain native focus/arrow controls. */ }
+        }
+      }
+
+      function focusedControlForClick(event) {
+        if (playStationBrowser) return null;
+        if (!event.isTrusted || event.button !== 0 || !navigation.focusNavigation) return null;
+        // Keyboard form submission already targets its submit button.
+        if (event.type === "click" && event.detail === 0) return null;
+        const target = navigation.focusTarget;
+        if (!target || (target.tagName !== "BUTTON" && !isNativeEditor(target) && !target.matches('input[type="checkbox"]'))) return null;
+        // A click already aimed at this editor must keep its trusted default action.
+        if (isNativeEditor(target) && (target === event.target || target.contains(event.target))) return null;
+        const root = activeDialog() || document;
+        return root.contains(target) && !target.closest("[hidden]") && target.getClientRects().length ? target : null;
+      }
+
+      $("libraryTab").addEventListener("click", () => switchView("library"));
+      $("confirmCancel").addEventListener("click", () => finishConfirmation(false));
+      $("confirmAccept").addEventListener("click", () => finishConfirmation(true));
+      $("confirmModal").addEventListener("click", event => { if (event.target === $("confirmModal")) finishConfirmation(false); });
+      $("consoleTab").addEventListener("click", () => switchView("console"));
+      document.querySelectorAll("[data-console-section]").forEach(button => {
+        button.addEventListener("click", () => selectConsolePane(button.dataset.consoleSection));
+      });
+      $("consoleScan").addEventListener("click", requestScan);
+      if (playStationBrowser) {
+        document.addEventListener("mouseover", event => {
+          const target = event.target.closest("button, input, select, textarea");
+          const root = activeDialog() || document;
+          if (!target || target.disabled || target.closest("[hidden]") || !root.contains(target) || document.activeElement === target) return;
+          // Follow the native cursor for highlighting without moving it or
+          // suppressing the trusted click that opens the system keyboard.
+          try { target.focus({ preventScroll: true }); } catch (_) { target.focus(); }
+        });
+      }
+      document.addEventListener("mousemove", event => {
+        if (navigation.pointerX === null || Math.abs(event.clientX - navigation.pointerX) > 2 || Math.abs(event.clientY - navigation.pointerY) > 2) navigation.focusNavigation = false;
+        navigation.pointerX = event.clientX;
+        navigation.pointerY = event.clientY;
+      });
+      document.addEventListener("mousedown", event => {
+        // PS5 Cross clicks at the browser cursor even after D-pad focus moved.
+        if (focusedControlForClick(event)) event.preventDefault();
+      }, true);
+      document.addEventListener("click", event => {
+        const target = focusedControlForClick(event);
+        if (!target) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        const now = performance.now();
+        if (now - navigation.activatedAt < 150) return;
+        navigation.activatedAt = now;
+        if (isNativeEditor(target)) activateNativeEditor(target);
+        else target.click();
+      }, true);
+      document.addEventListener("focusin", event => {
+        const dialog = activeDialog();
+        if (dialog && !dialog.contains(event.target)) {
+          focusControl(focusableControls(dialog)[0]);
+          return;
+        }
+        if (["BUTTON", "INPUT", "SELECT", "TEXTAREA"].includes(event.target.tagName)) navigation.focusTarget = event.target;
+        const card = event.target.closest(".game-card");
+        document.querySelectorAll(".game-card.is-focused").forEach(item => item.classList.remove("is-focused"));
+        if (card) {
+          card.classList.add("is-focused");
+          navigation.lastGame = event.target.getAttribute("data-title-id");
+          $("games").querySelectorAll(".game-open").forEach(item => { item.tabIndex = playStationBrowser || item === event.target ? 0 : -1; });
+        }
+      });
+      const dialogObserver = new MutationObserver(syncDialogFocus);
+      document.querySelectorAll(".modal").forEach(dialog => dialogObserver.observe(dialog, { attributes: true, attributeFilter: ["hidden"] }));
+      document.addEventListener("keydown", handleNavigationKey);
+      window.addEventListener("gamepadconnected", startGamepad);
+      document.addEventListener("visibilitychange", () => {
+        if (navigation.padFrame) cancelAnimationFrame(navigation.padFrame);
+        navigation.padFrame = 0;
+        navigation.padCommand = "";
+        startGamepad();
+      });
+      window.addEventListener("pagehide", () => {
+        if (navigation.padFrame) cancelAnimationFrame(navigation.padFrame);
+        navigation.padFrame = 0;
+      });
+      window.addEventListener("pageshow", startGamepad);
+      startGamepad();
+
       $("search").addEventListener("input", renderGames);
       $("filter").addEventListener("change", renderGames);
-      $("language").addEventListener("change", () => {
-        applyLanguage($("language").value, true);
-        renderStats();
-        renderGames();
-        if (state.storageJob) renderStorageJob(state.storageJob);
-        if (state.selected) renderDetails(state.selected);
-        if (!$("destinationModal").hidden) renderDestinationPicker();
-        renderScanPaths();
-        refreshStorage();
-        refreshManual();
+      $("language").addEventListener("click", () => {
+        $("languageModal").hidden = false;
+        $("language").setAttribute("aria-expanded", "true");
+      });
+      $("closeLanguage").addEventListener("click", closeLanguagePicker);
+      $("languageModal").addEventListener("click", event => { if (event.target === $("languageModal")) closeLanguagePicker(); });
+      document.querySelectorAll(".language-choice").forEach(choice => {
+        choice.addEventListener("click", () => selectLanguage(choice.dataset.language));
       });
       $("includeSize").addEventListener("change", refreshLibrary);
       $("refreshBtn").addEventListener("click", refreshAll);
@@ -2050,18 +3404,13 @@
       $("viewKernelLog").addEventListener("click", showKernelLog);
       $("refreshLog").addEventListener("click", refreshLog);
       $("closeLog").addEventListener("click", closeDebugLog);
+      $("copyLog").addEventListener("click", copyLog);
       $("logModal").addEventListener("click", (event) => { if (event.target === $("logModal")) closeDebugLog(); });
       $("destinationForm").addEventListener("submit", submitCustomDestination);
       $("closeDestination").addEventListener("click", closeDestinationPicker);
       $("destinationModal").addEventListener("click", (event) => { if (event.target === $("destinationModal")) closeDestinationPicker(); });
       $("closeModal").addEventListener("click", closeModal);
       $("modal").addEventListener("click", (event) => { if (event.target === $("modal")) closeModal(); });
-      document.addEventListener("keydown", (event) => {
-        if (event.key !== "Escape") return;
-        if (!$("destinationModal").hidden) closeDestinationPicker();
-        else if (!$("logModal").hidden) closeDebugLog();
-        else if (!$("modal").hidden) closeModal();
-      });
 
       for (let temperature = 50; temperature <= 91; temperature += 1) {
         const option = node("option", "", `${temperature} °C`);
