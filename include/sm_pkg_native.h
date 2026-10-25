@@ -43,5 +43,8 @@ _Static_assert(offsetof(sm_pkg_native_status_t, local_copy_percent) == 0x2c0, "A
 int sceAppInstUtilInstallByPackage(sm_pkg_native_metadata_t *metadata,
     sm_pkg_native_info_t *info, sm_pkg_native_playgo_t *playgo);
 int sceAppInstUtilGetInstallStatus(const char *content_id, sm_pkg_native_status_t *status);
+int sceAppInstUtilGetPatchInstallStatus(const char *content_id, sm_pkg_native_status_t *status);
+// This API writes one 32-bit installed flag (1 = installed), not a status struct.
+int sceAppInstUtilGetAddcontInstalledStatus(const char *content_id, int *installed);
 int sceAppInstUtilCancelInstall(const char *content_id);
 #endif

@@ -4074,9 +4074,14 @@ static void *package_install_thread(void *opaque) {
     while (!status) {
       if (package_install_cancelled(&ctx)) { status = ctx.failure ? ctx.failure : ECANCELED; break; }
       memset(&native_status, 0, sizeof(native_status));
-      native_result = sceAppInstUtilGetInstallStatus(submission.info.content_id, &native_status);
+      // Patches share the base content ID. The general status reports the
+      // already playable base and can close our source before the patch reads it.
+      native_result = info.pkg_kind == PKG_KIND_PATCH
+          ? sceAppInstUtilGetPatchInstallStatus(submission.info.content_id, &native_status)
+          : sceAppInstUtilGetInstallStatus(submission.info.content_id, &native_status);
       native_status.status[sizeof(native_status.status) - 1] = 0;
-      if (native_result || native_status.error.code || !strcmp(native_status.status, "error") || !strcmp(native_status.status, "none")) { status = EIO; break; }
+      if (native_result || native_status.error.code || !strcmp(native_status.status, "error") ||
+          (info.pkg_kind != PKG_KIND_DLC && !strcmp(native_status.status, "none"))) { status = EIO; break; }
       if (native_status.total > 0 && native_status.total <= INT64_MAX) {
         if (!ctx.native_progress) ctx.sample_us = 0;
         ctx.native_progress = true;
@@ -4087,8 +4092,15 @@ static void *package_install_thread(void *opaque) {
       bool downloaded = native_status.total > 0 && native_status.total <= INT64_MAX
           ? native_status.downloaded >= native_status.total
           : !ctx.native_progress && sm_pkg_server_complete(ctx.server);
-      if (!strcmp(native_status.status, "completed") ||
-          (!strcmp(native_status.status, "playable") && downloaded && copied)) break;
+      bool completed = !strcmp(native_status.status, "completed") ||
+          (!strcmp(native_status.status, "playable") && downloaded && copied);
+      if (info.pkg_kind == PKG_KIND_DLC) {
+        int installed = 0;
+        native_result = sceAppInstUtilGetAddcontInstalledStatus(submission.info.content_id, &installed);
+        if (native_result) { status = EIO; break; }
+        completed = installed == 1;
+      }
+      if (completed) break;
       for (int i = 0; i < 10; ++i) {
         if (package_install_cancelled(&ctx)) { status = ctx.failure ? ctx.failure : ECANCELED; break; }
         usleep(100000);

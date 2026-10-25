@@ -520,8 +520,16 @@ Both modes publish `operation=install` and `state=preparing|installing` through
 `/api/v1/games/storage/status` and use its existing cancellation endpoint.
 The popup shows the package name, bytes, speed, elapsed time and system state.
 Progress uses AppInstUtil downloaded/total counters when available, with HTTP
-coverage as a fallback. Speed is sampled from byte deltas once per second and
-becomes zero when progress stops. System completion does not require fetching
+coverage as a fallback. Patches use `sceAppInstUtilGetPatchInstallStatus`: the
+general install status can report the already playable base game with the same
+content ID. DLC completion requires the installed flag from
+`sceAppInstUtilGetAddcontInstalledStatus`; general status still supplies its
+download counters and errors. DLC without a general download record still uses
+its own installed flag. `sceAppInstUtilGetInstallProgress` and
+`sceAppInstUtilGetInstallProgressInfo` are not used for patch completion: on
+the tested 9.40 console both kept reporting 100% for the installed base while
+its patch was still transferring. Speed is sampled from byte deltas once per
+second and becomes zero when progress stops. System completion does not require fetching
 PKG padding or unused ranges. An early playable state only completes the job
 after all system bytes and any local copy are finished. Cancellation calls
 AppInstUtil CancelInstall and retires the stream and its connections. Sleep
