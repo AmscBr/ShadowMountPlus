@@ -7,7 +7,7 @@ info:
     authentication and should only be exposed on a trusted network.
 servers:
   - url: http://127.0.0.1:10101
-    description: Default loopback endpoint on the PS5
+    description: Local endpoint on the PS5; the default listener also accepts network connections
   - url: http://{address}:{port}
     description: Configured network endpoint
     variables:
@@ -1675,6 +1675,7 @@ components:
           description: Omission preserves the current value for compatibility with older web clients.
         allow_lan_access:
           type: boolean
+          default: true
           description: Bind to 0.0.0.0 when true or 127.0.0.1 when false.
         fan_target_temperature:
           type: integer

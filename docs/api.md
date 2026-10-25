@@ -3,10 +3,11 @@
 The machine-readable OpenAPI 3.1 description is available in
 [`openapi.yaml`](openapi.yaml).
 
-ShadowMount exposes its public API over HTTP/TCP. The default endpoint is
-`127.0.0.1:10101`, so only software running on the PS5 can connect. Set
-`api_bind_address=0.0.0.0` to allow clients on the network, or select a
-specific PS5 IPv4 address. `api_port` accepts values from 1 through 65535.
+ShadowMount exposes its public API over HTTP/TCP. By default it listens on
+`0.0.0.0:10101`, allowing clients on the local network to connect through the
+PS5's IPv4 address. Set `api_bind_address=127.0.0.1` for PS5-only access, or
+select a specific PS5 IPv4 address. Existing explicit settings are preserved.
+`api_port` accepts values from 1 through 65535.
 These settings are applied on runtime config reload. `api_enabled` defaults to
 `1`; setting it to `0` stops the listener and joins the libmicrohttpd service
 and worker threads. Re-enabling it restarts the HTTP service without restarting

@@ -2343,8 +2343,7 @@ static void handle_settings(struct MHD_Connection *connection) {
   if (!add_json_value(response, "scan_paths", scan_paths) ||
       !add_json_bool(response, "api_enabled", cfg.api_enabled) ||
       !add_json_bool(response, "allow_lan_access",
-                     strcmp(cfg.api_bind_address,
-                            SM_API_DEFAULT_BIND_ADDRESS) != 0) ||
+                     strncmp(cfg.api_bind_address, "127.", 4) != 0) ||
       !add_json_bool(response, "debug", cfg.debug_enabled) ||
       !add_json_bool(response, "quiet_mode", cfg.quiet_mode) ||
       !add_json_bool(response, "update_emulators",

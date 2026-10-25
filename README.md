@@ -64,7 +64,7 @@ Supported keys (all optional):
 - `debug=1|0` (`1` enables `log_debug` output to console + `/data/shadowmount/debug.log`; default is `1`)
 - `quiet_mode=1|0` (`1` suppresses plain informational popups but keeps rich toasts; default is `0`)
 - `language=auto|<locale>` (notification language; `auto` uses the console system language, e.g. `en-US`, `ru-RU`; default: `auto`)
-- `api_bind_address=<IPv4>` (HTTP/JSON API bind address; default: `127.0.0.1`; use `0.0.0.0` for network access)
+- `api_bind_address=<IPv4>` (HTTP/JSON API bind address; default: `0.0.0.0` for network access; use `127.0.0.1` for PS5-only access)
 - `api_port=<1..65535>` (HTTP/JSON API port; default: `10101`)
 - `mount_read_only=1|0` (default: `1`)
 - `force_mount=1|0` (mounting even damaged file systems; default: `0`)
