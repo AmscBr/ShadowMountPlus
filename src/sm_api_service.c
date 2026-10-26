@@ -56,6 +56,7 @@
 #define SM_API_STORAGE_STOP_LOG_SECONDS 5
 #define SM_API_LOG_DEFAULT_BYTES (128u * 1024u)
 #define SM_API_LOG_MAX_BYTES (256u * 1024u)
+#define SM_API_PKG_START_TIMEOUT_US (30ull * 1000000ull)
 
 extern unsigned char web_index_html[];
 extern unsigned int web_index_html_len;
@@ -4237,6 +4238,15 @@ static bool package_install_cancelled(void *opaque) {
   return cancelled || ctx->failure;
 }
 
+static int wait_for_package_poll(pkg_job_context_t *ctx) {
+  for (int i = 0; i < 10; ++i) {
+    if (package_install_cancelled(ctx))
+      return ctx->failure ? ctx->failure : ECANCELED;
+    usleep(100000);
+  }
+  return 0;
+}
+
 typedef struct {
   atomic_bool done;
   int result;
@@ -4276,6 +4286,7 @@ static void *package_install_thread(void *opaque) {
     bool submitted = false;
     pthread_t submitter;
     char uri[3072];
+    const char *phase = "prepare";
     const char *error = runtime_mutation_block_reason();
     if (error) status = EBUSY;
     if (!status && package_install_cancelled(&ctx)) status = ECANCELED;
@@ -4326,6 +4337,7 @@ static void *package_install_thread(void *opaque) {
       int length = snprintf(uri, sizeof(uri), "http://%s:%u/%s/%s", sm_pkg_server_host(ctx.server), port, token, encoded);
       if (length < 0 || (size_t)length >= sizeof(uri)) status = ENAMETOOLONG;
       else {
+        phase = "submit";
         submission.metadata.uri = uri;
         submission.metadata.ex_uri = submission.metadata.scenario = submission.metadata.content_id = submission.metadata.icon = "";
         submission.metadata.name = info.title_name;
@@ -4343,8 +4355,16 @@ static void *package_install_thread(void *opaque) {
       submission.info.content_id[sizeof(submission.info.content_id) - 1] = 0;
       if (!status && !submission.info.content_id[0]) status = EPROTO;
     }
+    uint64_t task_start_deadline_us = 0;
+    if (!status) {
+      phase = "poll";
+      uint64_t now = monotonic_time_us();
+      if (!now) status = EIO;
+      else task_start_deadline_us = now + SM_API_PKG_START_TIMEOUT_US;
+    }
     while (!status) {
       if (package_install_cancelled(&ctx)) { status = ctx.failure ? ctx.failure : ECANCELED; break; }
+      phase = "poll";
       memset(&native_status, 0, sizeof(native_status));
       // Patches share the base content ID. The general status reports the
       // already playable base and can close our source before the patch reads it.
@@ -4352,8 +4372,31 @@ static void *package_install_thread(void *opaque) {
           ? sceAppInstUtilGetPatchInstallStatus(submission.info.content_id, &native_status)
           : sceAppInstUtilGetInstallStatus(submission.info.content_id, &native_status);
       native_status.status[sizeof(native_status.status) - 1] = 0;
-      if (native_result || native_status.error.code || !strcmp(native_status.status, "error") ||
-          (info.pkg_kind != PKG_KIND_DLC && !strcmp(native_status.status, "none"))) { status = EIO; break; }
+      if (native_result || native_status.error.code || !strcmp(native_status.status, "error")) { status = EIO; break; }
+      if (!native_status.status[0]) { status = EPROTO; break; }
+      int installed = 0;
+      if (info.pkg_kind == PKG_KIND_DLC) {
+        native_result = sceAppInstUtilGetAddcontInstalledStatus(submission.info.content_id, &installed);
+        if (native_result) { status = EIO; break; }
+      }
+      if (!strcmp(native_status.status, "none")) {
+        // Entitlement-only DLC can have no general download record.
+        if (info.pkg_kind == PKG_KIND_DLC && installed == SM_PKG_ADDCONT_INSTALLED) break;
+        // Base/patch tasks may not disappear after they have been observed.
+        // DLC can lose its download record before its installed flag is set.
+        if (!task_start_deadline_us && info.pkg_kind != PKG_KIND_DLC) { status = EIO; break; }
+        phase = "wait_task";
+        if (task_start_deadline_us) {
+          // A successful submission can precede publication of its task. Keep
+          // the source alive, with one fixed startup deadline for every kind.
+          uint64_t now = monotonic_time_us();
+          if (!now) { status = EIO; break; }
+          if (now >= task_start_deadline_us) { status = ETIMEDOUT; break; }
+        }
+        status = wait_for_package_poll(&ctx);
+        continue;
+      }
+      task_start_deadline_us = 0;
       if (native_status.total > 0 && native_status.total <= INT64_MAX) {
         if (!ctx.native_progress) ctx.sample_us = 0;
         ctx.native_progress = true;
@@ -4366,26 +4409,32 @@ static void *package_install_thread(void *opaque) {
           : !ctx.native_progress && sm_pkg_server_complete(ctx.server);
       bool completed = !strcmp(native_status.status, "completed") ||
           (!strcmp(native_status.status, "playable") && downloaded && copied);
-      if (info.pkg_kind == PKG_KIND_DLC) {
-        int installed = 0;
-        native_result = sceAppInstUtilGetAddcontInstalledStatus(submission.info.content_id, &installed);
-        if (native_result) { status = EIO; break; }
-        // An existing DLC can remain installed while its replacement transfers.
-        completed = installed == SM_PKG_ADDCONT_INSTALLED &&
-            (completed || !strcmp(native_status.status, "none"));
-      }
+      // An installed DLC must not complete its replacement while transferring.
+      if (info.pkg_kind == PKG_KIND_DLC) completed = completed && installed == SM_PKG_ADDCONT_INSTALLED;
       if (completed) break;
-      for (int i = 0; i < 10; ++i) {
-        if (package_install_cancelled(&ctx)) { status = ctx.failure ? ctx.failure : ECANCELED; break; }
-        usleep(100000);
-      }
+      status = wait_for_package_poll(&ctx);
     }
     if (package_install_cancelled(&ctx)) status = ctx.failure ? ctx.failure : ECANCELED;
     if (status && !error) {
       if (status == EINVAL) error = "pkg_invalid";
       else if (status == ENOENT && info.title_id[0] && info.pkg_kind != PKG_KIND_BASE) error = "pkg_base_missing";
       else if (status == ESTALE) error = "pkg_source_changed";
-      else if (ctx.stream && (status == ETIMEDOUT || status == ECONNRESET || status == EPIPE || status == EPROTO)) error = "pkg_stream_lost";
+      else if (ctx.stream && (ctx.failure == ETIMEDOUT || ctx.failure == ECONNRESET ||
+                              ctx.failure == EPIPE || ctx.failure == EPROTO)) error = "pkg_stream_lost";
+    }
+    if (status && status != ECANCELED) {
+      log_debug("  [PKG] install failure detail: job=%llu title=%s kind=%u phase=%s "
+                "source=%s status=%d source_error=%d native=0x%08X "
+                "state='%.16s' error=0x%08X type='%.9s' detail='%.160s' "
+                "downloaded=%llu total=%llu served=%llu copy_only=%u copy_percent=%d",
+                (unsigned long long)id, info.title_id, (unsigned)info.pkg_kind, phase,
+                source, status, ctx.failure, (unsigned)native_result,
+                native_status.status, (unsigned)native_status.error.code,
+                native_status.error.type, native_status.error.description,
+                (unsigned long long)native_status.downloaded,
+                (unsigned long long)native_status.total,
+                (unsigned long long)ctx.bytes, (unsigned)native_status.copy_only,
+                native_status.local_copy_percent);
     }
     if (ctx.stream) sm_pkg_stream_stop(ctx.stream);
     // Closing the source unblocks an in-flight native submission before joining.

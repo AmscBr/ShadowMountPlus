@@ -586,6 +586,14 @@ content ID. DLC completion requires state `4` (installed) from
 `sceAppInstUtilGetAddcontInstalledStatus`; general status still supplies its
 download counters and errors. DLC without a general download record still uses
 its own installed state. State `1` is not installed and must not complete the job.
+After a successful submission, base games, patches and unconfirmed DLC share a
+fixed 30-second startup deadline while the native status is `none`. The package
+source remains open and cancellation stays available; the package is not
+resubmitted. Native errors still fail immediately. Once a base/patch task has
+appeared, a later `none` is an error. DLC may lose its download record before
+its own installed flag is published and continues to use that flag.
+Empty native status or content-ID replies fail with `EPROTO`; these native
+protocol failures are distinct from `pkg_stream_lost` source failures.
 When a general download record exists, it must also be complete, so an installed
 DLC cannot prematurely finish an in-progress replacement. `sceAppInstUtilGetInstallProgress` and
 `sceAppInstUtilGetInstallProgressInfo` are not used for patch completion: on
