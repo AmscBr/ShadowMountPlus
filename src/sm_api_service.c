@@ -62,6 +62,9 @@ extern unsigned int web_index_html_len;
 extern unsigned char smp_icon_png[];
 extern unsigned int smp_icon_png_len;
 
+int sceKernelConvertUtcToLocaltime(time_t utc, time_t *local, void *timezone,
+                                  int32_t *dst_seconds);
+
 typedef struct {
   pthread_t thread;
   pthread_mutex_t mutex;
@@ -288,6 +291,15 @@ static bool send_json_text(struct MHD_Connection *connection, int http_status,
       body_size, (void *)body, MHD_RESPMEM_MUST_COPY);
   if (!response)
     return false;
+  time_t now = time(NULL);
+  time_t local = now;
+  char local_time[32];
+  if (sceKernelConvertUtcToLocaltime(now, &local, NULL, NULL) == 0) {
+    // Shifted Unix seconds encode the console's wall clock, including DST.
+    snprintf(local_time, sizeof(local_time), "%lld", (long long)local);
+    (void)MHD_add_response_header(response, "X-ShadowMount-Local-Time",
+                                  local_time);
+  }
   bool ready = (keep_alive ? MHD_add_response_header(response,
                       MHD_HTTP_HEADER_ACCESS_CONTROL_ALLOW_ORIGIN, "*") == MHD_YES
                           : add_common_response_headers(response)) &&

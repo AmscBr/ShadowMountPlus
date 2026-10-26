@@ -102,8 +102,17 @@ each request, so it can be replaced without restarting ShadowMount. If it is
 missing, `GET /` returns HTTP 404 with the normal JSON error response.
 The bundled interface covers all 31 console locales, selects the closest match
 from the browser locale, and keeps a manually selected locale in local storage.
+The eight most recent operations are also kept in that browser's local storage,
+including their original event times, and restored after a page reload.
 
 ## Responses
+
+JSON responses include `X-ShadowMount-Local-Time` when the console's local-time
+conversion succeeds. Its integer value is Unix seconds shifted by the console's
+current timezone and daylight-saving offset. Treat it as local wall-clock fields
+(decode with UTC calendar functions), not as an absolute UTC timestamp. The web
+interface uses this value to timestamp its recent operations independently of
+the browser's timezone and clock. Older payloads omit this optional header.
 
 Every response contains numeric `status`. It is zero on success, or a positive
 errno value on failure. Error responses also contain `error` and use an

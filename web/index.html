@@ -1149,6 +1149,7 @@
         detailRequest: null,
         fakelibSaving: false,
         activity: [],
+        consoleClock: null,
         busy: false,
         storageJob: null,
         storageDestinations: [],
@@ -2612,6 +2613,7 @@
         }
         if (state.connectionStatus) setConnection(state.connectionStatus, state.connectionKey);
         if (!$("logModal").hidden) $("logTitle").textContent = t(state.logTitleKey);
+        renderActivity();
         if (persist) {
           try { localStorage.setItem("shadowmount.language", currentLanguage); } catch (_) { /* Keep the in-memory selection. */ }
         }
@@ -2683,6 +2685,10 @@
           cache: "no-store"
         });
         const type = response.headers.get("content-type") || "";
+        const localTime = response.headers.get("X-ShadowMount-Local-Time");
+        if (localTime && Number.isFinite(Number(localTime)) && Math.abs(Number(localTime)) <= 8640000000000) {
+          state.consoleClock = { time: Number(localTime) * 1000, receivedAt: performance.now() };
+        }
         const data = type.includes("application/json") ? await response.json() : null;
         if (!response.ok || !data || data.status !== 0) {
           const reason = data && data.error ? data.error : `HTTP ${response.status}`;
@@ -2712,14 +2718,40 @@
         toastTimer = setTimeout(() => { item.hidden = true; }, 4500);
       }
 
-      function logActivity(message, kind = "ok") {
-        state.activity.unshift({ message, kind, time: new Date().toLocaleTimeString(currentLanguage, { hour: "2-digit", minute: "2-digit" }) });
-        state.activity = state.activity.slice(0, 8);
+      function restoreActivity() {
+        try {
+          const entries = JSON.parse(localStorage.getItem("shadowmount.activity"));
+          if (!Array.isArray(entries)) return;
+          state.activity = entries.filter(entry => entry && typeof entry.message === "string" &&
+            (entry.kind === "ok" || entry.kind === "error") &&
+            Number.isFinite(entry.time) && Math.abs(entry.time) <= 8640000000000000 &&
+            typeof entry.consoleTime === "boolean").slice(0, 8);
+        } catch (_) { /* Storage may be disabled or contain invalid data. */ }
+      }
+
+      function renderActivity() {
         const list = $("activity");
         replaceContent(list);
+        if (!state.activity.length) {
+          list.append(node("span", "subtle", t("noOperations")));
+          return;
+        }
         state.activity.forEach((entry) => {
-          list.append(node("div", `activity-item ${entry.kind}`, `${entry.time} · ${entry.message}`));
+          const options = { hour: "2-digit", minute: "2-digit" };
+          // The API has already applied the console's timezone and DST.
+          if (entry.consoleTime) options.timeZone = "UTC";
+          const time = new Date(entry.time).toLocaleTimeString(currentLanguage, options);
+          list.append(node("div", `activity-item ${entry.kind}`, `${time} · ${entry.message}`));
         });
+      }
+
+      function logActivity(message, kind = "ok") {
+        const clock = state.consoleClock;
+        const time = clock ? clock.time + performance.now() - clock.receivedAt : Date.now();
+        state.activity.unshift({ message, kind, time, consoleTime: !!clock });
+        state.activity = state.activity.slice(0, 8);
+        try { localStorage.setItem("shadowmount.activity", JSON.stringify(state.activity)); } catch (_) { /* Keep the in-memory history. */ }
+        renderActivity();
       }
 
       function coverFor(game, large = false) {
@@ -4848,6 +4880,7 @@
         option.value = String(temperature);
         $("fanTemperature").append(option);
       }
+      restoreActivity();
       applyLanguage(currentLanguage);
       initializeTabHistory();
       Promise.all([refreshAll(), refreshManual(), refreshSettings(), refreshStorageJob()]);
