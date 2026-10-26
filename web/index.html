@@ -717,6 +717,96 @@
       .detail-size dd { font-size: 13px; }
       .modal-actions { padding: 0 18px 18px; }
     }
+    /* Older WebKit supports grid gap but ignores it in flex layouts. */
+    .no-flex-gap .topbar, .no-flex-gap .topbar-actions, .no-flex-gap .connection,
+    .no-flex-gap .check, .no-flex-gap .section-head, .no-flex-gap .badges,
+    .no-flex-gap .game-actions, .no-flex-gap .storage-head, .no-flex-gap .storage-space,
+    .no-flex-gap .operation-popup, .no-flex-gap .transfer-heading, .no-flex-gap .transfer-stats,
+    .no-flex-gap .manual-form, .no-flex-gap .setting-row, .no-flex-gap .settings-actions,
+    .no-flex-gap .modal-head, .no-flex-gap .size-total, .no-flex-gap .content-dlc-actions,
+    .no-flex-gap .modal-card:not(.details-card) .modal-actions, .no-flex-gap .destination-custom,
+    .no-flex-gap .view-nav, .no-flex-gap .stats, .no-flex-gap .stat,
+    .no-flex-gap .storage-summary, .no-flex-gap .storage-summary-item,
+    .no-flex-gap .package-sources, .no-flex-gap .package-toolbar, .no-flex-gap .package-row,
+    .no-flex-gap .package-queue-row, .no-flex-gap .console-setting, .no-flex-gap .console-save,
+    .no-flex-gap .console-scan, .no-flex-gap .control-bar, .no-flex-gap .control-bar > span,
+    .no-flex-gap .path-toolbar, .no-flex-gap .path-roots, .no-flex-gap .path-entries,
+    .no-flex-gap .path-entries .btn, .no-flex-gap .path-pages, .no-flex-gap .modal-meta,
+    .no-flex-gap .fakelib-switch { gap: 0; }
+    /* Prefixed logical margins keep spacing working in both LTR and RTL WebKit. */
+    .no-flex-gap .topbar > :not(:last-child), .no-flex-gap .console-scan > :not(:last-child) { -webkit-margin-end: 24px; margin-inline-end: 24px; }
+    .no-flex-gap .topbar-actions > :not(:last-child) { -webkit-margin-end: 22px; margin-inline-end: 22px; }
+    .no-flex-gap .connection > :not(:last-child), .no-flex-gap .check > :not(:last-child),
+    .no-flex-gap .storage-head > :not(:last-child), .no-flex-gap .storage-space > :not(:last-child),
+    .no-flex-gap .destination-custom > :not(:last-child) { -webkit-margin-end: 8px; margin-inline-end: 8px; }
+    .no-flex-gap .section-head > :not(:last-child), .no-flex-gap .transfer-heading > :not(:last-child),
+    .no-flex-gap .size-total > :not(:last-child), .no-flex-gap .content-dlc-actions > :not(:last-child),
+    .no-flex-gap .package-queue-row > :not(:last-child), .no-flex-gap .path-entries .btn::before,
+    .no-flex-gap .modal-meta > :not(:last-child), .no-flex-gap .modal-card:not(.details-card) .modal-actions > :not(:last-child) { -webkit-margin-end: 12px; margin-inline-end: 12px; }
+    .no-flex-gap .manual-form > :not(:last-child), .no-flex-gap .game-actions > :not(:last-child),
+    .no-flex-gap .settings-actions > :not(:last-child) { -webkit-margin-end: 7px; margin-inline-end: 7px; }
+    .no-flex-gap .setting-row > :not(:last-child), .no-flex-gap .package-toolbar > :not(:last-child),
+    .no-flex-gap .control-bar > span > kbd, .no-flex-gap .path-toolbar > :not(:last-child),
+    .no-flex-gap .fakelib-switch > :not(:last-child) { -webkit-margin-end: 10px; margin-inline-end: 10px; }
+    .no-flex-gap .modal-head > :not(:last-child), .no-flex-gap .console-save > :not(:last-child) { -webkit-margin-end: 20px; margin-inline-end: 20px; }
+    .no-flex-gap .operation-popup > :not(:last-child), .no-flex-gap .package-row > :not(:last-child),
+    .no-flex-gap .package-folder::before, .no-flex-gap .console-setting > :not(:last-child) { -webkit-margin-end: 18px; margin-inline-end: 18px; }
+    .no-flex-gap .transfer-stats > :not(:last-child), .no-flex-gap .path-pages > :not(:last-child) { -webkit-margin-end: 14px; margin-inline-end: 14px; }
+    .no-flex-gap .view-nav > :not(:last-child) { -webkit-margin-end: 6px; margin-inline-end: 6px; }
+    .no-flex-gap .view-nav::before { -webkit-margin-end: 12px; margin-inline-end: 12px; }
+    .no-flex-gap .view-nav::after { -webkit-margin-start: 12px; margin-inline-start: 12px; }
+    .no-flex-gap .stat-value { -webkit-margin-end: 8px; margin-inline-end: 8px; }
+    .no-flex-gap .stats { margin-bottom: 6px; }
+    .no-flex-gap .stats > .stat { -webkit-margin-end: 26px; margin-inline-end: 26px; margin-bottom: 12px; }
+    .no-flex-gap .storage-summary > :not(:last-child) { -webkit-margin-end: 18px; margin-inline-end: 18px; }
+    .no-flex-gap .storage-summary > * { margin-bottom: 8px; }
+    .no-flex-gap .storage-summary-item > :not(:last-child) { margin-bottom: 5px; }
+    .no-flex-gap .badges > :not(:last-child) { -webkit-margin-end: 5px; margin-inline-end: 5px; }
+    .no-flex-gap .badges > * { margin-bottom: 5px; }
+    .no-flex-gap .badges { margin-bottom: 3px; }
+    .no-flex-gap .game-card .badges, .no-flex-gap .modal-meta .badges { margin-bottom: -5px; }
+    .no-flex-gap .game-actions > *, .no-flex-gap .settings-actions > * { margin-bottom: 7px; }
+    .no-flex-gap .game-actions, .no-flex-gap .settings-actions { margin-bottom: -7px; }
+    .no-flex-gap .transfer-stats > * { margin-bottom: 4px; }
+    .no-flex-gap .transfer-stats { margin-bottom: -4px; }
+    .no-flex-gap .content-dlc-actions > * { margin-bottom: 8px; }
+    .no-flex-gap .content-dlc-actions { margin-bottom: -8px; }
+    .no-flex-gap .modal-card:not(.details-card) .modal-actions > * { margin-bottom: 12px; }
+    .no-flex-gap .package-sources > :not(:last-child) { margin-bottom: 18px; }
+    .no-flex-gap .package-toolbar > *, .no-flex-gap .path-toolbar > * { margin-bottom: 10px; }
+    .no-flex-gap .package-toolbar { margin-bottom: 6px; }
+    .no-flex-gap .path-toolbar { margin-bottom: -10px; }
+    .no-flex-gap .path-roots > :not(:last-child), .no-flex-gap .path-entries > :not(:last-child) { margin-bottom: 8px; }
+    .no-flex-gap .control-bar > :not(:last-child) { -webkit-margin-end: 32px; margin-inline-end: 32px; }
+    @media (max-width: 1250px) {
+      .no-flex-gap .topbar > :not(:last-child) { -webkit-margin-end: 14px; margin-inline-end: 14px; }
+    }
+    @media (max-width: 850px) {
+      .no-flex-gap .topbar > * { margin-bottom: 14px; }
+      .no-flex-gap .topbar > .view-nav { margin-bottom: 0; }
+    }
+    @media (max-width: 660px) {
+      .no-flex-gap .topbar > :not(:last-child) { -webkit-margin-end: 0; margin-inline-end: 0; }
+    }
+    @media (max-width: 540px) {
+      .no-flex-gap .view-nav { gap: 6px; }
+      .no-flex-gap .package-sources > :not(:last-child) { margin-bottom: 0; }
+      .no-flex-gap .view-nav > :not(:last-child) { -webkit-margin-end: 0; margin-inline-end: 0; }
+      .no-flex-gap .topbar-actions > :not(:last-child) { -webkit-margin-end: 10px; margin-inline-end: 10px; }
+      .no-flex-gap .stats { margin-bottom: 10px; }
+      .no-flex-gap .stats > .stat { -webkit-margin-end: 18px; margin-inline-end: 18px; margin-bottom: 8px; }
+      .no-flex-gap .control-bar > :not(:last-child) { -webkit-margin-end: 20px; margin-inline-end: 20px; }
+      .no-flex-gap .operation-popup > :not(:last-child), .no-flex-gap .package-row > :not(:last-child) { -webkit-margin-end: 12px; margin-inline-end: 12px; }
+      .no-flex-gap .transfer-stats > :not(:last-child) { -webkit-margin-end: 10px; margin-inline-end: 10px; }
+      .no-flex-gap .console-save > :not(:last-child), .no-flex-gap .console-scan > :not(:last-child),
+      .no-flex-gap .transfer-heading > :not(:last-child) { -webkit-margin-end: 0; margin-inline-end: 0; }
+      .no-flex-gap .console-save > :not(:last-child) { margin-bottom: 12px; }
+      .no-flex-gap .console-scan > :not(:last-child) { margin-bottom: 14px; }
+      .no-flex-gap .transfer-heading > :not(:last-child) { margin-bottom: 4px; }
+      .no-flex-gap .console-setting > :not(:last-child) { -webkit-margin-end: 12px; margin-inline-end: 12px; }
+      .no-flex-gap .detail-sidebar .fakelib-switch > :not(:last-child) { -webkit-margin-end: 0; margin-inline-end: 0; margin-bottom: 6px; }
+      .no-flex-gap .path-roots > :not(:last-child) { margin-bottom: 0; -webkit-margin-end: 8px; margin-inline-end: 8px; }
+    }
     @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
   </style>
 </head>
@@ -1034,6 +1124,22 @@
   <script>
     (() => {
       "use strict";
+
+      function supportsFlexGap() {
+        const probe = document.createElement("div");
+        probe.className = "flex-gap-probe";
+        probe.style.cssText = "position:absolute;left:-9999px;display:flex;flex-direction:column;row-gap:1px;visibility:hidden;";
+        for (let i = 0; i < 2; i++) {
+          const child = document.createElement("div");
+          child.style.cssText = "height:1px;flex:none;";
+          probe.appendChild(child);
+        }
+        document.body.appendChild(probe);
+        const supported = probe.scrollHeight === 3;
+        document.body.removeChild(probe);
+        return supported;
+      }
+      if (!supportsFlexGap()) document.documentElement.classList.add("no-flex-gap");
 
       const API = "/api/v1";
       const playStationBrowser = /PlayStation (?:4|5)\b/i.test(navigator.userAgent);
