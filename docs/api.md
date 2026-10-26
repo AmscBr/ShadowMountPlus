@@ -542,25 +542,32 @@ installation. System errors preserve the raw `native_status` code.
 
 For a file on a computer, `POST /api/v1/packages/stream` accepts
 `{"name":"game.pkg","size":123456}` and returns the job plus a private `token`.
-The response advertises `chunk_bytes` (512 KiB) and `stream_port`. Connect to
+The response advertises `chunk_bytes` (1 MiB) and `stream_port`. Connect to
 `ws://<console>:<stream_port>/<token>/ws` on the existing on-demand package
 server. One source connection is accepted per job. Server text messages are
-`{"op":"ready","window":2}`, `{"op":"range","id":1,"offset":0,"size":524288}`
+`{"op":"ready","window":2}`, `{"op":"range","id":1,"offset":0,"size":1048576}`
 and `{"op":"ack","id":1}`. Reply to each range with a binary message containing
 a little-endian 64-bit range ID followed by exactly the requested bytes.
 Two reads/transfers overlap; an acknowledgement releases its window slot.
+The web client sends file-backed Blobs with the range ID prepended, avoiding
+an explicit JavaScript ArrayBuffer read and full-segment copy.
 Demand notifications wake the connection immediately, without polling.
 The server closes the connection when the operation ends; disconnecting the
 source fails pending reads immediately with `pkg_stream_lost`. Explicit cancellation
 remains a separate cancelled job. Keep the browser page open until completion.
 
-The stream retains up to 64 aligned 512 KiB segments (32 MiB) in RAM and pins
+The stream retains up to 32 aligned 1 MiB segments (32 MiB) in RAM and pins
 the header. Bulk reads look ahead at most eight segments, with at most sixteen
 pending requests before speculation stops. Actual reader demand takes priority.
 Speculation can evict only already-consumed segments; demanded reads can reclaim
 ready segments without active readers. This prevents competing read-ahead windows
 from repeatedly discarding each other's unread data. No staging PKG is saved to
 storage. The installer only counts each delivered byte once.
+
+The installer's HTTP server batches disk and RAM reads into at most 2 MiB
+blocks and requests a 512 KiB socket send buffer. Successful full and partial
+responses include `Date`, a stable `Last-Modified` validator and
+`Content-Type: application/octet-stream`; the source URI is unique per attempt.
 
 Compatibility clients can use two concurrent
 `POST /api/v1/packages/stream/request` clients, with

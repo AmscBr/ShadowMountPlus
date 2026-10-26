@@ -10,7 +10,7 @@
 
 // Segment cache/read-ahead follows the approach used by ps5-pkg-manager's
 // ws_stream, with a fixed bound and no file-sized maps or background threads.
-#define STREAM_SLOTS 64
+#define STREAM_SLOTS (32u * 1024u * 1024u / SM_PKG_STREAM_CHUNK)
 #define STREAM_READ_AHEAD 8
 #define STREAM_PREFETCH_PENDING 16
 typedef struct {

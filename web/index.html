@@ -4467,16 +4467,16 @@
               finish(new Error(t("packageStreamLost"))); return;
             }
             pending.add(message.id);
-            // Reads overlap the other block's network transfer; only two blocks are in flight.
-            session.file.slice(message.offset, message.offset + message.size).arrayBuffer().then(buffer => {
-              if (settled || state.browserStream !== session || socket.readyState !== WebSocket.OPEN) return;
-              const packet = new Uint8Array(8 + buffer.byteLength);
-              const header = new DataView(packet.buffer);
+            // Let the browser read the file-backed Blob for the socket. Avoid a
+            // JS ArrayBuffer read and a second full-block copy on every range.
+            try {
+              if (socket.readyState !== WebSocket.OPEN) throw new Error(t("packageStreamLost"));
+              const id = new ArrayBuffer(8);
+              const header = new DataView(id);
               header.setUint32(0, message.id >>> 0, true);
               header.setUint32(4, Math.floor(message.id / 4294967296), true);
-              packet.set(new Uint8Array(buffer), 8);
-              socket.send(packet);
-            }).catch(error => finish(error));
+              socket.send(new Blob([id, session.file.slice(message.offset, message.offset + message.size)]));
+            } catch (error) { finish(error); }
           };
           socket.onerror = () => { /* onclose checks the authoritative job state. */ };
           socket.onclose = async event => {

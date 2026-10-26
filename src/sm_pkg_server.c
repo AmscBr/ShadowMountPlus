@@ -21,7 +21,8 @@
 
 #define SM_PKG_SERVER_MAX_CONNECTIONS 16
 #define SM_PKG_SERVER_REQUEST_MAX 8192
-#define SM_PKG_SERVER_SEND_CHUNK (256u * 1024u)
+#define SM_PKG_SERVER_SEND_CHUNK (2u * 1024u * 1024u)
+#define SM_PKG_SERVER_SEND_BUFFER (512 * 1024)
 #define SM_PKG_SERVER_IO_TIMEOUT_SECONDS 60
 #define SM_PKG_SERVER_COVERAGE_MAX 256
 
@@ -284,25 +285,30 @@ static int header_416(char *buffer, size_t size, uint64_t total,
                   keep_alive ? "keep-alive" : "close");
 }
 
-static int header_200(char *buffer, size_t size, uint64_t length,
-                      bool keep_alive) {
+static int header_content(char *buffer, size_t size, uint64_t start, uint64_t end,
+                           uint64_t total, bool ranged, bool keep_alive) {
+  char date[40];
+  char range[128] = "";
+  time_t now = time(NULL);
+  struct tm utc;
+  if (!gmtime_r(&now, &utc) ||
+      !strftime(date, sizeof(date), "%a, %d %b %Y %H:%M:%S GMT", &utc))
+    strlcpy(date, "Wed, 01 Jan 2025 00:00:00 GMT", sizeof(date));
+  if (ranged)
+    snprintf(range, sizeof(range), "Content-Range: bytes %llu-%llu/%llu\r\n",
+             (unsigned long long)start, (unsigned long long)end,
+             (unsigned long long)total);
+  // ShellCore needs cacheable responses and a stable validator when advancing
+  // ranges. Each attempt already has its own immutable source URI.
   return snprintf(buffer, size,
-                  "HTTP/1.1 200 OK\r\nContent-Length: %llu\r\n"
+                  "HTTP/1.1 %s\r\nDate: %s\r\n"
+                  "Last-Modified: Wed, 01 Jan 2025 00:00:00 GMT\r\n"
+                  "Content-Type: application/octet-stream\r\n"
+                  "Content-Length: %llu\r\n%s"
                   "Accept-Ranges: bytes\r\nConnection: %s\r\n\r\n",
-                  (unsigned long long)length,
-                  keep_alive ? "keep-alive" : "close");
-}
-
-static int header_206(char *buffer, size_t size, uint64_t start, uint64_t end,
-                      uint64_t total, bool keep_alive) {
-  return snprintf(buffer, size,
-                  "HTTP/1.1 206 Partial Content\r\nContent-Length: %llu\r\n"
-                  "Content-Range: bytes %llu-%llu/%llu\r\n"
-                  "Accept-Ranges: bytes\r\nConnection: %s\r\n\r\n",
-                  (unsigned long long)(end - start + 1),
-                  (unsigned long long)start, (unsigned long long)end,
-                  (unsigned long long)total,
-                  keep_alive ? "keep-alive" : "close");
+                  ranged ? "206 Partial Content" : "200 OK", date,
+                  (unsigned long long)(ranged ? end - start + 1 : total),
+                  range, keep_alive ? "keep-alive" : "close");
 }
 
 static bool serve_file(sm_pkg_server_t *server, int fd,
@@ -388,13 +394,10 @@ static bool serve_file(sm_pkg_server_t *server, int fd,
   if (invalid_range) {
     header_size = header_416(header, sizeof(header), total,
                              request->keep_alive);
-  } else if (ranged) {
-    header_size = header_206(header, sizeof(header), start, end, total,
-                             request->keep_alive);
   } else {
-    end = total == 0 ? 0 : total - 1;
-    header_size = header_200(header, sizeof(header), total,
-                             request->keep_alive);
+    if (!ranged) end = total == 0 ? 0 : total - 1;
+    header_size = header_content(header, sizeof(header), start, end, total,
+                                  ranged, request->keep_alive);
   }
   if (header_size <= 0 || (size_t)header_size >= sizeof(header) ||
       !send_all(fd, header, (size_t)header_size))
@@ -402,7 +405,8 @@ static bool serve_file(sm_pkg_server_t *server, int fd,
   if (invalid_range || request->head || total == 0)
     return request->keep_alive && !invalid_range;
 
-  size_t chunk_size = server->read ? SM_PKG_STREAM_CHUNK : SM_PKG_SERVER_SEND_CHUNK;
+  size_t chunk_size = SM_PKG_SERVER_SEND_CHUNK;
+  if (end - start + 1 < chunk_size) chunk_size = (size_t)(end - start + 1);
   char *buffer = malloc(chunk_size);
   if (!buffer)
     return false;
@@ -416,6 +420,7 @@ static bool serve_file(sm_pkg_server_t *server, int fd,
     ssize_t count = server->read
       ? (server->read(server->read_ctx, offset, buffer, want) == 0 ? (ssize_t)want : -1)
       : pread(server->pkg_fd, buffer, want, (off_t)offset);
+    if (!server->read && count < 0 && errno == EINTR) continue;
     if (count <= 0 || !send_all(fd, buffer, (size_t)count)) {
       ok = false;
       break;
@@ -560,6 +565,8 @@ static void *listener(void *opaque) {
     }
     int one = 1;
     (void)setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
+    int send_buffer = SM_PKG_SERVER_SEND_BUFFER;
+    (void)setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &send_buffer, sizeof(send_buffer));
     if (atomic_fetch_add(&server->worker_count, 1) + 1 >
         SM_PKG_SERVER_MAX_CONNECTIONS) {
       retire_worker(server);

@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define SM_PKG_STREAM_CHUNK (512u * 1024u)
+#define SM_PKG_STREAM_CHUNK (1024u * 1024u)
 #define SM_PKG_STREAM_CLIENTS 4u
 typedef struct sm_pkg_stream sm_pkg_stream_t;
 typedef struct { uint64_t id, offset; size_t size; } sm_pkg_range_t;
