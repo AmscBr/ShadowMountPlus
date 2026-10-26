@@ -36,6 +36,7 @@
 #define SM_API_ROUTE_SCAN "/api/v1/scan"
 #define SM_API_ROUTE_PACKAGES "/api/v1/packages"
 #define SM_API_ROUTE_FILES "/api/v1/files"
+#define SM_API_ROUTE_SOURCE_INSTALL "/api/v1/sources/install"
 #define SM_API_ROUTE_BACKPORT_INSTALL "/api/v1/backports/install"
 #define SM_API_ROUTE_BACKPORT_DELETE "/api/v1/backports/delete"
 #define SM_API_ROUTE_PACKAGE_INSTALL "/api/v1/packages/install"

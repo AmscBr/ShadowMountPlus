@@ -201,32 +201,37 @@ int sm_pkg_stream_read(void *ctx, uint64_t offset, void *buffer, size_t size) {
   return 0;
 }
 
+static stream_slot_t *next_request_locked(sm_pkg_stream_t *stream) {
+  // Cache slots are recycled in LRU order. Their array indices no longer
+  // describe file order after eviction, so choose the oldest queued request
+  // within each priority class instead of jumping between recycled slots.
+  for (unsigned pass = 0; pass < 2; ++pass) {
+    stream_slot_t *next = NULL;
+    for (size_t i = 0; i < STREAM_SLOTS; ++i) {
+      stream_slot_t *slot = &stream->slots[i];
+      if (!slot->range.id || slot->claimed || slot->ready || (!pass && !slot->waiters)) continue;
+      if (!next || slot->range.id < next->range.id) next = slot;
+    }
+    if (next) return next;
+  }
+  return NULL;
+}
+
 int sm_pkg_stream_request(sm_pkg_stream_t *stream, sm_pkg_range_t *range) {
   struct timespec deadline = deadline_after(8);
   pthread_mutex_lock(&stream->mutex);
   int status = 0;
   for (;;) {
     if (stream->status) { status = stream->status; break; }
-    for (size_t i = 0; i < STREAM_SLOTS; ++i) {
-      stream_slot_t *slot = &stream->slots[i];
-      if (slot->range.id && !slot->claimed && !slot->ready && slot->waiters) {
-        slot->claimed = true;
-        *range = slot->range;
-        goto done;
-      }
-    }
-    for (size_t i = 0; i < STREAM_SLOTS; ++i) {
-      stream_slot_t *slot = &stream->slots[i];
-      if (slot->range.id && !slot->claimed && !slot->ready) {
-        slot->claimed = true;
-        *range = slot->range;
-        goto done;
-      }
+    stream_slot_t *slot = next_request_locked(stream);
+    if (slot) {
+      slot->claimed = true;
+      *range = slot->range;
+      break;
     }
     status = pthread_cond_timedwait(&stream->cond, &stream->mutex, &deadline);
     if (status) { if (status == ETIMEDOUT) status = EAGAIN; break; }
   }
-done:
   pthread_mutex_unlock(&stream->mutex);
   return status;
 }
@@ -246,15 +251,13 @@ int sm_pkg_stream_try_request(sm_pkg_stream_t *stream, unsigned client, sm_pkg_r
     }
   }
   // Claim demanded segments before speculative read-ahead.
-  if (!stream->status) for (unsigned pass = 0; pass < 2; ++pass) {
-    for (size_t i = 0; i < STREAM_SLOTS; ++i) {
-      stream_slot_t *slot = &stream->slots[i];
-      if (!slot->range.id || slot->claimed || slot->ready || (!pass && !slot->waiters)) continue;
+  if (!stream->status) {
+    stream_slot_t *slot = next_request_locked(stream);
+    if (slot) {
       slot->claimed = true;
       slot->client = client;
       *range = slot->range;
       status = 0;
-      goto done;
     }
   }
 done:

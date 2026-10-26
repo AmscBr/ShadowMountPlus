@@ -207,6 +207,7 @@ static void handle_backport_operation(struct MHD_Connection *connection, struct 
                                       game_storage_operation_t operation);
 static void handle_package_install(struct MHD_Connection *connection, struct json_object *request, bool streaming, bool from_queue);
 static void handle_package_queue(struct MHD_Connection *connection, struct json_object *request);
+static void handle_source_install(struct MHD_Connection *connection, struct json_object *request);
 static bool handle_package_icon(struct MHD_Connection *connection);
 static void handle_package_range(struct MHD_Connection *connection, struct json_object *request);
 static bool destination_is_managed(const char *destination);
@@ -690,6 +691,7 @@ static void handle_version(struct MHD_Connection *fd) {
       !append_json_string(capabilities, "unmount_game") ||
       !append_json_string(capabilities, "uninstall_game") ||
       !append_json_string(capabilities, "uninstall_game_content") ||
+      !append_json_string(capabilities, "install_game_source") ||
       !append_json_string(capabilities, "move_game_source") ||
       !append_json_string(capabilities, "copy_game_source") ||
       !append_json_string(capabilities, "delete_game_source") ||
@@ -2977,6 +2979,8 @@ static void dispatch_request(struct MHD_Connection *connection,
     handle_file_listing(connection, json, true);
   } else if (strcmp(route, SM_API_ROUTE_FILES) == 0) {
     handle_file_listing(connection, json, false);
+  } else if (strcmp(route, SM_API_ROUTE_SOURCE_INSTALL) == 0) {
+    handle_source_install(connection, json);
   } else if (strcmp(route, SM_API_ROUTE_BACKPORT_INSTALL) == 0) {
     handle_backport_operation(connection, json, GAME_STORAGE_COPY);
   } else if (strcmp(route, SM_API_ROUTE_BACKPORT_DELETE) == 0) {
@@ -3062,13 +3066,9 @@ static int resolve_storage_destination_dir(const char *requested_dir,
   return 0;
 }
 
-static int build_storage_destination(const char *requested_dir,
-                                     const char *source,
-                                     char destination[MAX_PATH]) {
-  char resolved_dir[MAX_PATH];
-  int status = resolve_storage_destination_dir(requested_dir, resolved_dir);
-  if (status != 0)
-    return status;
+static int build_storage_destination_path(const char *resolved_dir,
+                                          const char *source,
+                                          char destination[MAX_PATH]) {
   struct stat st;
 
   const char *filename = get_filename_component(source);
@@ -3087,6 +3087,14 @@ static int build_storage_destination(const char *requested_dir,
   if (lstat(destination, &st) == 0)
     return EEXIST;
   return errno == ENOENT ? 0 : (errno != 0 ? errno : EIO);
+}
+
+static int build_storage_destination(const char *requested_dir,
+                                     const char *source,
+                                     char destination[MAX_PATH]) {
+  char resolved_dir[MAX_PATH];
+  int status = resolve_storage_destination_dir(requested_dir, resolved_dir);
+  return status ? status : build_storage_destination_path(resolved_dir, source, destination);
 }
 
 static int build_unpack_destination(const char *requested_dir,
@@ -3344,7 +3352,8 @@ static uint64_t storage_job_elapsed_ms(
 
 static uint64_t storage_job_speed_bytes_per_second(
     const storage_job_snapshot_t *snapshot, uint64_t now_us) {
-  if (snapshot->operation == GAME_STORAGE_INSTALL)
+  if (snapshot->operation == GAME_STORAGE_INSTALL &&
+      (!strcmp(snapshot->source_type, "pkg") || !strcmp(snapshot->source_type, "stream")))
     return snapshot->active && now_us >= snapshot->pkg_sample_us &&
                    now_us - snapshot->pkg_sample_us <= 3000000
                ? snapshot->pkg_speed : 0;
@@ -3547,6 +3556,29 @@ static int build_backport_destination(const char *source, char destination[MAX_P
   return errno == ENOENT ? 0 : (errno ? errno : EIO);
 }
 
+static bool read_install_source_info(const char *path, const struct stat *st,
+                                      game_source_info_t *source,
+                                      char title_id[MAX_TITLE_ID],
+                                      char title_name[MAX_TITLE_NAME]) {
+  title_id[0] = title_name[0] = 0;
+  source->source_type = NULL;
+  if (S_ISREG(st->st_mode) && st->st_size > 0 &&
+      is_supported_image_file_path(path, get_filename_component(path))) {
+    source->source_type = "image";
+    strlcpy(title_name, get_filename_component(path), MAX_TITLE_NAME);
+  } else if (S_ISDIR(st->st_mode)) {
+    struct stat param;
+    char backport_title[MAX_TITLE_ID];
+    if (resolve_backport_source(path, backport_title) ||
+        !directory_has_game_param(path, &param) || !directory_has_game_executable(path) ||
+        !get_game_info(path, &param, title_id, title_name)) return false;
+    source->source_type = "folder";
+  } else return false;
+  if (path != source->physical_path)
+    strlcpy(source->physical_path, path, sizeof(source->physical_path));
+  return true;
+}
+
 static void *storage_job_thread_main(void *arg) {
   uint64_t job_id = (uint64_t)(uintptr_t)arg;
   char title_id[MAX_TITLE_ID];
@@ -3638,7 +3670,16 @@ static void *storage_job_thread_main(void *arg) {
     }
   }
 
-  if (status == 0 && operation != GAME_STORAGE_UNPACK && !backport) {
+  if (status == 0 && operation == GAME_STORAGE_INSTALL) {
+    struct stat st;
+    game_source_info_t checked = {0};
+    char checked_title[MAX_TITLE_ID], checked_name[MAX_TITLE_NAME];
+    if (lstat(source, &st) != 0) status = errno ? errno : EIO;
+    else if (!read_install_source_info(source, &st, &checked, checked_title, checked_name) ||
+             strcmp(title_id, checked_title)) status = EINVAL;
+  }
+
+  if (status == 0 && operation != GAME_STORAGE_UNPACK && operation != GAME_STORAGE_INSTALL && !backport) {
     size_t affected = 0;
     recovery_scan_needed = true;
     status = release_storage_source_runtime(source, title_id, &affected,
@@ -3732,7 +3773,8 @@ static void *storage_job_thread_main(void *arg) {
     }
   }
 
-  if (status == 0 && operation == GAME_STORAGE_UNPACK && !begin_storage_job_finalizing(job_ctx)) {
+  if (status == 0 && (operation == GAME_STORAGE_UNPACK || operation == GAME_STORAGE_INSTALL) &&
+      !begin_storage_job_finalizing(job_ctx)) {
     status = ECANCELED;
     if (sm_storage_delete_path(destination) != 0 && errno != ENOENT)
       status = errno != 0 ? errno : EIO;
@@ -3747,6 +3789,12 @@ static void *storage_job_thread_main(void *arg) {
     status = errno != 0 ? errno : EIO;
   }
 
+  if (status == 0 && operation == GAME_STORAGE_INSTALL) {
+    bool changed = false;
+    recovery_scan_needed = true;
+    if (!sm_manual_add_path(destination, &changed)) status = errno ? errno : EIO;
+  }
+
   if (shellcore_mutation)
     sm_shellcore_end_external_mutation();
   if (scanner_mutation)
@@ -3757,6 +3805,8 @@ static void *storage_job_thread_main(void *arg) {
     scan_queued = request_scan_now(
         status != 0
             ? "HTTP API async storage operation recovery"
+            : operation == GAME_STORAGE_INSTALL
+                  ? "HTTP API game source installed"
             : operation == GAME_STORAGE_MOVE
                   ? "HTTP API async game source moved"
                   : operation == GAME_STORAGE_COPY
@@ -3782,7 +3832,7 @@ static int launch_storage_job(const char *title_id,
                               storage_job_snapshot_t *accepted_out,
                               const char **error_out) {
   pthread_mutex_lock(&g_storage_job.mutex);
-  if (!g_storage_job.accepting || storage_job_is_active(g_storage_job.state)) {
+  if (!g_storage_job.accepting || storage_job_is_active(g_storage_job.state) || g_storage_job.pkg_queue_running) {
     *error_out = g_storage_job.accepting
                      ? "storage_busy"
                      : "storage_unavailable";
@@ -3796,6 +3846,8 @@ static int launch_storage_job(const char *title_id,
   g_storage_job.id = job_id;
   g_storage_job.title_name[0] = 0;
   g_storage_job.native_status = 0;
+  g_storage_job.pkg_speed = g_storage_job.pkg_sample_us = 0;
+  g_storage_job.pkg_current_kind = PKG_KIND_UNKNOWN;
   g_storage_job.operation = operation;
   g_storage_job.state = STORAGE_JOB_PREPARING;
   (void)strlcpy(g_storage_job.title_id, title_id,
@@ -3917,6 +3969,44 @@ static int resolve_package_path(const char *path, char resolved[MAX_PATH], bool 
   return 0;
 }
 
+static void handle_source_install(struct MHD_Connection *connection, struct json_object *request) {
+  const char *error = runtime_mutation_block_reason();
+  if (error) { send_operation_error_response(connection, EBUSY, error); return; }
+  const char *path = package_string(request, "path");
+  const char *target = package_string(request, "destination_dir");
+  struct stat st;
+  int status = !path || path[0] != '/' || strlen(path) >= MAX_PATH ||
+      !target || target[0] != '/' || strlen(target) >= MAX_PATH ? EINVAL : 0;
+  if (!status && stat(path, &st) != 0) status = errno ? errno : EIO;
+  game_source_info_t source = {0};
+  char title_id[MAX_TITLE_ID] = "", title_name[MAX_TITLE_NAME] = "";
+  char destination[MAX_PATH], resolved_dir[MAX_PATH];
+  if (!status) status = resolve_package_path(path, source.physical_path, S_ISDIR(st.st_mode));
+  if (!status && lstat(source.physical_path, &st) != 0) status = errno ? errno : EIO;
+  if (!status && !read_install_source_info(source.physical_path, &st, &source, title_id, title_name)) status = EINVAL;
+  if (!status) {
+    status = resolve_package_path(target, resolved_dir, true);
+    if (status == ENOENT && !strcmp(target, "/mnt/ext1/homebrew"))
+      status = resolve_storage_destination_dir(target, resolved_dir);
+  }
+  if (!status && is_under_image_mount_base(resolved_dir)) status = EPERM;
+  if (!status) status = build_storage_destination_path(resolved_dir, source.physical_path, destination);
+  if (!status && (sm_shellcore_title_is_protected(title_id) ||
+      sm_shellcore_source_is_protected(source.physical_path) || sm_shellcore_source_is_protected(destination))) {
+    status = EBUSY; error = "game_active";
+  }
+  storage_job_snapshot_t accepted;
+  if (!status) status = launch_storage_job(title_id, &source, destination, GAME_STORAGE_INSTALL, false, &accepted, &error);
+  if (status) { send_operation_error_response(connection, status, error); return; }
+  pthread_mutex_lock(&g_storage_job.mutex);
+  if (g_storage_job.id == accepted.id) {
+    strlcpy(g_storage_job.title_name, title_name, sizeof(g_storage_job.title_name));
+    strlcpy(accepted.title_name, title_name, sizeof(accepted.title_name));
+  }
+  pthread_mutex_unlock(&g_storage_job.mutex);
+  send_storage_job_response(connection, 202, &accepted);
+}
+
 static void handle_backport_operation(struct MHD_Connection *connection, struct json_object *request,
                                       game_storage_operation_t operation) {
   const char *error = runtime_mutation_block_reason();
@@ -3968,6 +4058,7 @@ static bool package_base_installed(const char *title_id, bool *pkg_installed_out
 
 static bool package_base_queued_locked(const char *title_id) {
   if (g_storage_job.operation == GAME_STORAGE_INSTALL &&
+      (!strcmp(g_storage_job.source_type, "pkg") || !strcmp(g_storage_job.source_type, "stream")) &&
       storage_job_is_active(g_storage_job.state) &&
       g_storage_job.pkg_current_kind == PKG_KIND_BASE &&
       !strcmp(g_storage_job.title_id, title_id) && !g_storage_job.cancel_requested)
@@ -4030,11 +4121,13 @@ static bool add_package_state(struct json_object *item, const sm_pkg_info_t *inf
 
 static bool handle_package_icon(struct MHD_Connection *connection) {
   const char *path = MHD_lookup_connection_value(connection, MHD_GET_ARGUMENT_KIND, "path");
+  const char *source_type = MHD_lookup_connection_value(connection, MHD_GET_ARGUMENT_KIND, "source_type");
+  bool folder = source_type && !strcmp(source_type, "folder");
   char resolved[MAX_PATH];
-  int status = resolve_package_path(path, resolved, false);
+  int status = source_type && !folder ? EINVAL : resolve_package_path(path, resolved, folder);
   unsigned char *bytes = NULL;
   size_t size = 0;
-  if (!status) status = sm_pkg_read_icon(resolved, &bytes, &size);
+  if (!status) status = folder ? sm_pkg_read_directory_icon(resolved, &bytes, &size) : sm_pkg_read_icon(resolved, &bytes, &size);
   if (status) return send_error_response(connection, operation_http_status(status), status, "package icon is not available");
   struct MHD_Response *response = MHD_create_response_from_buffer(size, bytes, MHD_RESPMEM_MUST_FREE);
   if (!response) { free(bytes); return false; }
@@ -4062,6 +4155,20 @@ static bool add_backport_info(struct json_object *item, const char *path,
     add_json_string(item, "version", game ? game->version : "") &&
     add_json_string(item, "icon_url", icon_url) &&
     add_json_int(item, "sdk_version", sdk);
+}
+
+static bool add_folder_install_info(struct json_object *item, const char *path, const char *title_id) {
+  sm_pkg_info_t info = {0};
+  if (!sm_pkg_read_directory_metadata(path, &info) ||
+      (info.title_id[0] && strcmp(info.title_id, title_id))) memset(&info, 0, sizeof(info));
+  char icon[MAX_PATH], revision[32] = "";
+  struct stat st;
+  int length = snprintf(icon, sizeof(icon), "%s/sce_sys/icon0.png", path);
+  bool has_icon = length > 0 && (size_t)length < sizeof(icon) && lstat(icon, &st) == 0 &&
+      S_ISREG(st.st_mode) && st.st_size >= 8 && st.st_size <= SM_PKG_ICON_MAX;
+  if (has_icon) snprintf(revision, sizeof(revision), "%llx", (unsigned long long)sm_icon_source_fingerprint(icon, &st));
+  return add_json_string(item, "version", info.app_ver) && add_json_int(item, "sdk_version", info.sdk_version) &&
+      add_json_bool(item, "has_icon", has_icon) && add_json_string(item, "icon_revision", revision);
 }
 
 static void handle_file_listing(struct MHD_Connection *connection, struct json_object *request, bool packages) {
@@ -4125,7 +4232,8 @@ static void handle_file_listing(struct MHD_Connection *connection, struct json_o
           sm_pkg_is_installed_content_path(child) || (!S_ISDIR(st.st_mode) && !S_ISREG(st.st_mode))) continue;
       bool folder = S_ISDIR(st.st_mode);
       size_t name_length = strlen(entry->d_name);
-      if (!folder && (packages ? (name_length < 4 || strcasecmp(entry->d_name + name_length - 4, ".pkg")) : !include_files)) continue;
+      bool image = packages && !folder && is_supported_image_file_path(child, entry->d_name);
+      if (!folder && (packages ? (!image && (name_length < 4 || strcasecmp(entry->d_name + name_length - 4, ".pkg"))) : !include_files)) continue;
       if (count++ < offset) continue;
       if (count > offset + 256) { truncated = true; break; }
       sm_pkg_info_t info;
@@ -4133,6 +4241,10 @@ static void handle_file_listing(struct MHD_Connection *connection, struct json_o
       char backport_title[MAX_TITLE_ID], backport_destination[MAX_PATH];
       bool backport = packages && folder && resolve_backport_source(child, backport_title);
       bool backport_installed = backport && build_backport_destination(child, backport_destination) == EEXIST;
+      game_source_info_t game_source = {0};
+      char game_title[MAX_TITLE_ID], game_name[MAX_TITLE_NAME];
+      bool game = packages && !backport && (folder || image) &&
+          read_install_source_info(child, &st, &game_source, game_title, game_name);
       if (backport && !metadata_loaded) {
         if (!app_db_game_info_snapshot(&metadata, &metadata_count)) {
           closedir(directory); goto oom;
@@ -4142,7 +4254,10 @@ static void handle_file_listing(struct MHD_Connection *connection, struct json_o
       struct json_object *item = json_object_new_object();
       if (!item || !add_json_string(item, "name", entry->d_name) ||
           !add_json_string(item, "path", child) || !add_json_bool(item, "directory", folder) ||
-          !add_json_bool(item, "installable", valid) || !add_json_int(item, "size_bytes", st.st_size) ||
+          !add_json_bool(item, "installable", valid || game) || !add_json_int(item, "size_bytes", folder ? 0 : st.st_size) ||
+          (game && (!add_json_string(item, "source_type", game_source.source_type) ||
+                    !add_json_string(item, "title_id", game_title) || !add_json_string(item, "title_name", game_name))) ||
+          (game && folder && !add_folder_install_info(item, child, game_title)) ||
           (backport && !add_backport_info(item, child, backport_title, backport_installed,
                          app_db_find_game_info(metadata, metadata_count, backport_title))) ||
           (valid && (!add_package_info(item, &info) || !add_package_state(item, &info))) || json_object_array_add(entries, item) != 0) {
@@ -4217,11 +4332,13 @@ static bool package_install_cancelled(void *opaque) {
     int status = sm_pkg_stream_status(ctx->stream);
     if (status && status != ECANCELED) ctx->failure = status;
   }
+  if (ctx->expected && now >= ctx->source_check_us) {
+    ctx->source_check_us = now + 1000000;
+    struct stat st;
+    if (lstat(ctx->expected->path, &st) != 0 || !sm_pkg_source_matches(ctx->expected, &st))
+      ctx->failure = ESTALE;
+  }
   if (ctx->server) {
-    if (ctx->expected && now >= ctx->source_check_us) {
-      ctx->source_check_us = now + 1000000;
-      if (!sm_pkg_server_source_matches(ctx->server, ctx->expected)) ctx->failure = ESTALE;
-    }
     uint64_t bytes = sm_pkg_server_bytes_served(ctx->server);
     if (bytes > ctx->bytes) {
       ctx->bytes = bytes;
@@ -4231,8 +4348,8 @@ static bool package_install_cancelled(void *opaque) {
       publish_package_progress(ctx, sm_pkg_server_total(ctx->server), bytes, now);
     uint64_t request_time = sm_pkg_server_last_request_us(ctx->server);
     if (request_time > ctx->activity_us) ctx->activity_us = request_time;
-    if (now > ctx->activity_us && now - ctx->activity_us > 900ull * 1000000ull) ctx->failure = ETIMEDOUT;
   }
+  if (now > ctx->activity_us && now - ctx->activity_us > 900ull * 1000000ull) ctx->failure = ETIMEDOUT;
   bool cancelled = storage_job_cancelled((void *)(uintptr_t)ctx->id) || should_stop_requested() || runtime_sleep_mode_active();
   if ((cancelled || ctx->failure) && ctx->stream) sm_pkg_stream_stop(ctx->stream);
   return cancelled || ctx->failure;
@@ -4319,22 +4436,29 @@ static void *package_install_thread(void *opaque) {
       g_storage_job.state = STORAGE_JOB_INSTALLING;
       g_storage_job.transfer_started_us = monotonic_time_us();
       pthread_mutex_unlock(&g_storage_job.mutex);
-      if (!ctx.server) status = ctx.stream ? sm_pkg_server_start_reader(&ctx.server, source, size, sm_pkg_stream_read, ctx.stream, token, &port)
-          : sm_pkg_server_start(&ctx.server, resolved, token, &port);
+      if (ctx.stream && !ctx.server)
+        status = sm_pkg_server_start_reader(&ctx.server, source, size, sm_pkg_stream_read, ctx.stream, token, &port);
       if (!ctx.stream) ctx.expected = &info;
     }
     if (!status && package_install_cancelled(&ctx)) status = ctx.failure ? ctx.failure : ECANCELED;
     if (!status) {
-      char encoded[MAX_PATH * 3];
-      const char *name = strrchr(source, '/'); name = name ? name + 1 : source;
-      static const char hex[] = "0123456789ABCDEF";
-      size_t used = 0;
-      for (const unsigned char *p = (const unsigned char *)name; *p; ++p) {
-        if (isalnum(*p) || *p == '.' || *p == '-' || *p == '_') encoded[used++] = *p;
-        else { encoded[used++] = '%'; encoded[used++] = hex[*p >> 4]; encoded[used++] = hex[*p & 15]; }
+      int length;
+      if (ctx.server) {
+        char encoded[MAX_PATH * 3];
+        const char *name = strrchr(source, '/'); name = name ? name + 1 : source;
+        static const char hex[] = "0123456789ABCDEF";
+        size_t used = 0;
+        for (const unsigned char *p = (const unsigned char *)name; *p; ++p) {
+          if (isalnum(*p) || *p == '.' || *p == '-' || *p == '_') encoded[used++] = *p;
+          else { encoded[used++] = '%'; encoded[used++] = hex[*p >> 4]; encoded[used++] = hex[*p & 15]; }
+        }
+        encoded[used] = 0;
+        length = snprintf(uri, sizeof(uri), "http://%s:%u/%s/%s", sm_pkg_server_host(ctx.server), port, token, encoded);
+      } else {
+        // AppInstUtil resolves /data through its system-visible /user/data alias.
+        length = snprintf(uri, sizeof(uri), "%s%s",
+            path_matches_root_or_child(resolved, "/data") ? "/user" : "", resolved);
       }
-      encoded[used] = 0;
-      int length = snprintf(uri, sizeof(uri), "http://%s:%u/%s/%s", sm_pkg_server_host(ctx.server), port, token, encoded);
       if (length < 0 || (size_t)length >= sizeof(uri)) status = ENAMETOOLONG;
       else {
         phase = "submit";
@@ -4406,7 +4530,7 @@ static void *package_install_thread(void *opaque) {
       bool copied = !native_status.copy_only || native_status.local_copy_percent >= 100;
       bool downloaded = native_status.total > 0 && native_status.total <= INT64_MAX
           ? native_status.downloaded >= native_status.total
-          : !ctx.native_progress && sm_pkg_server_complete(ctx.server);
+          : !ctx.native_progress && ctx.server && sm_pkg_server_complete(ctx.server);
       bool completed = !strcmp(native_status.status, "completed") ||
           (!strcmp(native_status.status, "playable") && downloaded && copied);
       // An installed DLC must not complete its replacement while transferring.
@@ -4437,7 +4561,7 @@ static void *package_install_thread(void *opaque) {
                 native_status.local_copy_percent);
     }
     if (ctx.stream) sm_pkg_stream_stop(ctx.stream);
-    // Closing the source unblocks an in-flight native submission before joining.
+    // Close streamed sources and cancel native work before joining submission.
     sm_pkg_server_stop(ctx.server);
     if (status && submitted) {
       int cancelled = sceAppInstUtilCancelInstall(info.content_id);

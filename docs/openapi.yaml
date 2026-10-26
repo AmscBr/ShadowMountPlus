@@ -963,6 +963,40 @@ paths:
         "409":
           $ref: "#/components/responses/Busy"
 
+  /api/v1/sources/install:
+    post:
+      operationId: installGameSource
+      summary: Copy a game folder or intact image to a selected destination
+      description: Uses the shared cancellable storage job without a queue. Preserves the source and original filename, refuses existing targets and source descendants, protects active games, adds the copied path to manual.lst and requests a scan. Directory destinations are restricted to managed data and mounted USB/ext storage, excluding native installed-content trees and runtime image mounts.
+      tags: [Games]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path, destination_dir]
+              properties:
+                path: {type: string, description: Path to a supported image or game folder}
+                destination_dir: {type: string, description: Existing writable parent directory for the new copy}
+      responses:
+        "202":
+          description: Source installation accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorageJobResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Busy"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /api/v1/backports/install:
     post:
       operationId: installBackport
@@ -1050,11 +1084,12 @@ paths:
   /api/v1/packages/icon:
     get:
       operationId: getPackageIcon
-      summary: Extract embedded icon0.png from a local PKG
+      summary: Read icon0.png from a local PKG or game directory
       tags: [Packages]
       parameters:
         - {in: query, name: path, required: true, schema: {type: string, maxLength: 1023}}
         - {in: query, name: v, schema: {type: string}, description: Source revision for browser caching.}
+        - {in: query, name: source_type, schema: {type: string, enum: [folder]}, description: Read sce_sys/icon0.png from a directory when folder; omit for PKGs.}
       responses:
         "200":
           description: Bounded PNG artwork from an allowed package source (up to 4 MiB).
@@ -1102,7 +1137,7 @@ paths:
       operationId: installPackage
       summary: Install a local PKG through AppInstUtil
       tags: [Packages]
-      description: Shares the storage job slot and mutation gates. Patches and DLC require an installed base game. No automatic retry or deletion of the source.
+      description: Passes the local filesystem path directly to AppInstUtil without an HTTP proxy. Paths under /data/ use the /user/data/ alias. Shares the storage job slot and mutation gates. Patches and DLC require an installed base game. No automatic retry or deletion of the source.
       requestBody:
         required: true
         content:
@@ -1770,8 +1805,8 @@ components:
           type: array
           items:
             type: string
-            enum: [web_ui, storage_space, list_images, list_games, game_info, game_data_sizes, pkg_install, pkg_browser_stream, game_icon, mount_game, unmount_game, uninstall_game, uninstall_game_content, move_game_source, copy_game_source, delete_game_source, unpack_game_image, storage_job_status, storage_job_cancel, list_manual_sources, add_manual_source, remove_manual_source, manage_settings, read_debug_log, read_kernel_log, rescan]
-          example: [web_ui, storage_space, list_images, list_games, game_info, game_data_sizes, pkg_install, pkg_browser_stream, game_icon, mount_game, unmount_game, uninstall_game, uninstall_game_content, move_game_source, copy_game_source, delete_game_source, unpack_game_image, storage_job_status, storage_job_cancel, list_manual_sources, add_manual_source, remove_manual_source, manage_settings, read_debug_log, read_kernel_log, rescan]
+            enum: [web_ui, storage_space, list_images, list_games, game_info, game_data_sizes, pkg_install, pkg_browser_stream, game_icon, mount_game, unmount_game, uninstall_game, uninstall_game_content, install_game_source, move_game_source, copy_game_source, delete_game_source, unpack_game_image, storage_job_status, storage_job_cancel, list_manual_sources, add_manual_source, remove_manual_source, manage_settings, read_debug_log, read_kernel_log, rescan]
+          example: [web_ui, storage_space, list_images, list_games, game_info, game_data_sizes, pkg_install, pkg_browser_stream, game_icon, mount_game, unmount_game, uninstall_game, uninstall_game_content, install_game_source, move_game_source, copy_game_source, delete_game_source, unpack_game_image, storage_job_status, storage_job_cancel, list_manual_sources, add_manual_source, remove_manual_source, manage_settings, read_debug_log, read_kernel_log, rescan]
 
     StorageMount:
       type: object
@@ -2256,7 +2291,7 @@ components:
           type: integer
           format: int64
           minimum: 0
-          description: Average processed-byte rate since transfer or deletion began. PKG installation uses recent system byte deltas (HTTP coverage until system counters are available), sampled about once per second; stalled or inactive installs report zero.
+          description: Average processed-byte rate since transfer or deletion began. PKG installation uses recent system byte deltas (browser streams can use HTTP coverage until system counters are available), sampled about once per second; stalled or inactive installs report zero.
         elapsed_ms:
           type: integer
           format: int64
@@ -2445,6 +2480,7 @@ components:
               path: {type: string}
               directory: {type: boolean}
               installable: {type: boolean}
+              source_type: {type: string, enum: [folder, image], description: Non-PKG source installed by copying without queue support.}
               backport: {type: boolean}
               backport_installed: {type: boolean}
               size_bytes: {type: integer, format: int64}
@@ -2453,7 +2489,7 @@ components:
               icon_url: {type: string, description: Versioned installed-game cover URL for backports; empty when unavailable.}
               content_id: {type: string}
               version: {type: string}
-              sdk_version: {type: integer, minimum: 0, maximum: 4294967295, description: Packed SDK from param.json/param.sfo for PKGs or the backport eboot.bin process parameter; zero when unavailable.}
+              sdk_version: {type: integer, minimum: 0, maximum: 4294967295, description: Packed SDK from param.json/param.sfo for PKGs and game directories or the backport eboot.bin process parameter; zero when unavailable.}
               kind: {type: string, enum: [base, patch, dlc, unknown]}
               installed: {type: boolean, description: The base game is already installed as a native PKG.}
               base_installed: {type: boolean, description: A base game is registered from a PKG or a folder/image source.}

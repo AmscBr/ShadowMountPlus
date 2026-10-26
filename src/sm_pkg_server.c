@@ -17,14 +17,19 @@
 #include "sm_pkg_stream.h"
 #include "sm_pkg_ws.h"
 #include "sm_limits.h"
+#include "sm_log.h"
 #include "sm_time.h"
 
 #define SM_PKG_SERVER_MAX_CONNECTIONS 16
 #define SM_PKG_SERVER_REQUEST_MAX 8192
 #define SM_PKG_SERVER_SEND_CHUNK (2u * 1024u * 1024u)
-#define SM_PKG_SERVER_SEND_BUFFER (512 * 1024)
+#define SM_PKG_SERVER_SOCKET_BUFFER (512 * 1024)
 #define SM_PKG_SERVER_IO_TIMEOUT_SECONDS 60
 #define SM_PKG_SERVER_COVERAGE_MAX 256
+
+typedef struct {
+  uint64_t started_us, reported_us, bytes, read_us, send_us;
+} sm_pkg_transfer_stats_t;
 
 struct sm_pkg_server {
   pthread_mutex_t mutex;
@@ -46,6 +51,7 @@ struct sm_pkg_server {
   uint16_t port;
   uint64_t total;
   uint64_t last_request_us;
+  sm_pkg_transfer_stats_t transfer;
   struct {
     uint64_t start;
     uint64_t end;
@@ -311,6 +317,17 @@ static int header_content(char *buffer, size_t size, uint64_t start, uint64_t en
                   range, keep_alive ? "keep-alive" : "close");
 }
 
+static void log_transfer_stats(bool streaming, const sm_pkg_transfer_stats_t *stats,
+                                uint64_t now, bool final) {
+  // Reader times are summed across HTTP workers; elapsed time is wall time.
+  log_debug("  [PKG] HTTP transfer: source=%s bytes=%llu elapsed_ms=%llu "
+            "read_ms=%llu send_ms=%llu final=%u",
+            streaming ? "stream" : "disk", (unsigned long long)stats->bytes,
+            (unsigned long long)((now - stats->started_us) / 1000),
+            (unsigned long long)(stats->read_us / 1000),
+            (unsigned long long)(stats->send_us / 1000), (unsigned)final);
+}
+
 static bool serve_file(sm_pkg_server_t *server, int fd,
                        const sm_pkg_http_request_t *request) {
   char decoded[MAX_PATH];
@@ -417,17 +434,34 @@ static bool serve_file(sm_pkg_server_t *server, int fd,
     size_t want = remaining > chunk_size
                       ? chunk_size
                       : (size_t)remaining;
+    uint64_t read_started_us = monotonic_time_us();
     ssize_t count = server->read
       ? (server->read(server->read_ctx, offset, buffer, want) == 0 ? (ssize_t)want : -1)
       : pread(server->pkg_fd, buffer, want, (off_t)offset);
-    if (!server->read && count < 0 && errno == EINTR) continue;
-    if (count <= 0 || !send_all(fd, buffer, (size_t)count)) {
-      ok = false;
-      break;
-    }
+    int read_error = count < 0 ? errno : 0;
+    uint64_t send_started_us = monotonic_time_us();
+    if (!server->read && count < 0 && read_error == EINTR) continue;
+    bool sent = count > 0 && send_all(fd, buffer, (size_t)count);
+    uint64_t sent_us = monotonic_time_us();
+    sm_pkg_transfer_stats_t snapshot = {0};
     pthread_mutex_lock(&server->mutex);
-    add_coverage_locked(server, offset, offset + (uint64_t)count - 1);
+    sm_pkg_transfer_stats_t *stats = &server->transfer;
+    if (!stats->started_us || read_started_us < stats->started_us) stats->started_us = read_started_us;
+    if (!stats->reported_us) stats->reported_us = read_started_us;
+    stats->read_us += send_started_us - read_started_us;
+    stats->send_us += sent_us - send_started_us;
+    if (sent) {
+      stats->bytes += (uint64_t)count;
+      add_coverage_locked(server, offset, offset + (uint64_t)count - 1);
+    }
+    // Rate-limit across all ranges and connections, including short requests.
+    if (sent_us >= stats->reported_us && sent_us - stats->reported_us >= 30000000ull) {
+      stats->reported_us = sent_us;
+      snapshot = *stats;
+    }
     pthread_mutex_unlock(&server->mutex);
+    if (snapshot.started_us) log_transfer_stats(server->read != NULL, &snapshot, sent_us, false);
+    if (!sent) { ok = false; break; }
     offset += (uint64_t)count;
   }
   free(buffer);
@@ -500,9 +534,6 @@ static void *worker(void *opaque) {
         if (owner) server->browser_fd = fd;
         pthread_mutex_unlock(&server->mutex);
         if (owner) {
-          int bytes = 4 * 1024 * 1024;
-          (void)setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &bytes, sizeof(bytes));
-          (void)setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &bytes, sizeof(bytes));
           request[request_size] = next;
           sm_pkg_ws_serve(fd, key, request + request_size, used - request_size, server->browser, &server->running);
           pthread_mutex_lock(&server->mutex);
@@ -565,7 +596,7 @@ static void *listener(void *opaque) {
     }
     int one = 1;
     (void)setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
-    int send_buffer = SM_PKG_SERVER_SEND_BUFFER;
+    int send_buffer = SM_PKG_SERVER_SOCKET_BUFFER;
     (void)setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &send_buffer, sizeof(send_buffer));
     if (atomic_fetch_add(&server->worker_count, 1) + 1 >
         SM_PKG_SERVER_MAX_CONNECTIONS) {
@@ -662,6 +693,13 @@ static int start_server(sm_pkg_server_t **out, const char *pkg_path, uint64_t si
   int one = 1;
   (void)setsockopt(server->listen_fd, SOL_SOCKET, SO_REUSEADDR, &one,
                    sizeof(one));
+  if (browser) {
+    // Set before listen so uploads inherit the receive window during the
+    // handshake, rather than growing it only after the WebSocket upgrade.
+    int receive_buffer = SM_PKG_SERVER_SOCKET_BUFFER;
+    (void)setsockopt(server->listen_fd, SOL_SOCKET, SO_RCVBUF,
+                     &receive_buffer, sizeof(receive_buffer));
+  }
   memset(&address, 0, sizeof(address));
   address.sin_family = AF_INET;
   address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
@@ -733,11 +771,7 @@ uint64_t sm_pkg_server_bytes_served(sm_pkg_server_t *server) {
 bool sm_pkg_server_source_matches(sm_pkg_server_t *server, const sm_pkg_info_t *info) {
   if (!server || server->read || !info) return false;
   struct stat st;
-  return fstat(server->pkg_fd, &st) == 0 && S_ISREG(st.st_mode) &&
-    (uint64_t)st.st_size == info->source_size && (uint64_t)st.st_dev == info->source_device &&
-    (uint64_t)st.st_ino == info->source_inode && (uint64_t)st.st_ctime == info->source_ctime &&
-    st.st_mtime == info->source_mtime && (uint32_t)st.st_mtim.tv_nsec == info->source_mtime_ns &&
-    (uint32_t)st.st_ctim.tv_nsec == info->source_ctime_ns;
+  return fstat(server->pkg_fd, &st) == 0 && sm_pkg_source_matches(info, &st);
 }
 
 uint64_t sm_pkg_server_total(sm_pkg_server_t *server) {
@@ -795,6 +829,8 @@ void sm_pkg_server_stop(sm_pkg_server_t *server) {
   while (atomic_load(&server->worker_count) != 0)
     pthread_cond_wait(&server->cond, &server->mutex);
   pthread_mutex_unlock(&server->mutex);
+  if (server->transfer.bytes >= 16u * 1024u * 1024u)
+    log_transfer_stats(server->read != NULL, &server->transfer, monotonic_time_us(), true);
   if (server->pkg_fd >= 0) close(server->pkg_fd);
   pthread_cond_destroy(&server->cond);
   pthread_mutex_destroy(&server->mutex);

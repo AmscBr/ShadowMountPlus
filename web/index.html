@@ -458,7 +458,7 @@
     .layout { display: block; }
     .package-workbench { display: grid; grid-template-columns: 333.5px minmax(0, 1fr); gap: 24px; align-items: start; }
     .backport-cover { background: radial-gradient(circle at 30% 20%, #2b5076, #17283e); }
-    .backport-cover svg { width: 40px; height: 40px; color: #9ebbd7; }
+    .package-cover svg { width: 40px; height: 40px; flex-shrink: 0; color: #9ebbd7; }
     .package-sources { display: flex; flex-direction: column; gap: 18px; align-self: stretch; }
     .package-sources .panel { padding: 18px; min-width: 0; flex-shrink: 0; }
     .package-roots.console-list { display: grid; grid-auto-rows: 50px; gap: 8px; margin-top: 14px; max-height: 466px; overflow-y: auto; padding: 5px; }
@@ -476,6 +476,7 @@
     .package-cover img { width: 100%; height: 100%; object-fit: cover; }
     .package-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; width: 316px; flex-shrink: 0; max-width: 42%; }
     .package-actions .btn { width: 100%; height: 56px; min-width: 0; min-height: 56px; padding: 8px 12px; font-size: 16px; line-height: 1.2; white-space: normal; overflow-wrap: anywhere; }
+    .package-actions.source-single { grid-template-columns: minmax(0, 1fr); width: 148px; }
     .package-queue { position: sticky; top: 16px; z-index: 2; display: flex; flex-direction: column; margin-top: 0; padding: 18px; }
     .package-queue-head { flex-shrink: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
     .package-queue-head .btn { grid-column: 1 / -1; min-width: 0; width: 100%; padding: 10px 12px; white-space: normal; overflow-wrap: anywhere; }
@@ -485,7 +486,7 @@
     .package-queue-row span { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 15px; }
     .btn.package-queue-remove { flex: 0 0 46px; width: 46px; height: 46px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
     .package-queue-remove svg { width: 22px; height: 22px; pointer-events: none; }
-    @media (max-width: 540px) { .package-cover { width: 56px; height: 56px; flex-basis: 56px; } .package-row:not(.package-folder) { flex-wrap: wrap; } .package-actions { width: 100%; max-width: none; } .package-actions .btn { flex: 1; } }
+    @media (max-width: 540px) { .package-cover { width: 56px; height: 56px; flex-basis: 56px; } .package-row:not(.package-folder) { flex-wrap: wrap; } .package-actions, .package-actions.source-single { width: 100%; max-width: none; } .package-actions .btn { flex: 1; } }
     .package-folder { width: 100%; justify-content: flex-start; text-align: left; white-space: normal; }
     .package-folder::before { content: ""; width: 26px; height: 21px; background: #88c7ff; border-radius: 3px; clip-path: polygon(0 0, 40% 0, 52% 18%, 100% 18%, 100% 100%, 0 100%); flex-shrink: 0; }
     .package-row > .btn { flex-shrink: 0; min-width: 110px; max-width: 40%; white-space: normal; }
@@ -822,8 +823,8 @@
       </div>
       <nav class="view-nav" aria-label="Navigation" data-i18n-aria-label="navigate">
         <button class="btn view-tab active" id="libraryTab" type="button" aria-pressed="true" data-i18n="library">Library</button>
-        <button class="btn view-tab" id="consoleTab" type="button" aria-pressed="false" data-i18n="consoleTools">Console</button>
-        <button class="btn view-tab" id="packagesTab" type="button" aria-pressed="false" data-i18n="packagesTab">Install PKG</button>
+        <button class="btn view-tab" id="packagesTab" type="button" aria-pressed="false" data-i18n="packagesTab">Installation</button>
+        <button class="btn view-tab" id="consoleTab" type="button" aria-pressed="false" data-i18n="settings">Settings</button>
       </nav>
       <div class="topbar-actions">
         <div class="connection" id="connection" role="status">
@@ -2946,9 +2947,9 @@
         $("transferSummary").title = $("transferSummary").textContent;
         $("transferState").textContent = job.cancel_requested ? t("cancelling") : storageJobStateLabel(job);
         if (job.queue_running) $("transferState").textContent += ` · ${Number(job.queue_completed) + 1} / ${job.queue_total}`;
-        $("transferRoute").textContent = ["delete", "install"].includes(job.operation)
-          ? job.source
-          : `${job.source} → ${job.destination}`;
+        $("transferRoute").textContent = job.destination
+          ? `${job.source} → ${job.destination}`
+          : job.source;
         $("transferRoute").title = $("transferRoute").textContent;
         const measuring = job.state === "preparing" || job.state === "measuring";
         $("transferMeter").classList.toggle("indeterminate", measuring);
@@ -3707,7 +3708,7 @@
         $("pathUp").disabled = !data.path;
         $("choosePath").disabled = !data.path;
         const destination = state.destinationRequest;
-        if (picker.target === "customDestination" && destination && ["copy", "move"].includes(destination.operation)) {
+        if (picker.target === "customDestination" && destination && ["copy", "move", "install"].includes(destination.operation)) {
           const source = String(destination.game.path || "").replace(/\/+/g, "/").replace(/\/+$/, "");
           if (source && data.path === source.slice(0, source.lastIndexOf("/"))) $("choosePath").disabled = true;
         }
@@ -3771,9 +3772,10 @@
       function renderDestinationPicker() {
         const request = state.destinationRequest;
         if (!request) return;
-        $("destinationTitle").textContent = t({ copy: "chooseCopyDestination", move: "chooseMoveDestination", unpack: "chooseUnpackDestination" }[request.operation]);
-        $("destinationAction").dataset.i18n = request.operation;
-        $("destinationAction").textContent = t(request.operation);
+        $("destinationTitle").textContent = t({ copy: "chooseCopyDestination", move: "chooseMoveDestination", unpack: "chooseUnpackDestination", install: "packageInstall" }[request.operation]);
+        const action = request.operation === "install" ? "packageInstall" : request.operation;
+        $("destinationAction").dataset.i18n = action;
+        $("destinationAction").textContent = t(action);
         const choices = $("destinationChoices");
         replaceContent(choices);
         const fromUsb = /^\/mnt\/usb[0-7](?:\/|$)/.test(request.game.path || "");
@@ -3781,7 +3783,7 @@
         const normalize = path => String(path || "").replace(/\/+/g, "/").replace(/\/+$/, "") || "/";
         const source = normalize(request.game.path);
         const parent = source.slice(0, source.lastIndexOf("/")) || "/";
-        const transfer = request.operation === "copy" || request.operation === "move";
+        const transfer = ["copy", "move", "install"].includes(request.operation);
         const destinations = state.storageDestinations.filter(destination =>
           !transfer || !request.game.path || normalize(destination.path) !== parent
         );
@@ -3819,10 +3821,9 @@
         const deleteSource = request.operation === "unpack" && $("unpackDeleteSource").checked;
         if (deleteSource && !await confirmAction(t("unpackDeleteConfirm"))) return;
         closeDestinationPicker();
-        const payload = {
-          title_id: request.game.title_id,
-          destination_dir: path
-        };
+        const payload = { destination_dir: path };
+        if (request.operation === "install") payload.path = request.game.path;
+        else payload.title_id = request.game.title_id;
         if (request.operation === "unpack") payload.delete_source = deleteSource;
         await startStorageJob(request.game, request.operation, payload);
       }
@@ -3838,7 +3839,7 @@
 
       async function startStorageJob(game, operation, payload) {
         try {
-          const job = await api(`/games/${operation}`, payload);
+          const job = await api(operation === "install" ? "/sources/install" : `/games/${operation}`, payload);
           if (job.source_missing) {
             const message = job.scan_deferred
               ? `${t("sourceMissing")}. ${scanQueueMessage(job)}` : t("sourceMissing");
@@ -3851,7 +3852,7 @@
           }
           renderStorageJob(job);
           closeModal();
-          logActivity(t("jobStarted", { operation: storageOperationLabel(operation), title: game.title_id, id: job.job_id }));
+          logActivity(t("jobStarted", { operation: storageOperationLabel(operation), title: gameLabel(game), id: job.job_id }));
           toast(t("operationStarted"));
           if (job.active) scheduleStorageJobPoll();
           else reportStorageJob(job);
@@ -4040,7 +4041,7 @@
 
       function switchMainTab(direction) {
         if (activeDialog() || (!playStationBrowser && isNativeEditor(document.activeElement))) return;
-        const views = ["library", "console", "packages"];
+        const views = ["library", "packages", "console"];
         const index = views.indexOf(navigation.view);
         switchView(views[(index + direction + views.length) % views.length]);
       }
@@ -4125,13 +4126,14 @@
         const queue = state.packageQueue?.entries || [];
         const entries = state.packages?.entries || [];
         const rows = new Map([...$("packageList").querySelectorAll(".package-row")].map(row => [row.dataset.path, row]));
-        entries.filter(entry => !entry.directory).forEach(entry => {
+        entries.filter(entry => !entry.directory && !["folder", "image"].includes(entry.source_type)).forEach(entry => {
           const row = rows.get(entry.path);
           if (!row) return;
           const installed = Boolean(entry.installed);
           const missing = entry.kind !== "base" && !entry.base_installed;
           const baseQueued = queue.some(item => item.kind === "base" && item.title_id === entry.title_id) ||
             Boolean(state.storageJob?.active && state.storageJob.operation === "install" &&
+              ["pkg", "stream"].includes(state.storageJob.source_type) &&
               state.storageJob.title_id === entry.title_id && state.storageJob.package_kind === "base");
           const queued = queue.some(item => item.path === entry.path ||
             (entry.content_id && item.content_id === entry.content_id && item.kind === entry.kind && item.version === entry.version)) ||
@@ -4144,6 +4146,9 @@
         });
         $("packageList").querySelectorAll(".backport-install").forEach(button => {
           button.disabled = button.dataset.selfSource === "true" || Boolean(state.storageJob?.active);
+        });
+        $("packageList").querySelectorAll(".source-install").forEach(button => {
+          button.disabled = Boolean(state.storageJob?.active);
         });
         $("packageList").querySelectorAll(".backport-delete").forEach(button => {
           button.disabled = Boolean(state.storageJob?.active);
@@ -4221,10 +4226,12 @@
           ? `${version}.${(minor >>> 4)}${minor & 15}` : `${version}.xx`;
       }
 
-      function backportCover(entry) {
-        const cover = node("div", "package-cover backport-cover");
+      function installationCover(entry) {
+        const cover = node("div", entry.backport ? "package-cover backport-cover" : "package-cover");
         const placeholder = document.createElementNS("http://www.w3.org/2000/svg", "svg");
         placeholder.setAttribute("viewBox", "0 0 32 32");
+        placeholder.setAttribute("width", "40");
+        placeholder.setAttribute("height", "40");
         placeholder.setAttribute("fill", "none");
         placeholder.setAttribute("stroke", "currentColor");
         placeholder.setAttribute("stroke-width", "1.7");
@@ -4236,10 +4243,12 @@
         shape.setAttribute("d", "M11 9h10c4 0 6 4 7 10 1 5-2 7-5 4l-3-3h-8l-3 3c-3 3-6 1-5-4 1-6 3-10 7-10ZM9 14v6m-3-3h6m9-2h.1m3 3h.1");
         placeholder.append(shape);
         cover.append(placeholder);
-        if (entry.icon_url) {
+        const iconUrl = entry.icon_url || (entry.has_icon
+          ? `/api/v1/packages/icon?${entry.source_type === "folder" ? "source_type=folder&" : ""}path=${encodeURIComponent(entry.path)}&v=${encodeURIComponent(entry.icon_revision || "")}` : "");
+        if (iconUrl) {
           const image = document.createElement("img");
           image.alt = ""; image.loading = "lazy"; image.decoding = "async";
-          image.src = entry.icon_url;
+          image.src = iconUrl;
           image.addEventListener("error", () => replaceContent(cover, placeholder), { once: true });
           replaceContent(cover, image);
         }
@@ -4261,14 +4270,33 @@
         $("packagePath").textContent = data.path || t("storage");
         $("packageUp").disabled = !data.path;
         replaceContent(list);
+        const group = entry => !entry.directory ? 2
+          : entry.backport || (entry.installable && entry.source_type === "folder") ? 1 : 0;
         const entries = (data.entries || []).slice().sort((left, right) =>
-          Number(Boolean(right.directory)) - Number(Boolean(left.directory)) || (left.title_name || left.name).localeCompare(right.title_name || right.name, currentLanguage));
+          group(left) - group(right) || (left.title_name || left.name).localeCompare(right.title_name || right.name, currentLanguage));
         if (!data.path) {
           (data.roots || []).forEach(path => {
             const button = actionButton(path, () => refreshPackages(path, true), "package-row package-folder");
             list.append(button);
           });
         } else entries.forEach(entry => {
+          if (entry.installable && ["folder", "image"].includes(entry.source_type)) {
+            const row = node("div", "package-row source-install-row");
+            row.dataset.path = entry.path;
+            const info = node("div", "package-info");
+            info.append(node("h3", "", entry.title_name || entry.name));
+            const sourceLabel = t(entry.source_type);
+            const details = [sourceLabel.charAt(0).toLocaleUpperCase(currentLanguage) + sourceLabel.slice(1), entry.title_id,
+              ...(entry.source_type === "folder" ? [entry.version || "—", `SDK ${packageSdkVersion(entry.sdk_version)}`] : []),
+              entry.source_type === "image" ? formatBytes(entry.size_bytes) : ""].filter(Boolean);
+            info.append(node("p", "subtle", details.join(" · ")), node("p", "subtle", entry.name));
+            const actions = node("div", entry.directory ? "package-actions" : "package-actions source-single");
+            actions.append(actionButton(t("packageInstall"), () => storageOperation(entry, "install"), "primary source-install"));
+            if (entry.directory) actions.append(actionButton(t("browse"), () => refreshPackages(entry.path, true)));
+            row.append(installationCover(entry), info, actions);
+            list.append(row);
+            return;
+          }
           if (entry.directory) {
             if (entry.backport) {
               const row = node("div", "package-row backport-row");
@@ -4287,7 +4315,7 @@
               remove.dataset.path = entry.path;
               const actions = node("div", "package-actions backport-actions");
               actions.append(install, remove);
-              row.append(backportCover(entry), info, actions);
+              row.append(installationCover(entry), info, actions);
               list.append(row);
               return;
             }
@@ -4298,14 +4326,7 @@
           }
           const row = node("div", "package-row");
           row.dataset.path = entry.path;
-          const cover = node("div", "package-cover", "PKG");
-          if (entry.has_icon) {
-            const image = document.createElement("img");
-            image.alt = ""; image.loading = "lazy"; image.decoding = "async";
-            image.src = `/api/v1/packages/icon?path=${encodeURIComponent(entry.path)}&v=${encodeURIComponent(entry.icon_revision || "")}`;
-            image.addEventListener("error", () => { replaceContent(cover, document.createTextNode("PKG")); }, { once: true });
-            replaceContent(cover, image);
-          }
+          const cover = installationCover(entry);
           const info = node("div", "package-info");
           info.append(node("h3", "", entry.title_name || entry.name));
           const metadata = entry.installable

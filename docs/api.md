@@ -451,17 +451,42 @@ mount/unmount cycle. The mutation test is skipped if there is no candidate or
 the runtime is busy.
 
 
-### PKG installation and browser streaming
+### Game installation and browser streaming
 
-`pkg_install` and `pkg_browser_stream` capabilities advertise the package tab.
+`pkg_install`, `pkg_browser_stream` and `install_game_source` advertise the
+Installation tab. The main tabs are Library, Installation and Settings, in that
+order; shoulder-button navigation follows the same order.
 `POST /api/v1/packages` accepts `{"path":"/data/pkgs","offset":0}` and returns
 `path`, `parent`, available `roots`, `entries`, `offset` and `truncated`.
-An empty path lists available roots. Each page contains up to 256 folders/PKGs;
+An empty path lists available roots. Each page contains up to 256 folders, images or PKGs;
 advance `offset` by 256 when `truncated` is true. Browsing is non-recursive and
 restricted to internal `/data`, mounted `/mnt/usb0..7` and `/mnt/ext0..1`.
 `/data/pkgs` remains a shortcut. Symlinks and installed content trees are excluded. Valid package entries expose
 `title_id`, `title_name`, `content_id`, `version`, `kind` (base/patch/dlc) and
 `size_bytes`. Invalid packages remain visible with `installable=false`.
+Game folders with `sce_sys/param.json` or `param.sfo` and `eboot.bin` or
+`eboot2.bin`, and supported image files, expose `source_type` (`folder` or
+`image`) and `installable=true`. Folders include their title ID and name,
+`version` and `sdk_version` from their own param.json/param.sfo, plus `has_icon`
+and `icon_revision` for `sce_sys/icon0.png`;
+unmounted images use their filename. Folder sizes are not recursively measured
+during browsing (`size_bytes=0`); installation measures the whole source.
+
+`POST /api/v1/sources/install` accepts `path` and `destination_dir`. It copies
+the source directory or intact image under its original name into the selected
+directory, using the shared background storage job. Destinations must be existing
+directories under `/data` or mounted USB/ext storage; native installed-content
+trees and runtime image mounts are excluded. The optional ext1 homebrew preset
+can be created using the existing storage destination rules. Existing targets,
+the source's own parent, and destinations inside the source are rejected.
+The source is preserved. After copying, the destination is added to `manual.lst`
+and a scan is requested, so custom destination directories are discovered too.
+These installations have no queue support and serialize against active jobs and
+PKG batches. Active-title/source protection, cancellation, sleep and shutdown use
+the existing storage worker. The status popup reports `operation=install` with
+`source_type=folder|image`; native PKG dependency checks do not treat this as a
+queued base PKG.
+
 Valid entries also include `installed` (base packages installed as native PKGs), `base_installed`,
 `base_queued`, `has_icon` and `icon_revision`. A folder/image registration counts
 as `base_installed` but not `installed`: its base PKG can be installed or queued,
@@ -471,6 +496,10 @@ as No base game. Direct patch/DLC installation requires the base to be installed
 `GET /api/v1/packages/icon?path=...&v=...` extracts the embedded icon0.png from a
 permitted PKG. The image is limited to 4 MiB, with file bounds and PNG signature
 checks; packages without artwork use a placeholder.
+For a game directory, add `source_type=folder` and pass the directory as `path`
+to read its `sce_sys/icon0.png`, even before registration. Directory assets use
+bounded reads with symlink/FIFO rejection; the cover cache revision changes with
+the icon file. Missing or unreadable version/SDK fields are shown as unavailable.
 
 `POST /api/v1/files` supplies the path picker for scan roots, individual game
 sources and storage destinations. It accepts `path` (empty for drives), `offset`
@@ -533,8 +562,10 @@ Storage status adds `queue_count`, `queue_completed`, `queue_total`,
 `queue_running` and the current `package_kind`; its job ID covers the batch.
 
 `POST /api/v1/packages/install` accepts `{"path":"/mnt/usb0/packages/game.pkg"}`.
-It submits the package to the existing AppInstUtil session over an on-demand
-loopback range server. There is one shared job slot for installation and file
+It submits local packages to the existing AppInstUtil session by filesystem
+path, without an HTTP proxy. Paths under `/data/` use the system-visible
+`/user/data/` alias; USB and external-storage paths are passed directly.
+There is one shared job slot for installation and file
 operations, with the same scanner/runtime mutation gates. Patches and DLC
 require an installed base game. Sources are not deleted or automatically retried.
 Local file identity, size and modification times are checked before and during
@@ -559,15 +590,26 @@ remains a separate cancelled job. Keep the browser page open until completion.
 The stream retains up to 32 aligned 1 MiB segments (32 MiB) in RAM and pins
 the header. Bulk reads look ahead at most eight segments, with at most sixteen
 pending requests before speculation stops. Actual reader demand takes priority.
+Within each priority class, requests retain their creation order when cache
+slots are reused. Sequential reads therefore remain sequential on the browser's
+source disk instead of following recycled RAM-slot indices.
 Speculation can evict only already-consumed segments; demanded reads can reclaim
 ready segments without active readers. This prevents competing read-ahead windows
 from repeatedly discarding each other's unread data. No staging PKG is saved to
 storage. The installer only counts each delivered byte once.
 
 The installer's HTTP server batches disk and RAM reads into at most 2 MiB
-blocks and requests a 512 KiB socket send buffer. Successful full and partial
-responses include `Date`, a stable `Last-Modified` validator and
-`Content-Type: application/octet-stream`; the source URI is unique per attempt.
+blocks and requests a 512 KiB socket send buffer.
+The browser listener also sets a 512 KiB receive buffer before `listen()`, so
+uploads inherit the larger initial receive window during the TCP handshake.
+Successful full and partial responses include `Date`, a stable
+`Last-Modified` validator and `Content-Type: application/octet-stream`.
+The source URI is unique per attempt.
+Debug logs summarize HTTP bytes, elapsed time, source-read time and body-send
+time at most once every 30 seconds, plus a final summary for transfers of at
+least 16 MiB. Read time includes waiting for browser data; send time includes
+waiting for the installer to consume it. Worker times are summed across
+connections and can exceed elapsed wall time when readers overlap.
 
 Compatibility clients can use two concurrent
 `POST /api/v1/packages/stream/request` clients, with
@@ -587,7 +629,10 @@ Both modes publish `operation=install` and `state=preparing|installing` through
 `/api/v1/games/storage/status` and use its existing cancellation endpoint.
 The popup shows the package name, bytes, speed, elapsed time and system state.
 Progress uses AppInstUtil downloaded/total counters when available, with HTTP
-coverage as a fallback. Patches use `sceAppInstUtilGetPatchInstallStatus`: the
+coverage as a fallback for browser streams only. Direct local installs wait
+for native counters or an explicit terminal status; missing counters cannot
+turn an early playable state into completion.
+Patches use `sceAppInstUtilGetPatchInstallStatus`: the
 general install status can report the already playable base game with the same
 content ID. DLC completion requires state `4` (installed) from
 `sceAppInstUtilGetAddcontInstalledStatus`; general status still supplies its
@@ -595,7 +640,7 @@ download counters and errors. DLC without a general download record still uses
 its own installed state. State `1` is not installed and must not complete the job.
 After a successful submission, base games, patches and unconfirmed DLC share a
 fixed 30-second startup deadline while the native status is `none`. The package
-source remains open and cancellation stays available; the package is not
+source remains available and cancellation stays available; the package is not
 resubmitted. Native errors still fail immediately. Once a base/patch task has
 appeared, a later `none` is an error. DLC may lose its download record before
 its own installed flag is published and continues to use that flag.
@@ -611,8 +656,9 @@ PKG padding or unused ranges. An early playable state only completes the job
 after all system bytes and any local copy are finished. Cancellation calls
 AppInstUtil CancelInstall and retires the stream and its connections. Sleep
 latches cancellation for both disk and PC installations, including coalesced
-sleep/resume events. The install worker retires its per-attempt HTTP/WebSocket
-listener and any running queue; the interrupted installation must be restarted.
+sleep/resume events. The install worker retires any per-attempt HTTP/WebSocket
+listener and any running queue; direct local installs create no such listener.
+The interrupted installation must be restarted.
 The main API listener is recreated automatically after resume using its existing
 bounded bind-recovery backoff. A new installation creates fresh sockets and a
 new stream token. Shutdown uses the same cleanup path.

@@ -562,6 +562,14 @@ static bool parse_package(const char *path, const struct stat *st,
   return true;
 }
 
+bool sm_pkg_source_matches(const sm_pkg_info_t *info, const struct stat *st) {
+  return info && st && S_ISREG(st->st_mode) &&
+    (uint64_t)st->st_size == info->source_size && (uint64_t)st->st_dev == info->source_device &&
+    (uint64_t)st->st_ino == info->source_inode && (uint64_t)st->st_ctime == info->source_ctime &&
+    st->st_mtime == info->source_mtime && (uint32_t)st->st_mtim.tv_nsec == info->source_mtime_ns &&
+    (uint32_t)st->st_ctim.tv_nsec == info->source_ctime_ns;
+}
+
 bool sm_pkg_parse_file(const char *path, const struct stat *st, sm_pkg_info_t *candidate) {
   (void)st;
   if (!path || !candidate || !pkg_extension(pkg_filename(path)) || strlen(path) >= MAX_PATH) return false;
@@ -585,6 +593,65 @@ bool sm_pkg_parse_stream(const char *name, uint64_t size, sm_pkg_read_fn read,
   bool ok = parse_package(name, &st, &reader, candidate);
   if (!ok) errno = reader.error ? reader.error : errno == ENOMEM ? ENOMEM : EINVAL;
   return ok;
+}
+
+static int read_directory_asset(const char *path, const char *name, size_t limit,
+                                 unsigned char **data, size_t *size) {
+  *data = NULL;
+  *size = 0;
+  int directory = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+  if (directory < 0) return errno;
+  int system_dir = openat(directory, "sce_sys", O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+  int result = system_dir < 0 ? errno : 0;
+  close(directory);
+  if (result) return result;
+  int fd = openat(system_dir, name, O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
+  result = fd < 0 ? errno : 0;
+  close(system_dir);
+  if (result) return result;
+  struct stat before, after;
+  if (fstat(fd, &before) != 0) result = errno;
+  else if (!S_ISREG(before.st_mode) || before.st_size <= 0 ||
+           (uint64_t)before.st_size > limit) result = EINVAL;
+  if (!result) {
+    *size = (size_t)before.st_size;
+    *data = malloc(*size);
+    if (!*data) result = ENOMEM;
+    else result = file_read_at(&fd, 0, *data, *size);
+  }
+  if (!result && (fstat(fd, &after) != 0 || before.st_size != after.st_size ||
+      before.st_mtim.tv_sec != after.st_mtim.tv_sec || before.st_mtim.tv_nsec != after.st_mtim.tv_nsec ||
+      before.st_ctim.tv_sec != after.st_ctim.tv_sec || before.st_ctim.tv_nsec != after.st_ctim.tv_nsec)) result = ESTALE;
+  close(fd);
+  if (result) { free(*data); *data = NULL; *size = 0; }
+  return result;
+}
+
+bool sm_pkg_read_directory_metadata(const char *path, sm_pkg_info_t *info) {
+  if (!path || !info) return false;
+  memset(info, 0, sizeof(*info));
+  const char *names[] = {"param.json", "param.sfo"};
+  for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); ++i) {
+    unsigned char *data = NULL;
+    size_t size = 0;
+    int result = read_directory_asset(path, names[i], PKG_PARAM_MAX, &data, &size);
+    if (result == ENOENT) continue;
+    if (result) return false;
+    bool parsed = i == 0 ? parse_param_json(data, size, info) : parse_sfo(data, size, info);
+    free(data);
+    if (!parsed) memset(info, 0, sizeof(*info));
+    return parsed;
+  }
+  return false;
+}
+
+int sm_pkg_read_directory_icon(const char *path, unsigned char **data, size_t *size) {
+  if (!path || !data || !size) return EINVAL;
+  int result = read_directory_asset(path, "icon0.png", SM_PKG_ICON_MAX, data, size);
+  if (!result && (*size < 8 || memcmp(*data, "\x89PNG\r\n\x1a\n", 8))) {
+    free(*data); *data = NULL; *size = 0; result = EINVAL;
+  }
+  return result;
 }
 
 int sm_pkg_read_icon(const char *path, unsigned char **data, size_t *size) {
