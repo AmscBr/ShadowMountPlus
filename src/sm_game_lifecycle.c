@@ -230,7 +230,9 @@ static bool pread_exact_at(int fd, void *buffer, size_t size, off_t offset) {
 }
 
 static bool package_is_plaintext_ppr(const char *path) {
-  static const uint8_t plaintext_marker[16] = "PPRPLAIN-NOAUTH!";
+  static const uint8_t plaintext_marker[16] = {
+      'P', 'P', 'R', 'P', 'L', 'A', 'I', 'N',
+      '-', 'N', 'O', 'A', 'U', 'T', 'H', '!'};
   uint8_t fih[PPR_FIH_PROBE_SIZE];
   uint8_t marker[sizeof(plaintext_marker)];
 

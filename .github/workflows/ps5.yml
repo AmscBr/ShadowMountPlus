@@ -121,6 +121,15 @@ jobs:
           makepkg -c -f
           sudo pacman --noconfirm -U ./ps5-payload-*.pkg.tar.gz
 
+      - name: Build PS5 libsmb2 package
+        working-directory: pacbrew-repo/libsmb2
+        run: |
+          makepkg -c -f
+          sudo pacman --noconfirm -U ./ps5-payload-*.pkg.tar.gz
+          test -f /opt/ps5-payload-sdk/target/user/homebrew/include/smb2/smb2.h
+          test -f /opt/ps5-payload-sdk/target/user/homebrew/include/smb2/libsmb2-raw.h
+          test -s /opt/ps5-payload-sdk/target/user/homebrew/lib/libsmb2.a
+
       - name: Check API tools and manifest
         run: |
           python3 -m py_compile tools/api_test.py
@@ -128,7 +137,8 @@ jobs:
 
       - name: Build payload
         run: |
-          make clean all PS5_SCE_STUBS_DIR="$GITHUB_WORKSPACE/ps5-sdk/sce_stubs"
+          make clean
+          make -j4 all PS5_SCE_STUBS_DIR="$GITHUB_WORKSPACE/ps5-sdk/sce_stubs"
 
       - name: Create release archive
         id: package
@@ -139,7 +149,7 @@ jobs:
           archive_name="ShadowMountPlus_${version_tag}.zip"
           manifest_file=".github/release-files.txt"
 
-          mapfile -t release_files < <(grep -Ev '^[[:space:]]*(#|$)' "${manifest_file}")
+          mapfile -t release_files < <(tr -d '\r' < "${manifest_file}" | grep -Ev '^[[:space:]]*(#|$)')
 
           if [ "${#release_files[@]}" -eq 0 ]; then
             echo "Release manifest is empty: ${manifest_file}" >&2
