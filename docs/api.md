@@ -702,7 +702,7 @@ Storage status adds `queue_count`, `queue_completed`, `queue_total`,
 `queue_running` and the current `package_kind`; its job ID covers the batch.
 
 `POST /api/v1/packages/install` accepts `{"path":"/mnt/usb0/packages/game.pkg"}`.
-It submits local packages to the existing AppInstUtil session by filesystem
+It submits local base packages to the existing AppInstUtil session by filesystem
 path, without an HTTP proxy. Paths under `/data/` use the system-visible
 `/user/data/` alias; USB and external-storage paths are passed directly.
 There is one shared job slot for installation and file
@@ -774,22 +774,29 @@ Expired sessions return 404/410.
 Both modes publish `operation=install` and `state=preparing|installing` through
 `/api/v1/games/storage/status` and use its existing cancellation endpoint.
 The popup shows the package name, bytes, speed, elapsed time and system state.
-Progress uses AppInstUtil downloaded/total counters when available, with HTTP
-coverage as a fallback for browser streams only. Direct local installs wait
-for native counters or an explicit terminal status; missing counters cannot
-turn an early playable state into completion.
-Patches use `sceAppInstUtilGetPatchInstallStatus`: the
-general install status can report the already playable base game with the same
-content ID. DLC completion requires state `4` (installed) from
+Progress uses only AppInstUtil downloaded/total counters for every PKG kind
+and source. The UI shows indeterminate progress until native counters arrive.
+Direct local base installs require native counters or an explicit terminal
+status; browser/SMB base installs can use complete source coverage to confirm
+a playable status. Updates require native completion evidence.
+Status polling follows the task type returned by `InstallByPackage`. Patches use
+`sceAppInstUtilGetPatchInstallStatus`; general status can report the already
+playable base game with the same content ID. General replacement tasks use
+`GetInstallStatus` and must show progress beyond the existing base status.
+DLC completion requires state `4` (installed) from
 `sceAppInstUtilGetAddcontInstalledStatus`; general status still supplies its
 download counters and errors. DLC without a general download record still uses
 its own installed state. State `1` is not installed and must not complete the job.
 After a successful submission, base games, patches and unconfirmed DLC share a
 fixed 30-second startup deadline while the native status is `none`. The package
 source remains available and cancellation stays available; the package is not
-resubmitted. Native errors still fail immediately. Once a base/patch task has
-appeared, a later `none` is an error. DLC may lose its download record before
-its own installed flag is published and continues to use that flag.
+resubmitted. Native errors still fail immediately. A later `none` starts one
+fixed 30-second visibility-gap deadline instead of immediately failing with I/O
+error. A visible task clears that deadline. A retired patch task can complete
+after its native transfer finishes if the installed result is verified and
+the general status is ready with no pending local copy.
+DLC may lose its download record before its own installed flag is published
+and continues to use that flag within the same bound.
 Empty native status or content-ID replies fail with `EPROTO`; these native
 protocol failures are distinct from `pkg_stream_lost` source failures.
 When a general download record exists, it must also be complete, so an installed
@@ -797,13 +804,17 @@ DLC cannot prematurely finish an in-progress replacement. `sceAppInstUtilGetInst
 `sceAppInstUtilGetInstallProgressInfo` are not used for patch completion: on
 the tested 9.40 console both kept reporting 100% for the installed base while
 its patch was still transferring. Speed is sampled from byte deltas once per
-second and becomes zero when progress stops. System completion does not require fetching
+second and becomes zero when progress stops. Temporary zero or regressing
+counters retain the last usable display sample; each queued package starts
+with fresh progress. System completion does not require fetching
 PKG padding or unused ranges. An early playable state only completes the job
-after all system bytes and any local copy are finished. Cancellation calls
-AppInstUtil CancelInstall and retires the stream and its connections. Sleep
+after all system bytes and any local copy are finished. CancelInstall is used
+only for base installations. Patches and DLC use a managed HTTP source,
+including local PKGs; cancellation retires that source and its connections
+without cancelling the base application. Sleep
 latches cancellation for both disk and PC installations, including coalesced
 sleep/resume events. The install worker retires any per-attempt HTTP/WebSocket
-listener and any running queue; direct local installs create no such listener.
+listener and any running queue; direct local base installs create no such listener.
 The interrupted installation must be restarted.
 The main API listener is recreated automatically after resume using its existing
 bounded bind-recovery backoff. A new installation creates fresh sockets and a

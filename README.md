@@ -66,7 +66,8 @@ Active connections appear as `smb://NAS` in **Installation** and the copy/move
 destination picker. Copy or move game images and folders from console storage
 to the share, or install folders and intact images from the share onto console
 storage. PKGs on SMB are streamed to the system installer through an on-demand
-HTTP range server; local PKGs continue to use native file paths directly.
+HTTP range server. Local base PKGs use native file paths directly; patches and
+DLC use HTTP streaming, including local files, to allow safe cancellation.
 Images and folders are copied locally before registration and launching.
 Files copied from SMB to console storage receive permissions `0777`.
 Active SMB connections also appear in the storage overview and summary with

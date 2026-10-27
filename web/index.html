@@ -3258,7 +3258,8 @@
           ? `${job.source} → ${job.destination}`
           : job.source;
         $("transferRoute").title = $("transferRoute").textContent;
-        const measuring = job.state === "preparing" || job.state === "measuring";
+        const measuring = job.state === "preparing" || job.state === "measuring" ||
+          (job.state === "installing" && percent === 0);
         $("transferMeter").classList.toggle("indeterminate", measuring);
         $("transferFill").style.width = measuring ? "28%" : `${percent}%`;
         if (measuring) $("transferMeter").removeAttribute("aria-valuenow");

@@ -9,6 +9,8 @@
 
 // AppInstUtil output sizes verified against the console's 9.40 library.
 typedef struct { char content_id[48]; int type, platform; } sm_pkg_native_info_t;
+// InstallByPackage task types; independent of the source parser's category.
+enum { SM_PKG_NATIVE_BASE = 0, SM_PKG_NATIVE_ADDCONT = 1, SM_PKG_NATIVE_PATCH = 2 };
 typedef struct {
   int32_t code, version;
   char description[512], type[9];

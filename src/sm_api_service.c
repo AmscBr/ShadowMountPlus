@@ -4725,6 +4725,18 @@ static void publish_package_progress(pkg_job_context_t *ctx, uint64_t total,
                                      uint64_t bytes, uint64_t now) {
   if (!total || total > INT64_MAX) return;
   if (bytes > total) bytes = total;
+  // Native counters can briefly reset during delta promotion. Keep the last
+  // usable display sample, not a false 0%.
+  if (ctx->sample_bytes && (!bytes || (ctx->sample_total == total &&
+                                      bytes < ctx->sample_bytes))) {
+    pthread_mutex_lock(&g_storage_job.mutex);
+    if (g_storage_job.id == ctx->id) {
+      g_storage_job.pkg_speed = 0;
+      g_storage_job.pkg_sample_us = now;
+    }
+    pthread_mutex_unlock(&g_storage_job.mutex);
+    return;
+  }
   uint64_t speed = 0;
   bool sample = ctx->sample_us && ctx->sample_total == total &&
                 bytes >= ctx->sample_bytes && now > ctx->sample_us;
@@ -4768,8 +4780,6 @@ static bool package_install_cancelled(void *opaque) {
       ctx->bytes = bytes;
       ctx->activity_us = now;
     }
-    if (!ctx->native_progress)
-      publish_package_progress(ctx, sm_pkg_server_total(ctx->server), bytes, now);
     uint64_t request_time = sm_pkg_server_last_request_us(ctx->server);
     if (request_time > ctx->activity_us) ctx->activity_us = request_time;
   }
@@ -4803,6 +4813,55 @@ static void *submit_native_package(void *opaque) {
   return NULL;
 }
 
+typedef struct {
+  struct stat file;
+  int status;
+} pkg_result_snapshot_t;
+
+static void snapshot_package_result(const char *title_id,
+                                    pkg_result_snapshot_t result[2], char paths[2][MAX_PATH]) {
+  memset(result, 0, sizeof(*result) * 2);
+  memset(paths, 0, MAX_PATH * 2);
+  sm_game_cache_snapshot_entry_t base;
+  if (resolve_installed_pkg_game(title_id, NULL, &base))
+    strlcpy(paths[0], base.path, MAX_PATH);
+  else
+    result[0].status = errno ? errno : EIO;
+  result[1].status = resolve_game_patch_file(title_id, paths[1]);
+  for (size_t i = 0; i < 2; ++i) {
+    if (result[i].status) continue;
+    if (lstat(paths[i], &result[i].file) != 0) result[i].status = errno ? errno : EIO;
+    else if (!S_ISREG(result[i].file.st_mode) || result[i].file.st_size <= 0) result[i].status = EINVAL;
+  }
+}
+
+static bool package_patch_result_installed(const sm_pkg_info_t *source,
+                                           const pkg_result_snapshot_t before[2]) {
+  pkg_result_snapshot_t current[2];
+  char paths[2][MAX_PATH];
+  snapshot_package_result(source->title_id, current, paths);
+  for (size_t i = 0; i < 2; ++i) {
+    if (current[i].status || (before[i].status && before[i].status != ENOENT && before[i].status != ENOTDIR)) continue;
+    // Skip unchanged files before opening/parsing their package metadata.
+    const struct stat *old = &before[i].file;
+    sm_pkg_info_t installed = {
+      .source_size = (uint64_t)old->st_size, .source_device = (uint64_t)old->st_dev,
+      .source_inode = (uint64_t)old->st_ino, .source_ctime = (uint64_t)old->st_ctime,
+      .source_mtime = old->st_mtime, .source_mtime_ns = (uint32_t)old->st_mtim.tv_nsec,
+      .source_ctime_ns = (uint32_t)old->st_ctim.tv_nsec,
+    };
+    if (!before[i].status && sm_pkg_source_matches(&installed, &current[i].file)) continue;
+    if (!sm_pkg_parse_file(paths[i], NULL, &installed) ||
+        !sm_pkg_source_matches(&installed, &current[i].file) ||
+        (installed.pkg_kind != PKG_KIND_BASE && installed.pkg_kind != PKG_KIND_PATCH) ||
+        strcmp(installed.title_id, source->title_id) || strcmp(installed.content_id, source->content_id) ||
+        (source->app_ver[0] && strcmp(installed.app_ver, source->app_ver))) continue;
+    struct stat stable;
+    if (lstat(paths[i], &stable) == 0 && sm_pkg_source_matches(&installed, &stable)) return true;
+  }
+  return false;
+}
+
 static void *package_install_thread(void *opaque) {
   uint64_t id = (uint64_t)(uintptr_t)opaque;
   bool scanner = false, shellcore = false;
@@ -4822,6 +4881,10 @@ static void *package_install_thread(void *opaque) {
     int status = 0;
     int native_result = 0;
     sm_pkg_native_status_t native_status = {0};
+    sm_pkg_native_status_t previous_general = {0};
+    bool general_snapshot = false, replacement_observed = false;
+    uint64_t patch_completed_total = 0;
+    pkg_result_snapshot_t previous_result[2] = {0};
     pkg_submit_t submission = {0};
     atomic_init(&submission.done, false);
     bool submitted = false;
@@ -4862,7 +4925,9 @@ static void *package_install_thread(void *opaque) {
       pthread_mutex_unlock(&g_storage_job.mutex);
       if (ctx.stream && !ctx.server)
         status = sm_pkg_server_start_reader(&ctx.server, source, size, sm_pkg_stream_read, ctx.stream, token, &port);
-      else if (!ctx.server && sm_smb_path(resolved))
+      // Updates share the base's ID. A managed HTTP source lets cancellation
+      // interrupt their reads without CancelInstall removing the base title.
+      else if (!ctx.server && (sm_smb_path(resolved) || info.pkg_kind != PKG_KIND_BASE))
         status = sm_pkg_server_start(&ctx.server,resolved,token,&port);
       if (!ctx.stream) ctx.expected = &info;
     }
@@ -4888,6 +4953,16 @@ static void *package_install_thread(void *opaque) {
       if (length < 0 || (size_t)length >= sizeof(uri)) status = ENAMETOOLONG;
       else {
         phase = "submit";
+        if (info.pkg_kind != PKG_KIND_BASE) {
+          int result = sceAppInstUtilGetInstallStatus(info.content_id, &previous_general);
+          previous_general.status[sizeof(previous_general.status) - 1] = 0;
+          general_snapshot = !result && !previous_general.error.code &&
+              (!strcmp(previous_general.status, "playable") || !strcmp(previous_general.status, "completed"));
+        }
+        if (info.pkg_kind == PKG_KIND_PATCH) {
+          char paths[2][MAX_PATH];
+          snapshot_package_result(info.title_id, previous_result, paths);
+        }
         submission.metadata.uri = uri;
         submission.metadata.ex_uri = submission.metadata.scenario = submission.metadata.content_id = submission.metadata.icon = "";
         submission.metadata.name = info.title_name;
@@ -4904,6 +4979,13 @@ static void *package_install_thread(void *opaque) {
       if (native_result) status = EIO;
       submission.info.content_id[sizeof(submission.info.content_id) - 1] = 0;
       if (!status && !submission.info.content_id[0]) status = EPROTO;
+      if (!status && strcmp(submission.info.content_id, info.content_id)) status = EPROTO;
+      if (!status && (submission.info.type < SM_PKG_NATIVE_BASE ||
+                      submission.info.type > SM_PKG_NATIVE_PATCH)) status = EPROTO;
+      if (!status)
+        log_debug("  [PKG] native task accepted: job=%llu title=%s kind=%u type=%d platform=%d content_id=%s",
+                  (unsigned long long)id, info.title_id, (unsigned)info.pkg_kind,
+                  submission.info.type, submission.info.platform, submission.info.content_id);
     }
     uint64_t task_start_deadline_us = 0;
     if (!status) {
@@ -4916,39 +4998,73 @@ static void *package_install_thread(void *opaque) {
       if (package_install_cancelled(&ctx)) { status = ctx.failure ? ctx.failure : ECANCELED; break; }
       phase = "poll";
       memset(&native_status, 0, sizeof(native_status));
-      // Patches share the base content ID. The general status reports the
-      // already playable base and can close our source before the patch reads it.
-      native_result = info.pkg_kind == PKG_KIND_PATCH
+      // Follow the task actually submitted by AppInstUtil, including delta-PKGs,
+      // instead of assuming its type from the source parser's category.
+      // True patch tasks must not read the already playable base's status.
+      native_result = submission.info.type == SM_PKG_NATIVE_PATCH
           ? sceAppInstUtilGetPatchInstallStatus(submission.info.content_id, &native_status)
           : sceAppInstUtilGetInstallStatus(submission.info.content_id, &native_status);
       native_status.status[sizeof(native_status.status) - 1] = 0;
       if (native_result || native_status.error.code || !strcmp(native_status.status, "error")) { status = EIO; break; }
       if (!native_status.status[0]) { status = EPROTO; break; }
       int installed = 0;
-      if (info.pkg_kind == PKG_KIND_DLC) {
+      if (submission.info.type == SM_PKG_NATIVE_ADDCONT) {
         native_result = sceAppInstUtilGetAddcontInstalledStatus(submission.info.content_id, &installed);
         if (native_result) { status = EIO; break; }
       }
       if (!strcmp(native_status.status, "none")) {
         // Entitlement-only DLC can have no general download record.
-        if (info.pkg_kind == PKG_KIND_DLC && installed == SM_PKG_ADDCONT_INSTALLED) break;
-        // Base/patch tasks may not disappear after they have been observed.
-        // DLC can lose its download record before its installed flag is set.
-        if (!task_start_deadline_us && info.pkg_kind != PKG_KIND_DLC) { status = EIO; break; }
-        phase = "wait_task";
-        if (task_start_deadline_us) {
-          // A successful submission can precede publication of its task. Keep
-          // the source alive, with one fixed startup deadline for every kind.
-          uint64_t now = monotonic_time_us();
-          if (!now) { status = EIO; break; }
-          if (now >= task_start_deadline_us) { status = ETIMEDOUT; break; }
+        if (submission.info.type == SM_PKG_NATIVE_ADDCONT && installed == SM_PKG_ADDCONT_INSTALLED) break;
+        if (submission.info.type == SM_PKG_NATIVE_PATCH && patch_completed_total) {
+          sm_pkg_native_status_t general = {0};
+          native_result = sceAppInstUtilGetInstallStatus(submission.info.content_id, &general);
+          general.status[sizeof(general.status) - 1] = 0;
+          if (native_result || general.error.code || !strcmp(general.status, "error")) {
+            native_status = general; status = EIO; break;
+          }
+          bool ready = !strcmp(general.status, "playable") || !strcmp(general.status, "completed");
+          if (ready && (!general.copy_only || general.local_copy_percent >= 100) &&
+              package_patch_result_installed(&info, previous_result)) {
+            log_debug("  [PKG] patch completion verified after task retirement: job=%llu title=%s",
+                      (unsigned long long)id, info.title_id);
+            break;
+          }
         }
+        phase = "wait_task";
+        // A missing record is not a native I/O failure. Keep the source alive
+        // for one bounded visibility gap without resubmitting the package.
+        uint64_t now = monotonic_time_us();
+        if (!now) { status = EIO; break; }
+        if (!task_start_deadline_us) task_start_deadline_us = now + SM_API_PKG_START_TIMEOUT_US;
+        if (now >= task_start_deadline_us) { status = ETIMEDOUT; break; }
         status = wait_for_package_poll(&ctx);
         continue;
       }
+      if (info.pkg_kind != PKG_KIND_BASE && submission.info.type == SM_PKG_NATIVE_BASE &&
+          !replacement_observed) {
+        // An unchanged terminal result can still describe the previous base.
+        // Observe the replacement before allowing that shared record to finish it.
+        bool terminal = !strcmp(native_status.status, "playable") || !strcmp(native_status.status, "completed");
+        replacement_observed = !terminal || (general_snapshot &&
+            (native_status.total != previous_general.total ||
+             native_status.downloaded != previous_general.downloaded ||
+             memcmp(native_status.patch_version, previous_general.patch_version, sizeof(native_status.patch_version))));
+        if (!replacement_observed) {
+          phase = "wait_task";
+          uint64_t now = monotonic_time_us();
+          if (!now) { status = EIO; break; }
+          if (now >= task_start_deadline_us) { status = ETIMEDOUT; break; }
+          status = wait_for_package_poll(&ctx);
+          continue;
+        }
+      }
       task_start_deadline_us = 0;
+      if (submission.info.type == SM_PKG_NATIVE_PATCH && native_status.total > 0 &&
+          native_status.total <= INT64_MAX) {
+        if (native_status.downloaded >= native_status.total) patch_completed_total = native_status.total;
+        else if (patch_completed_total != native_status.total) patch_completed_total = 0;
+      }
       if (native_status.total > 0 && native_status.total <= INT64_MAX) {
-        if (!ctx.native_progress) ctx.sample_us = 0;
         ctx.native_progress = true;
         publish_package_progress(&ctx, native_status.total, native_status.downloaded, monotonic_time_us());
       }
@@ -4956,11 +5072,11 @@ static void *package_install_thread(void *opaque) {
       bool copied = !native_status.copy_only || native_status.local_copy_percent >= 100;
       bool downloaded = native_status.total > 0 && native_status.total <= INT64_MAX
           ? native_status.downloaded >= native_status.total
-          : !ctx.native_progress && ctx.server && sm_pkg_server_complete(ctx.server);
-      bool completed = !strcmp(native_status.status, "completed") ||
-          (!strcmp(native_status.status, "playable") && downloaded && copied);
+          : info.pkg_kind == PKG_KIND_BASE && !ctx.native_progress && ctx.server && sm_pkg_server_complete(ctx.server);
+      bool completed = copied && (!strcmp(native_status.status, "completed") ||
+          (!strcmp(native_status.status, "playable") && downloaded));
       // An installed DLC must not complete its replacement while transferring.
-      if (info.pkg_kind == PKG_KIND_DLC) completed = completed && installed == SM_PKG_ADDCONT_INSTALLED;
+      if (submission.info.type == SM_PKG_NATIVE_ADDCONT) completed = completed && installed == SM_PKG_ADDCONT_INSTALLED;
       if (completed) break;
       status = wait_for_package_poll(&ctx);
     }
@@ -4973,10 +5089,17 @@ static void *package_install_thread(void *opaque) {
                               ctx.failure == EPIPE || ctx.failure == EPROTO)) error = "pkg_stream_lost";
     }
     if (status && status != ECANCELED) {
+      // The submission thread may still be filling its output during abort.
+      int task_type = -1, task_platform = -1;
+      if (atomic_load(&submission.done)) {
+        task_type = submission.info.type;
+        task_platform = submission.info.platform;
+      }
       log_debug("  [PKG] install failure detail: job=%llu title=%s kind=%u phase=%s "
                 "source=%s status=%d source_error=%d native=0x%08X "
                 "state='%.16s' error=0x%08X type='%.9s' detail='%.160s' "
-                "downloaded=%llu total=%llu served=%llu copy_only=%u copy_percent=%d",
+                "downloaded=%llu total=%llu served=%llu copy_only=%u copy_percent=%d task_type=%d platform=%d "
+                "last_downloaded=%llu last_total=%llu source_size=%llu",
                 (unsigned long long)id, info.title_id, (unsigned)info.pkg_kind, phase,
                 source, status, ctx.failure, (unsigned)native_result,
                 native_status.status, (unsigned)native_status.error.code,
@@ -4984,12 +5107,19 @@ static void *package_install_thread(void *opaque) {
                 (unsigned long long)native_status.downloaded,
                 (unsigned long long)native_status.total,
                 (unsigned long long)ctx.bytes, (unsigned)native_status.copy_only,
-                native_status.local_copy_percent);
+                native_status.local_copy_percent, task_type, task_platform,
+                (unsigned long long)ctx.sample_bytes, (unsigned long long)ctx.sample_total,
+                (unsigned long long)info.source_size);
     }
     if (ctx.stream) sm_pkg_stream_stop(ctx.stream);
     // Close streamed sources and cancel native work before joining submission.
     sm_pkg_server_stop(ctx.server);
-    if (status && submitted) {
+    // CancelInstall addresses the base application, not an individual patch or
+    // DLC task sharing its content ID. Never use it to clean up an update.
+    bool submission_done = atomic_load(&submission.done);
+    bool cancel_base = !submission_done || (!submission.result && submission.info.type == SM_PKG_NATIVE_BASE &&
+        submission.info.content_id[0] && !strcmp(submission.info.content_id, info.content_id));
+    if (status && submitted && info.pkg_kind == PKG_KIND_BASE && cancel_base) {
       int cancelled = sceAppInstUtilCancelInstall(info.content_id);
       if (cancelled)
         log_debug("  [PKG] native cancel failed: job=%llu code=0x%08X", (unsigned long long)id, (unsigned)cancelled);
