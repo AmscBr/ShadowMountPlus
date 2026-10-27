@@ -40,7 +40,7 @@ release of mount resources, and new management features.
 
 - The built-in library interface offers search, filters, game cards, source
   management, scanning, settings, and log viewing.
-- A Shadow Mount+ launcher is installed in the PS5 menu and opens the local
+- A ShadowMount+ launcher is installed in the PS5 menu and opens the local
   web interface.
 - HTTP/JSON API v1 provides access to images, games, and storage devices, as
   well as game mounting, source management, settings, and scanning.
