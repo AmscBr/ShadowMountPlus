@@ -39,6 +39,8 @@
 #include "sm_storage.h"
 #include "sm_time.h"
 #include "sm_title_state.h"
+#include "sm_smb.h"
+#include "sm_vfs.h"
 
 #ifndef SHADOWMOUNT_VERSION
 #define SHADOWMOUNT_VERSION "unknown"
@@ -208,9 +210,12 @@ static void handle_backport_operation(struct MHD_Connection *connection, struct 
 static void handle_package_install(struct MHD_Connection *connection, struct json_object *request, bool streaming, bool from_queue);
 static void handle_package_queue(struct MHD_Connection *connection, struct json_object *request);
 static void handle_source_install(struct MHD_Connection *connection, struct json_object *request);
+static void handle_source_delete(struct MHD_Connection *connection, struct json_object *request);
+static void handle_directory_create(struct MHD_Connection *connection, struct json_object *request);
 static bool handle_package_icon(struct MHD_Connection *connection);
 static void handle_package_range(struct MHD_Connection *connection, struct json_object *request);
 static bool destination_is_managed(const char *destination);
+static bool storage_job_is_active(storage_job_state_t state);
 static void handle_game_storage_operation(
     struct MHD_Connection *connection, struct json_object *request,
     game_storage_operation_t operation);
@@ -624,7 +629,7 @@ static const char *get_destination_dir(struct json_object *request) {
   }
   const char *path = json_object_get_string(value);
   size_t size = strlen(path);
-  return size > 1u && size < MAX_PATH && path[0] == '/' ? path : NULL;
+  return size > 1u && size < MAX_PATH && (path[0] == '/' || sm_smb_path(path)) ? path : NULL;
 }
 
 typedef struct {
@@ -686,6 +691,7 @@ static void handle_version(struct MHD_Connection *fd) {
       !append_json_string(capabilities, "game_data_sizes") ||
       !append_json_string(capabilities, "pkg_install") ||
       !append_json_string(capabilities, "pkg_browser_stream") ||
+      !append_json_string(capabilities, "smb2_smb3") ||
       !append_json_string(capabilities, "game_icon") ||
       !append_json_string(capabilities, "mount_game") ||
       !append_json_string(capabilities, "unmount_game") ||
@@ -744,12 +750,9 @@ static bool filesystem_has_capacity(const struct statfs *mount) {
   return true;
 }
 
-static struct json_object *filesystem_to_json(const struct statfs *mount) {
-  uint64_t block_size = (uint64_t)mount->f_bsize;
-  uint64_t total_blocks = (uint64_t)mount->f_blocks;
-  uint64_t free_blocks = mount->f_bfree > 0 ? (uint64_t)mount->f_bfree : 0;
-  uint64_t available_blocks =
-      mount->f_bavail > 0 ? (uint64_t)mount->f_bavail : 0;
+static bool add_filesystem_capacity(struct json_object *item,
+                                     uint64_t block_size, uint64_t total_blocks,
+                                     uint64_t free_blocks, uint64_t available_blocks) {
   if (free_blocks > total_blocks)
     free_blocks = total_blocks;
   if (available_blocks > free_blocks)
@@ -761,21 +764,67 @@ static struct json_object *filesystem_to_json(const struct statfs *mount) {
       filesystem_size_bytes(available_blocks, block_size);
   int64_t used_bytes = total_bytes - available_bytes;
 
+  return add_json_int(item, "total_bytes", total_bytes) &&
+         add_json_int(item, "free_bytes", free_bytes) &&
+         add_json_int(item, "available_bytes", available_bytes) &&
+         add_json_int(item, "used_bytes", used_bytes);
+}
+
+static struct json_object *filesystem_to_json(const struct statfs *mount) {
   struct json_object *item = json_object_new_object();
   if (!item)
     return NULL;
   if (!add_json_string(item, "source", mount->f_mntfromname) ||
       !add_json_string(item, "mount_point", mount->f_mntonname) ||
       !add_json_string(item, "filesystem", mount->f_fstypename) ||
-      !add_json_int(item, "total_bytes", total_bytes) ||
-      !add_json_int(item, "free_bytes", free_bytes) ||
-      !add_json_int(item, "available_bytes", available_bytes) ||
-      !add_json_int(item, "used_bytes", used_bytes) ||
+      !add_filesystem_capacity(item, (uint64_t)mount->f_bsize,
+                              (uint64_t)mount->f_blocks,
+                              mount->f_bfree > 0 ? (uint64_t)mount->f_bfree : 0,
+                              mount->f_bavail > 0 ? (uint64_t)mount->f_bavail : 0) ||
       !add_json_bool(item, "read_only", (mount->f_flags & MNT_RDONLY) != 0)) {
     json_object_put(item);
     return NULL;
   }
   return item;
+}
+
+static struct json_object *smb_storage_to_json(const char *path) {
+  struct statvfs filesystem;
+  if (statvfs(path, &filesystem) != 0) return NULL;
+  struct json_object *item = new_status_response(0);
+  if (!item || !add_json_string(item, "path", path) ||
+      !add_json_string(item, "filesystem", "smb") ||
+      !add_json_bool(item, "remote", true) ||
+      !add_filesystem_capacity(item,
+                              filesystem.f_frsize ? filesystem.f_frsize : filesystem.f_bsize,
+                              filesystem.f_blocks, filesystem.f_bfree, filesystem.f_bavail) ||
+      !add_json_bool(item, "read_only", (filesystem.f_flag & ST_RDONLY) != 0)) {
+    if (item) json_object_put(item);
+    errno = ENOMEM;
+    return NULL;
+  }
+  return item;
+}
+
+static bool append_smb_paths(struct json_object *items, bool destinations) {
+  sm_smb_connection_t *connections=calloc(SM_SMB_CONNECTIONS_MAX,sizeof(*connections));
+  if(!connections) return false;
+  size_t count=sm_smb_snapshot(connections);
+  bool ok=true;
+  for(size_t i=0;ok && i<count;++i) {
+    if(!connections[i].active) continue;
+    char path[MAX_PATH]; snprintf(path,sizeof(path),"smb://%s",connections[i].name);
+    if(!destinations) { ok=append_json_string(items,path); continue; }
+    struct json_object *item=json_object_new_object();
+    if(!item || !add_json_string(item,"path",path) || !add_json_string(item,"filesystem","smb") ||
+        !add_json_string(item,"source",connections[i].path) ||
+        !add_json_string(item,"name",connections[i].name) || !add_json_bool(item,"remote",true) ||
+        json_object_array_add(items,item)) {
+      if (item) json_object_put(item);
+      ok = false;
+    }
+  }
+  memset(connections,0,SM_SMB_CONNECTIONS_MAX*sizeof(*connections)); free(connections); return ok;
 }
 
 static int append_storage_destination(struct json_object *items,
@@ -810,7 +859,25 @@ static int append_storage_destination(struct json_object *items,
   return 1;
 }
 
-static void handle_storage(struct MHD_Connection *connection) {
+static void handle_storage(struct MHD_Connection *connection, struct json_object *request) {
+  struct json_object *path_value;
+  if (json_object_object_get_ex(request, "path", &path_value)) {
+    if (!json_object_is_type(path_value, json_type_string) ||
+        !sm_smb_path(json_object_get_string(path_value)) ||
+        strlen(json_object_get_string(path_value)) != (size_t)json_object_get_string_len(path_value)) {
+      send_error_response(connection, 400, EINVAL, "invalid SMB storage path");
+      return;
+    }
+    struct json_object *response = smb_storage_to_json(json_object_get_string(path_value));
+    if (!response) {
+      int status = errno != 0 ? errno : EIO;
+      send_error_response(connection, operation_http_status(status), status, strerror(status));
+      return;
+    }
+    (void)send_json_object(connection, 200, response);
+    json_object_put(response);
+    return;
+  }
   struct statfs *mounts = NULL;
   int mount_count = sm_mount_table_snapshot(&mounts);
   if (mount_count < 0) {
@@ -883,6 +950,11 @@ static void handle_storage(struct MHD_Connection *connection) {
     destination_count += (size_t)result;
   }
 
+  if (!append_smb_paths(destinations,true)) {
+    json_object_put(destinations); json_object_put(items); json_object_put(response);
+    send_out_of_memory_response(connection); return;
+  }
+  destination_count=json_object_array_length(destinations);
   if (!add_json_int(response, "count", (int64_t)count) ||
       !add_json_int(response, "destination_count",
                     (int64_t)destination_count)) {
@@ -955,6 +1027,8 @@ typedef struct {
   const char *image_type;
   bool image_backed;
 } game_source_info_t;
+
+static int resolve_browser_delete_source(const char *path, game_source_info_t *source);
 
 static bool resolve_game_source(const sm_game_cache_snapshot_entry_t *source,
                                 game_source_info_t *info) {
@@ -2328,6 +2402,85 @@ static void send_log_tail_response(struct MHD_Connection *connection,
   json_object_put(response);
 }
 
+static bool smb_request_string(struct json_object *request, const char *key,
+                                 char *out, size_t size, bool required) {
+  struct json_object *value;
+  if(!json_object_object_get_ex(request,key,&value)) return !required;
+  if(!json_object_is_type(value,json_type_string)) return false;
+  const char *text=json_object_get_string(value);
+  if(strlen(text) != (size_t)json_object_get_string_len(value) || strlen(text) >= size) return false;
+  strlcpy(out,text,size); return true;
+}
+
+static void handle_smb(struct MHD_Connection *connection, struct json_object *request) {
+  char action[16]="list", previous[64]="", name[64]="";
+  if(!smb_request_string(request,"action",action,sizeof(action),false) ||
+      !smb_request_string(request,"previous_name",previous,sizeof(previous),false) ||
+      !smb_request_string(request,"name",name,sizeof(name),false)) {
+    send_error_response(connection,400,EINVAL,"invalid SMB fields"); return;
+  }
+  int status=0;
+  uint16_t dialect=0;
+  if(strcmp(action,"list")) {
+    if(strcmp(action,"save") && strcmp(action,"remove") && strcmp(action,"check")) {
+      send_error_response(connection,400,EINVAL,"invalid SMB action"); return;
+    }
+    sm_smb_connection_t c={0};
+    if(!strcmp(action,"remove")) {
+      if(!name[0]) status=EINVAL;
+    } else {
+      struct json_object *value;
+      if(previous[0]) status=sm_smb_get(previous,&c);
+      if(!status && (!smb_request_string(request,"name",c.name,sizeof(c.name),true) ||
+          !smb_request_string(request,"path",c.path,sizeof(c.path),true) ||
+          !smb_request_string(request,"username",c.username,sizeof(c.username),false) ||
+          !smb_request_string(request,"password",c.password,sizeof(c.password),false))) status=EINVAL;
+      if(!previous[0]) c.active=true;
+      if(!status && json_object_object_get_ex(request,"active",&value)) {
+        if(!json_object_is_type(value,json_type_boolean)) status=EINVAL;
+        else c.active=json_object_get_boolean(value);
+      }
+      if(!status) status=sm_smb_validate(&c);
+    }
+    if(!status && !strcmp(action,"check")) status=sm_smb_check(&c,&dialect);
+    else if(!status) {
+      pthread_mutex_lock(&g_storage_job.mutex);
+      if(storage_job_is_active(g_storage_job.state) || g_storage_job.pkg_queue_running || g_storage_job.pkg_queue_count) status=EBUSY;
+      else status=!strcmp(action,"remove") ? sm_smb_remove(name) : sm_smb_save(previous,&c);
+      pthread_mutex_unlock(&g_storage_job.mutex);
+    }
+    memset(&c,0,sizeof(c));
+    if(status) {
+      if(status == EBUSY) send_operation_error_response(connection,status,"storage_busy");
+      else send_error_response(connection,operation_http_status(status),status,strerror(status));
+      return;
+    }
+  }
+  struct json_object *response=new_status_response(0), *items=json_object_new_array();
+  sm_smb_connection_t *connections=calloc(SM_SMB_CONNECTIONS_MAX,sizeof(*connections));
+  if(!response || !items || !connections) goto oom;
+  size_t count=sm_smb_snapshot(connections);
+  for(size_t i=0;i<count;++i) {
+    struct json_object *item=json_object_new_object();
+    if(!item || !add_json_string(item,"name",connections[i].name) ||
+        !add_json_string(item,"path",connections[i].path) || !add_json_string(item,"username",connections[i].username) ||
+        !add_json_bool(item,"active",connections[i].active) ||
+        !add_json_bool(item,"password_set",connections[i].password[0] != 0) || json_object_array_add(items,item)) {
+      if (item) json_object_put(item);
+      goto oom;
+    }
+  }
+  memset(connections,0,SM_SMB_CONNECTIONS_MAX*sizeof(*connections)); free(connections); connections=NULL;
+  if(!add_json_int(response,"dialect",dialect)) goto oom;
+  if(!add_json_value(response,"connections",items)) { items=NULL; goto oom; }
+  (void)send_json_object(connection,200,response); json_object_put(response); return;
+oom:
+  if(connections) { memset(connections,0,SM_SMB_CONNECTIONS_MAX*sizeof(*connections)); free(connections); }
+  if(response) json_object_put(response);
+  if(items) json_object_put(items);
+  send_out_of_memory_response(connection);
+}
+
 static void handle_settings(struct MHD_Connection *connection) {
   runtime_config_t cfg = runtime_config();
   struct json_object *response = new_status_response(0);
@@ -2930,7 +3083,7 @@ static void dispatch_request(struct MHD_Connection *connection,
   if (strcmp(route, SM_API_ROUTE_VERSION) == 0) {
     handle_version(connection);
   } else if (strcmp(route, SM_API_ROUTE_STORAGE) == 0) {
-    handle_storage(connection);
+    handle_storage(connection, json);
   } else if (strcmp(route, SM_API_ROUTE_IMAGES) == 0) {
     handle_images(connection);
   } else if (strcmp(route, SM_API_ROUTE_GAMES) == 0) {
@@ -2969,6 +3122,8 @@ static void dispatch_request(struct MHD_Connection *connection,
     handle_settings(connection);
   } else if (strcmp(route, SM_API_ROUTE_SETTINGS_UPDATE) == 0) {
     handle_settings_update(connection, json);
+  } else if (strcmp(route, SM_API_ROUTE_SMB) == 0) {
+    handle_smb(connection, json);
   } else if (strcmp(route, SM_API_ROUTE_DEBUG_LOG) == 0) {
     handle_debug_log(connection, json);
   } else if (strcmp(route, SM_API_ROUTE_KERNEL_LOG) == 0) {
@@ -2979,8 +3134,12 @@ static void dispatch_request(struct MHD_Connection *connection,
     handle_file_listing(connection, json, true);
   } else if (strcmp(route, SM_API_ROUTE_FILES) == 0) {
     handle_file_listing(connection, json, false);
+  } else if (strcmp(route, SM_API_ROUTE_DIRECTORY_CREATE) == 0) {
+    handle_directory_create(connection, json);
   } else if (strcmp(route, SM_API_ROUTE_SOURCE_INSTALL) == 0) {
     handle_source_install(connection, json);
+  } else if (strcmp(route, SM_API_ROUTE_SOURCE_DELETE) == 0) {
+    handle_source_delete(connection, json);
   } else if (strcmp(route, SM_API_ROUTE_BACKPORT_INSTALL) == 0) {
     handle_backport_operation(connection, json, GAME_STORAGE_COPY);
   } else if (strcmp(route, SM_API_ROUTE_BACKPORT_DELETE) == 0) {
@@ -3016,6 +3175,10 @@ static const char *game_storage_operation_name(
 }
 
 static bool destination_is_managed(const char *destination) {
+  if (sm_smb_path(destination)) {
+    char canonical[MAX_PATH];
+    return sm_smb_normalize(destination,canonical) == 0;
+  }
   if (is_under_image_mount_base(destination) ||
       path_matches_root_or_child(destination, APP_BASE) ||
       path_matches_root_or_child(destination, APPMETA_BASE) ||
@@ -3199,8 +3362,35 @@ static int release_storage_source_runtime(const char *physical_path,
   return 0;
 }
 
+static int release_browser_source_runtime(const char *path, size_t *affected_out,
+                                           const char **error_out) {
+  sm_game_cache_snapshot_entry_t *snapshot = NULL;
+  size_t count = 0;
+  *affected_out = 0;
+  if (!sm_game_cache_snapshot(&snapshot, &count)) return ENOMEM;
+  int status = 0;
+  for (size_t i = 0; i < count; ++i) {
+    game_source_info_t source;
+    char canonical[PATH_MAX];
+    if (!resolve_game_source(&snapshot[i], &source)) continue;
+    const char *physical = realpath(source.physical_path, canonical) ? canonical : source.physical_path;
+    if (!path_matches_root_or_child(physical, path)) continue;
+    size_t affected = 0;
+    status = release_storage_source_runtime(source.physical_path, snapshot[i].title_id, &affected, error_out);
+    if (status == ENOENT && affected == 0) status = 0;
+    if (status) break;
+    ++*affected_out;
+  }
+  free(snapshot);
+  return status;
+}
+
 static void update_moved_source_links(const char *source,
                                       const char *destination) {
+  if (sm_smb_path(destination)) {
+    cleanup_mount_links_for_source_unmount(source);
+    return;
+  }
   sm_game_cache_snapshot_entry_t *snapshot = NULL;
   size_t count = 0;
   if (!sm_game_cache_snapshot(&snapshot, &count))
@@ -3567,6 +3757,24 @@ static bool read_install_source_info(const char *path, const struct stat *st,
     source->source_type = "image";
     strlcpy(title_name, get_filename_component(path), MAX_TITLE_NAME);
   } else if (S_ISDIR(st->st_mode)) {
+    if (sm_smb_path(path)) {
+      sm_pkg_info_t info;
+      char executable[MAX_PATH];
+      struct stat executable_stat;
+      bool has_executable = false;
+      const char *names[] = {"eboot.bin", "eboot2.bin"};
+      for (size_t i=0;i<2 && !has_executable;++i) {
+        int size=snprintf(executable,sizeof(executable),"%s/%s",path,names[i]);
+        if (size > 0 && (size_t)size < sizeof(executable) &&
+            lstat(executable,&executable_stat) == 0 && S_ISREG(executable_stat.st_mode)) has_executable=true;
+      }
+      if (!has_executable || !sm_pkg_read_directory_metadata(path,&info) || !is_supported_game_title_id(info.title_id)) return false;
+      strlcpy(title_id,info.title_id,MAX_TITLE_ID);
+      strlcpy(title_name,info.title_name[0] ? info.title_name : info.title_id,MAX_TITLE_NAME);
+      source->source_type="folder";
+      if(path != source->physical_path) strlcpy(source->physical_path,path,sizeof(source->physical_path));
+      return true;
+    }
     struct stat param;
     char backport_title[MAX_TITLE_ID];
     if (resolve_backport_source(path, backport_title) ||
@@ -3587,6 +3795,7 @@ static void *storage_job_thread_main(void *arg) {
   char destination[MAX_PATH];
   bool delete_source;
   bool backport;
+  bool browser_delete;
   game_storage_operation_t operation;
 
   pthread_mutex_lock(&g_storage_job.mutex);
@@ -3599,6 +3808,7 @@ static void *storage_job_thread_main(void *arg) {
   delete_source = g_storage_job.delete_source;
   operation = g_storage_job.operation;
   backport = strcmp(g_storage_job.source_type, "backport") == 0;
+  browser_delete = operation == GAME_STORAGE_DELETE && !title_id[0];
   pthread_mutex_unlock(&g_storage_job.mutex);
 
   uint64_t total_bytes = 0;
@@ -3679,7 +3889,20 @@ static void *storage_job_thread_main(void *arg) {
              strcmp(title_id, checked_title)) status = EINVAL;
   }
 
-  if (status == 0 && operation != GAME_STORAGE_UNPACK && operation != GAME_STORAGE_INSTALL && !backport) {
+  if (status == 0 && browser_delete) {
+    game_source_info_t checked = {0};
+    status = resolve_browser_delete_source(source, &checked);
+    if (!status && !sm_smb_path(source)) {
+      size_t affected = 0;
+      status = release_browser_source_runtime(source, &affected, &error);
+      recovery_scan_needed = affected > 0 || status != 0;
+      pthread_mutex_lock(&g_storage_job.mutex);
+      g_storage_job.affected_titles = affected;
+      pthread_mutex_unlock(&g_storage_job.mutex);
+    }
+  }
+
+  if (status == 0 && operation != GAME_STORAGE_UNPACK && operation != GAME_STORAGE_INSTALL && !backport && !browser_delete) {
     size_t affected = 0;
     recovery_scan_needed = true;
     status = release_storage_source_runtime(source, title_id, &affected,
@@ -3715,6 +3938,11 @@ static void *storage_job_thread_main(void *arg) {
                                    measure_source, &total_bytes, &total_files,
                                    storage_job_cancelled, job_ctx);
     status = storage_operation_result_status(operation, source, measure_result);
+  }
+
+  if (status == 0 && browser_delete) {
+    game_source_info_t checked = {0};
+    status = resolve_browser_delete_source(source, &checked);
   }
 
   if (status == 0) {
@@ -3832,7 +4060,8 @@ static int launch_storage_job(const char *title_id,
                               storage_job_snapshot_t *accepted_out,
                               const char **error_out) {
   pthread_mutex_lock(&g_storage_job.mutex);
-  if (!g_storage_job.accepting || storage_job_is_active(g_storage_job.state) || g_storage_job.pkg_queue_running) {
+  if (!g_storage_job.accepting || storage_job_is_active(g_storage_job.state) || g_storage_job.pkg_queue_running ||
+      (operation == GAME_STORAGE_DELETE && !title_id[0] && g_storage_job.pkg_queue_count)) {
     *error_out = g_storage_job.accepting
                      ? "storage_busy"
                      : "storage_unavailable";
@@ -3945,6 +4174,13 @@ static const char *package_string(struct json_object *request, const char *key) 
 }
 
 static bool package_root(const char *path, char root[MAX_PATH]) {
+  if (sm_smb_path(path)) {
+    char canonical[MAX_PATH];
+    if (sm_smb_normalize(path,canonical)) return false;
+    const char *slash=strchr(canonical+6,'/');
+    size_t length=slash ? (size_t)(slash-canonical) : strlen(canonical);
+    memcpy(root,canonical,length); root[length]=0; return true;
+  }
   if (path_matches_root_or_child(path, "/data")) {
     strlcpy(root, "/data", MAX_PATH);
     return true;
@@ -3959,8 +4195,15 @@ static bool package_root(const char *path, char root[MAX_PATH]) {
 }
 
 static int resolve_package_path(const char *path, char resolved[MAX_PATH], bool directory) {
-  if (!path || path[0] != '/' || strlen(path) >= MAX_PATH) return EINVAL;
-  if (!realpath(path, resolved)) return errno ? errno : EINVAL;
+  if (!path || (path[0] != '/' && !sm_smb_path(path)) || strlen(path) >= MAX_PATH) return EINVAL;
+  if (sm_smb_path(path)) {
+    int status = sm_smb_normalize(path, resolved);
+    if (status) return status;
+  } else {
+    char canonical[PATH_MAX];
+    if (!realpath(path, canonical)) return errno ? errno : EINVAL;
+    if (strlcpy(resolved, canonical, MAX_PATH) >= MAX_PATH) return ENAMETOOLONG;
+  }
   char root[MAX_PATH];
   if (!package_root(resolved, root) || sm_pkg_is_installed_content_path(resolved)) return EPERM;
   struct stat st;
@@ -3975,7 +4218,7 @@ static void handle_source_install(struct MHD_Connection *connection, struct json
   const char *path = package_string(request, "path");
   const char *target = package_string(request, "destination_dir");
   struct stat st;
-  int status = !path || path[0] != '/' || strlen(path) >= MAX_PATH ||
+  int status = !path || (path[0] != '/' && !sm_smb_path(path)) || strlen(path) >= MAX_PATH ||
       !target || target[0] != '/' || strlen(target) >= MAX_PATH ? EINVAL : 0;
   if (!status && stat(path, &st) != 0) status = errno ? errno : EIO;
   game_source_info_t source = {0};
@@ -4005,6 +4248,157 @@ static void handle_source_install(struct MHD_Connection *connection, struct json
   }
   pthread_mutex_unlock(&g_storage_job.mutex);
   send_storage_job_response(connection, 202, &accepted);
+}
+
+static bool browser_source_writable(const char *path, const struct stat *st) {
+  char parent[MAX_PATH];
+  if (strlcpy(parent, path, sizeof(parent)) >= sizeof(parent)) return false;
+  char *slash = strrchr(parent, '/');
+  if (!slash) return false;
+  if (slash == parent) slash[1] = 0;
+  else *slash = 0;
+  struct stat parent_stat;
+  struct statvfs filesystem;
+  return (!S_ISDIR(st->st_mode) || (st->st_mode & 0222) != 0) &&
+         stat(parent, &parent_stat) == 0 && (parent_stat.st_mode & 0222) != 0 &&
+         access(parent, W_OK | X_OK) == 0 &&
+         (!S_ISDIR(st->st_mode) || access(path, W_OK | X_OK) == 0) &&
+         statvfs(parent, &filesystem) == 0 && (filesystem.f_flag & ST_RDONLY) == 0;
+}
+
+static bool browser_path_is_system(const char *path, bool include_ancestors) {
+  static const char *const system_paths[] = {
+      "/system", "/system_ex", "/system_data", "/user", "/preinst", "/update",
+      LOG_DIR, IMAGE_MOUNT_BASE, "/mnt/ext0/user", "/mnt/ext1/user",
+      "/mnt/ext0/ps5", "/mnt/ext1/ps5", "/mnt/ext0/system_data", "/mnt/ext1/system_data",
+  };
+  for (size_t i = 0; i < sizeof(system_paths) / sizeof(system_paths[0]); ++i)
+    if (path_matches_root_or_child(path, system_paths[i]) ||
+        (include_ancestors && path_matches_root_or_child(system_paths[i], path))) return true;
+  return sm_pkg_is_installed_content_path(path);
+}
+
+static bool browser_directory_creatable(const char *path) {
+  if (sm_smb_path(path)) return sm_vfs_mkdir_access(path) == 0;
+  char root[MAX_PATH];
+  struct stat st;
+  struct statvfs filesystem;
+  return package_root(path, root) && !browser_path_is_system(path, false) &&
+         stat(path, &st) == 0 && S_ISDIR(st.st_mode) && (st.st_mode & 0222) != 0 &&
+         access(path, W_OK | X_OK) == 0 && statvfs(path, &filesystem) == 0 &&
+         (filesystem.f_flag & ST_RDONLY) == 0;
+}
+
+static bool browser_source_deletable(const char *path, const struct stat *st) {
+  const char *name = get_filename_component(path);
+  const char *extension = strrchr(name, '.');
+  bool pkg = S_ISREG(st->st_mode) && extension && !strcasecmp(extension, ".pkg");
+  bool directory = S_ISDIR(st->st_mode);
+  if (!directory && !pkg && !(S_ISREG(st->st_mode) && is_supported_image_file_path(path, name))) return false;
+  if (sm_smb_path(path)) return strchr(path + 6, '/') != NULL && sm_vfs_delete_access(path, directory) == 0;
+  char root[MAX_PATH];
+  if (!package_root(path, root) || !strcmp(path, root) || browser_path_is_system(path, directory)) return false;
+  // PKGs may be removed from scan roots. Folders must not contain one either.
+  if (pkg) return browser_source_writable(path, st);
+  for (int i = 0; i < get_scan_path_count(); ++i) {
+    char scan_path[MAX_PATH], canonical[PATH_MAX];
+    if (!get_scan_path(i, scan_path)) return false;
+    const char *scan = realpath(scan_path, canonical) ? canonical : scan_path;
+    if (path_matches_root_or_child(path, scan) ||
+        (directory && path_matches_root_or_child(scan, path))) return false;
+  }
+  return browser_source_writable(path, st);
+}
+
+static int resolve_browser_delete_source(const char *path, game_source_info_t *source) {
+  if (!path || (!sm_smb_path(path) && path[0] != '/') || strlen(path) >= MAX_PATH) return EINVAL;
+  char resolved[PATH_MAX];
+  if (!realpath(path, resolved)) return errno ? errno : EINVAL;
+  if (strlcpy(source->physical_path, resolved, sizeof(source->physical_path)) >= sizeof(source->physical_path)) return ENAMETOOLONG;
+  struct stat st;
+  if (lstat(source->physical_path, &st) != 0) return errno ? errno : EIO;
+  if (!browser_source_deletable(source->physical_path, &st)) return EPERM;
+  if (S_ISDIR(st.st_mode)) source->source_type = "folder";
+  else if (S_ISREG(st.st_mode)) {
+    const char *name = get_filename_component(source->physical_path);
+    const char *extension = strrchr(name, '.');
+    if (is_supported_image_file_path(source->physical_path, name)) source->source_type = "image";
+    else if (extension && !strcasecmp(extension, ".pkg")) source->source_type = "pkg";
+    else return EINVAL;
+  } else return EINVAL;
+  return 0;
+}
+
+static void handle_source_delete(struct MHD_Connection *connection, struct json_object *request) {
+  struct json_object *confirm;
+  if (!json_object_object_get_ex(request, "confirm", &confirm) ||
+      !json_object_is_type(confirm, json_type_boolean) || !json_object_get_boolean(confirm)) {
+    send_operation_error_response(connection, EINVAL, NULL);
+    return;
+  }
+  const char *error = runtime_mutation_block_reason();
+  if (error) { send_operation_error_response(connection, EBUSY, error); return; }
+  game_source_info_t source = {0};
+  int status = resolve_browser_delete_source(package_string(request, "path"), &source);
+  storage_job_snapshot_t accepted;
+  if (!status) status = launch_storage_job("", &source, "", GAME_STORAGE_DELETE, false, &accepted, &error);
+  if (status) { send_operation_error_response(connection, status, error); return; }
+  pthread_mutex_lock(&g_storage_job.mutex);
+  if (g_storage_job.id == accepted.id) {
+    strlcpy(g_storage_job.title_name, get_filename_component(source.physical_path), sizeof(g_storage_job.title_name));
+    strlcpy(accepted.title_name, g_storage_job.title_name, sizeof(accepted.title_name));
+  }
+  pthread_mutex_unlock(&g_storage_job.mutex);
+  send_storage_job_response(connection, 202, &accepted);
+}
+
+static void handle_directory_create(struct MHD_Connection *connection, struct json_object *request) {
+  const char *name = package_string(request, "name");
+  if (!name || !name[0] || strlen(name) > 255 || !strcmp(name, ".") || !strcmp(name, "..") ||
+      strpbrk(name, "/\\:*?\"<>|")) {
+    send_operation_error_response(connection, EINVAL, NULL); return;
+  }
+  for (const unsigned char *p = (const unsigned char *)name; *p; ++p)
+    if (*p < 32 || *p == 127) { send_operation_error_response(connection, EINVAL, NULL); return; }
+  const char *error = runtime_mutation_block_reason();
+  int status = error ? EBUSY : 0;
+  bool scanner_mutation = false, shellcore_mutation = false;
+  char parent[MAX_PATH], child[MAX_PATH];
+  if (!status) status = resolve_package_path(package_string(request, "path"), parent, true);
+  if (!status && sm_smb_path(parent) && (name[strlen(name) - 1] == '.' || name[strlen(name) - 1] == ' ')) status = EINVAL;
+  if (!status) {
+    int length = snprintf(child, sizeof(child), "%s/%s", parent, name);
+    if (length < 0 || (size_t)length >= sizeof(child)) status = ENAMETOOLONG;
+  }
+  if (!status && sm_shellcore_source_is_protected(child)) { status = EBUSY; error = "game_active"; }
+  if (!status) {
+    pthread_mutex_lock(&g_storage_job.mutex);
+    bool busy = !g_storage_job.accepting || storage_job_is_active(g_storage_job.state) || g_storage_job.pkg_queue_running;
+    pthread_mutex_unlock(&g_storage_job.mutex);
+    if (busy) { status = EBUSY; error = "storage_busy"; }
+  }
+  if (!status) {
+    scanner_mutation = sm_scanner_try_begin_external_mutation();
+    if (!scanner_mutation) { status = EBUSY; error = "scanner_busy"; }
+  }
+  if (!status) {
+    shellcore_mutation = sm_shellcore_try_begin_external_mutation();
+    if (!shellcore_mutation) { status = EBUSY; error = "runtime_busy"; }
+  }
+  if (!status && !browser_directory_creatable(parent))
+    status = should_stop_requested() || runtime_sleep_mode_active() ? ECANCELED : EACCES;
+  if (!status && (should_stop_requested() || runtime_sleep_mode_active())) status = ECANCELED;
+  if (!status && mkdir(child, 0777) != 0) status = errno ? errno : EIO;
+  if (shellcore_mutation) sm_shellcore_end_external_mutation();
+  if (scanner_mutation) sm_scanner_end_external_mutation();
+  if (status) { send_operation_error_response(connection, status, error); return; }
+  struct json_object *response = new_status_response(0);
+  if (!response || !add_json_string(response, "path", child)) {
+    if (response) json_object_put(response);
+    send_out_of_memory_response(connection); return;
+  }
+  (void)send_json_object(connection, 200, response);
+  json_object_put(response);
 }
 
 static void handle_backport_operation(struct MHD_Connection *connection, struct json_object *request,
@@ -4199,28 +4593,44 @@ static void handle_file_listing(struct MHD_Connection *connection, struct json_o
   size_t metadata_count = 0;
   bool metadata_loaded = false;
   if (!response || !roots || !entries) goto oom;
+  struct json_object *root_storage = json_object_new_array();
+  if (!root_storage || !add_json_value(response, "root_storage", root_storage)) goto oom;
   for (int i = 0; i < 12; ++i) {
     char root[MAX_PATH], managed[MAX_PATH];
     if (i < 2) strlcpy(root, i == 0 ? "/data/pkgs" : "/data", sizeof(root));
     else snprintf(root, sizeof(root), i <= 9 ? "/mnt/usb%d" : "/mnt/ext%d", i <= 9 ? i - 2 : i - 10);
     struct stat st;
-    if (package_root(root, managed) && stat(root, &st) == 0 && S_ISDIR(st.st_mode))
+    if (package_root(root, managed) && stat(root, &st) == 0 && S_ISDIR(st.st_mode)) {
       if (!append_json_string(roots, root)) goto oom;
+      struct statfs filesystem;
+      if (packages && statfs(root, &filesystem) == 0 && filesystem_has_capacity(&filesystem)) {
+        struct json_object *item = filesystem_to_json(&filesystem);
+        if (!item || !add_json_string(item, "path", root) || json_object_array_add(root_storage, item) != 0) {
+          if (item) json_object_put(item);
+          goto oom;
+        }
+      }
+    }
   }
+  if(!append_smb_paths(roots,false)) goto oom;
   char resolved[MAX_PATH] = "", parent[MAX_PATH] = "";
+  size_t page_limit = 256;
   bool truncated = false;
+  bool can_create_directory = false;
   if (path && path[0]) {
     int status = resolve_package_path(path, resolved, true);
     if (status) {
       json_object_put(response); json_object_put(roots); json_object_put(entries);
       send_error_response(connection, operation_http_status(status), status, strerror(status)); return;
     }
+    if(sm_smb_path(resolved)) page_limit=32;
     DIR *directory = opendir(resolved);
     if (!directory) {
       int error = errno;
       json_object_put(response); json_object_put(roots); json_object_put(entries);
       send_error_response(connection, operation_http_status(error), error, strerror(error)); return;
     }
+    if (!packages) can_create_directory = browser_directory_creatable(resolved);
     struct dirent *entry;
     size_t count = 0;
     while (!api_listener_stop_requested(NULL) && (entry = readdir(directory))) {
@@ -4235,7 +4645,7 @@ static void handle_file_listing(struct MHD_Connection *connection, struct json_o
       bool image = packages && !folder && is_supported_image_file_path(child, entry->d_name);
       if (!folder && (packages ? (!image && (name_length < 4 || strcasecmp(entry->d_name + name_length - 4, ".pkg"))) : !include_files)) continue;
       if (count++ < offset) continue;
-      if (count > offset + 256) { truncated = true; break; }
+      if (count > offset + page_limit) { truncated = true; break; }
       sm_pkg_info_t info;
       bool valid = packages && !folder && sm_pkg_parse_file(child, &st, &info);
       char backport_title[MAX_TITLE_ID], backport_destination[MAX_PATH];
@@ -4254,6 +4664,7 @@ static void handle_file_listing(struct MHD_Connection *connection, struct json_o
       struct json_object *item = json_object_new_object();
       if (!item || !add_json_string(item, "name", entry->d_name) ||
           !add_json_string(item, "path", child) || !add_json_bool(item, "directory", folder) ||
+          !add_json_bool(item, "can_delete", browser_source_deletable(child, &st)) ||
           !add_json_bool(item, "installable", valid || game) || !add_json_int(item, "size_bytes", folder ? 0 : st.st_size) ||
           (game && (!add_json_string(item, "source_type", game_source.source_type) ||
                     !add_json_string(item, "title_id", game_title) || !add_json_string(item, "title_name", game_name))) ||
@@ -4265,7 +4676,16 @@ static void handle_file_listing(struct MHD_Connection *connection, struct json_o
         closedir(directory); goto oom;
       }
     }
+    #ifdef SM_VFS_ENABLED
+    int directory_error=sm_vfs_dir_error(directory);
+    #else
+    int directory_error=0;
+    #endif
     closedir(directory);
+    if(directory_error) {
+      json_object_put(response); json_object_put(roots); json_object_put(entries); free(metadata);
+      send_error_response(connection,operation_http_status(directory_error),directory_error,strerror(directory_error)); return;
+    }
     char root[MAX_PATH];
     if (package_root(resolved, root) && strcmp(root, resolved)) {
       strlcpy(parent, resolved, sizeof(parent));
@@ -4274,7 +4694,9 @@ static void handle_file_listing(struct MHD_Connection *connection, struct json_o
     }
   }
   if (!add_json_string(response, "path", resolved) || !add_json_string(response, "parent", parent) ||
-      !add_json_bool(response, "truncated", truncated) || !add_json_int(response, "offset", offset)) goto oom;
+      !add_json_bool(response, "can_create_directory", can_create_directory) ||
+      !add_json_bool(response, "truncated", truncated) || !add_json_int(response, "offset", offset) ||
+      !add_json_int(response,"limit",page_limit)) goto oom;
   json_object_object_add(response, "roots", roots);
   json_object_object_add(response, "entries", entries);
   send_json_object(connection, 200, response);
@@ -4335,7 +4757,9 @@ static bool package_install_cancelled(void *opaque) {
   if (ctx->expected && now >= ctx->source_check_us) {
     ctx->source_check_us = now + 1000000;
     struct stat st;
-    if (lstat(ctx->expected->path, &st) != 0 || !sm_pkg_source_matches(ctx->expected, &st))
+    bool matches=ctx->server ? sm_pkg_server_source_matches(ctx->server,ctx->expected) :
+        lstat(ctx->expected->path,&st) == 0 && sm_pkg_source_matches(ctx->expected,&st);
+    if (!matches)
       ctx->failure = ESTALE;
   }
   if (ctx->server) {
@@ -4438,6 +4862,8 @@ static void *package_install_thread(void *opaque) {
       pthread_mutex_unlock(&g_storage_job.mutex);
       if (ctx.stream && !ctx.server)
         status = sm_pkg_server_start_reader(&ctx.server, source, size, sm_pkg_stream_read, ctx.stream, token, &port);
+      else if (!ctx.server && sm_smb_path(resolved))
+        status = sm_pkg_server_start(&ctx.server,resolved,token,&port);
       if (!ctx.stream) ctx.expected = &info;
     }
     if (!status && package_install_cancelled(&ctx)) status = ctx.failure ? ctx.failure : ECANCELED;
@@ -4771,7 +5197,8 @@ static void handle_package_queue(struct MHD_Connection *connection, struct json_
   int status = 0;
   const char *reason = NULL;
   if (!strcmp(action, "add")) {
-    if (!g_storage_job.accepting || (storage_job_is_active(g_storage_job.state) && g_storage_job.cancel_requested)) status = EBUSY;
+    if (!g_storage_job.accepting || (storage_job_is_active(g_storage_job.state) &&
+        (g_storage_job.cancel_requested || (g_storage_job.operation == GAME_STORAGE_DELETE && !g_storage_job.title_id[0])))) status = EBUSY;
     else status = enqueue_package_locked(&info, installed);
     reason = status == ENOENT ? "pkg_base_missing" : status == EALREADY ? "pkg_already_installed" :
              status == EEXIST ? "pkg_queued" : status == ENOSPC ? "pkg_queue_full" : "storage_busy";

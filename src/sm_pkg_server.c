@@ -19,16 +19,18 @@
 #include "sm_limits.h"
 #include "sm_log.h"
 #include "sm_time.h"
+#include "sm_vfs.h"
 
 #define SM_PKG_SERVER_MAX_CONNECTIONS 16
 #define SM_PKG_SERVER_REQUEST_MAX 8192
 #define SM_PKG_SERVER_SEND_CHUNK (2u * 1024u * 1024u)
+#define SM_PKG_SERVER_SMB_CHUNK (4u * 1024u * 1024u)
 #define SM_PKG_SERVER_SOCKET_BUFFER (512 * 1024)
 #define SM_PKG_SERVER_IO_TIMEOUT_SECONDS 60
 #define SM_PKG_SERVER_COVERAGE_MAX 256
 
 typedef struct {
-  uint64_t started_us, reported_us, bytes, read_us, send_us;
+  uint64_t started_us, reported_us, bytes, read_us, send_us, wait_us;
 } sm_pkg_transfer_stats_t;
 
 struct sm_pkg_server {
@@ -72,6 +74,85 @@ typedef struct {
   char range[128];
   bool has_range;
 } sm_pkg_http_request_t;
+
+typedef struct {
+  char *data;
+  ssize_t size;
+  uint64_t started_us, read_us;
+} sm_pkg_read_block_t;
+
+/* Owned by one HTTP response; pending includes the block being sent. */
+typedef struct {
+  sm_pkg_server_t *server;
+  pthread_mutex_t mutex;
+  pthread_cond_t cond;
+  pthread_t thread;
+  sm_pkg_read_block_t blocks[2];
+  size_t chunk_size;
+  uint64_t offset, end;
+  unsigned head, pending;
+  bool stop, done;
+} sm_pkg_read_ahead_t;
+
+static void *read_ahead_worker(void *opaque) {
+  sm_pkg_read_ahead_t *state = opaque;
+  pthread_mutex_lock(&state->mutex);
+  while (!state->stop && state->server->running && state->offset <= state->end) {
+    while (state->pending == 2 && !state->stop && state->server->running)
+      pthread_cond_wait(&state->cond, &state->mutex);
+    if (state->stop || !state->server->running) break;
+    sm_pkg_read_block_t *block = &state->blocks[(state->head + state->pending) % 2];
+    uint64_t remaining = state->end - state->offset + 1;
+    size_t want = remaining < state->chunk_size
+                      ? (size_t)remaining : state->chunk_size;
+    uint64_t offset = state->offset;
+    pthread_mutex_unlock(&state->mutex);
+    block->started_us = monotonic_time_us();
+    block->size = pread(state->server->pkg_fd, block->data, want, (off_t)offset);
+    int error = errno;
+    block->read_us = monotonic_time_us() - block->started_us;
+    pthread_mutex_lock(&state->mutex);
+    if (block->size < 0 && error == EINTR) continue;
+    ++state->pending;
+    pthread_cond_signal(&state->cond);
+    if (block->size <= 0) break;
+    state->offset += (uint64_t)block->size;
+  }
+  state->done = true;
+  pthread_cond_broadcast(&state->cond);
+  pthread_mutex_unlock(&state->mutex);
+  return NULL;
+}
+
+static bool start_read_ahead(sm_pkg_read_ahead_t *state) {
+  state->blocks[1].data = malloc(state->chunk_size);
+  if (!state->blocks[1].data) return false;
+  if (pthread_mutex_init(&state->mutex, NULL) != 0) {
+    free(state->blocks[1].data);
+    return false;
+  }
+  if (pthread_cond_init(&state->cond, NULL) != 0) {
+    pthread_mutex_destroy(&state->mutex);
+    free(state->blocks[1].data);
+    return false;
+  }
+  if (pthread_create(&state->thread, NULL, read_ahead_worker, state) == 0) return true;
+  pthread_cond_destroy(&state->cond);
+  pthread_mutex_destroy(&state->mutex);
+  free(state->blocks[1].data);
+  return false;
+}
+
+static void stop_read_ahead(sm_pkg_read_ahead_t *state) {
+  pthread_mutex_lock(&state->mutex);
+  state->stop = true;
+  pthread_cond_broadcast(&state->cond);
+  pthread_mutex_unlock(&state->mutex);
+  pthread_join(state->thread, NULL);
+  pthread_cond_destroy(&state->cond);
+  pthread_mutex_destroy(&state->mutex);
+  free(state->blocks[1].data);
+}
 
 static bool send_all(int fd, const void *buffer, size_t size) {
   const char *data = buffer;
@@ -317,15 +398,20 @@ static int header_content(char *buffer, size_t size, uint64_t start, uint64_t en
                   range, keep_alive ? "keep-alive" : "close");
 }
 
-static void log_transfer_stats(bool streaming, const sm_pkg_transfer_stats_t *stats,
+static void log_transfer_stats(const sm_pkg_server_t *server, const sm_pkg_transfer_stats_t *stats,
                                 uint64_t now, bool final) {
-  // Reader times are summed across HTTP workers; elapsed time is wall time.
+  const char *source = server->read ? "stream" : "disk";
+#ifdef SM_VFS_ENABLED
+  if (!server->read && sm_vfs_remote_fd(server->pkg_fd)) source = "smb";
+#endif
+  // Read/send times can overlap and are summed across workers; elapsed is wall time.
   log_debug("  [PKG] HTTP transfer: source=%s bytes=%llu elapsed_ms=%llu "
-            "read_ms=%llu send_ms=%llu final=%u",
-            streaming ? "stream" : "disk", (unsigned long long)stats->bytes,
+            "read_ms=%llu send_ms=%llu wait_ms=%llu final=%u",
+            source, (unsigned long long)stats->bytes,
             (unsigned long long)((now - stats->started_us) / 1000),
             (unsigned long long)(stats->read_us / 1000),
-            (unsigned long long)(stats->send_us / 1000), (unsigned)final);
+            (unsigned long long)(stats->send_us / 1000),
+            (unsigned long long)(stats->wait_us / 1000), (unsigned)final);
 }
 
 static bool serve_file(sm_pkg_server_t *server, int fd,
@@ -423,32 +509,75 @@ static bool serve_file(sm_pkg_server_t *server, int fd,
     return request->keep_alive && !invalid_range;
 
   size_t chunk_size = SM_PKG_SERVER_SEND_CHUNK;
+  if (server->read == sm_pkg_stream_read) chunk_size = SM_PKG_STREAM_CHUNK;
+#ifdef SM_VFS_ENABLED
+  // Larger SMB batches keep four requests in flight instead of two. Preserve
+  // the native-file size and keep two buffers useful even for shorter ranges.
+  if (!server->read && sm_vfs_remote_fd(server->pkg_fd) &&
+      end - start + 1 >= 2u * SM_PKG_SERVER_SMB_CHUNK)
+    chunk_size = SM_PKG_SERVER_SMB_CHUNK;
+#endif
   if (end - start + 1 < chunk_size) chunk_size = (size_t)(end - start + 1);
   char *buffer = malloc(chunk_size);
   if (!buffer)
     return false;
   uint64_t offset = start;
+  sm_pkg_read_ahead_t ahead = {.server = server, .offset = start, .end = end,
+                               .chunk_size = chunk_size,
+                               .blocks = {{.data = buffer}}};
+  /* Browser sources already prefetch in their range cache. File sources use
+   * two bounded buffers, with no extra thread for single-block HTTP ranges. */
+  bool pipelined = !server->read && end - start + 1 >= 2u * chunk_size &&
+                   start_read_ahead(&ahead);
   bool ok = true;
-  while (offset <= end) {
+  while (offset <= end && server->running) {
     uint64_t remaining = end - offset + 1;
     size_t want = remaining > chunk_size
                       ? chunk_size
                       : (size_t)remaining;
+    if (server->read == sm_pkg_stream_read) {
+      size_t available = SM_PKG_STREAM_CHUNK - (size_t)(offset % SM_PKG_STREAM_CHUNK);
+      if (want > available) want = available;
+    }
     uint64_t read_started_us = monotonic_time_us();
-    ssize_t count = server->read
-      ? (server->read(server->read_ctx, offset, buffer, want) == 0 ? (ssize_t)want : -1)
-      : pread(server->pkg_fd, buffer, want, (off_t)offset);
+    uint64_t read_us, wait_us;
+    char *data = buffer;
+    ssize_t count;
+    if (pipelined) {
+      pthread_mutex_lock(&ahead.mutex);
+      while (!ahead.pending && !ahead.done)
+        pthread_cond_wait(&ahead.cond, &ahead.mutex);
+      if (!ahead.pending) {
+        pthread_mutex_unlock(&ahead.mutex);
+        ok = false;
+        break;
+      }
+      wait_us = monotonic_time_us() - read_started_us;
+      sm_pkg_read_block_t block = ahead.blocks[ahead.head];
+      count = block.size;
+      data = block.data;
+      read_started_us = block.started_us;
+      read_us = block.read_us;
+      pthread_mutex_unlock(&ahead.mutex);
+    } else {
+      count = server->read
+        ? ((server->read)(server->read_ctx, offset, buffer, want) == 0 ? (ssize_t)want : -1)
+        : pread(server->pkg_fd, buffer, want, (off_t)offset);
+      read_us = monotonic_time_us() - read_started_us;
+      wait_us = read_us;
+    }
     int read_error = count < 0 ? errno : 0;
     uint64_t send_started_us = monotonic_time_us();
-    if (!server->read && count < 0 && read_error == EINTR) continue;
-    bool sent = count > 0 && send_all(fd, buffer, (size_t)count);
+    if (!pipelined && !server->read && count < 0 && read_error == EINTR) continue;
+    bool sent = count > 0 && send_all(fd, data, (size_t)count);
     uint64_t sent_us = monotonic_time_us();
     sm_pkg_transfer_stats_t snapshot = {0};
     pthread_mutex_lock(&server->mutex);
     sm_pkg_transfer_stats_t *stats = &server->transfer;
     if (!stats->started_us || read_started_us < stats->started_us) stats->started_us = read_started_us;
     if (!stats->reported_us) stats->reported_us = read_started_us;
-    stats->read_us += send_started_us - read_started_us;
+    stats->read_us += read_us;
+    stats->wait_us += wait_us;
     stats->send_us += sent_us - send_started_us;
     if (sent) {
       stats->bytes += (uint64_t)count;
@@ -460,10 +589,18 @@ static bool serve_file(sm_pkg_server_t *server, int fd,
       snapshot = *stats;
     }
     pthread_mutex_unlock(&server->mutex);
-    if (snapshot.started_us) log_transfer_stats(server->read != NULL, &snapshot, sent_us, false);
+    if (snapshot.started_us) log_transfer_stats(server, &snapshot, sent_us, false);
     if (!sent) { ok = false; break; }
+    if (pipelined) {
+      pthread_mutex_lock(&ahead.mutex);
+      ahead.head = (ahead.head + 1) % 2;
+      --ahead.pending;
+      pthread_cond_signal(&ahead.cond);
+      pthread_mutex_unlock(&ahead.mutex);
+    }
     offset += (uint64_t)count;
   }
+  if (pipelined) stop_read_ahead(&ahead);
   free(buffer);
   return ok && request->keep_alive;
 }
@@ -830,7 +967,7 @@ void sm_pkg_server_stop(sm_pkg_server_t *server) {
     pthread_cond_wait(&server->cond, &server->mutex);
   pthread_mutex_unlock(&server->mutex);
   if (server->transfer.bytes >= 16u * 1024u * 1024u)
-    log_transfer_stats(server->read != NULL, &server->transfer, monotonic_time_us(), true);
+    log_transfer_stats(server, &server->transfer, monotonic_time_us(), true);
   if (server->pkg_fd >= 0) close(server->pkg_fd);
   pthread_cond_destroy(&server->cond);
   pthread_mutex_destroy(&server->mutex);

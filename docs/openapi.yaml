@@ -26,6 +26,7 @@ tags:
   - name: Images
   - name: Games
   - name: Packages
+  - name: Settings
 
 paths:
   /:
@@ -130,10 +131,21 @@ paths:
           $ref: "#/components/responses/Preflight"
     post:
       operationId: getStorageSpace
-      summary: Get free space for mounted storage filesystems
+      summary: Get local storage listings or capacity for one SMB path
       tags: [Storage]
       requestBody:
-        $ref: "#/components/requestBodies/EmptyRequest"
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                path:
+                  type: string
+                  pattern: "^smb://"
+                  maxLength: 1023
+                  description: Optional active SMB alias path. Queries only this path; omitted returns the local storage list and active SMB destinations without contacting SMB servers.
       responses:
         "200":
           $ref: "#/components/responses/StorageSpaceSuccess"
@@ -936,12 +948,63 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /api/v1/smb:
+    post:
+      operationId: manageSmbConnections
+      summary: Manage and check named SMB2/SMB3 connections
+      tags: [Settings]
+      description: Up to 16 connections. Save/remove are refused during active storage jobs or queued PKGs. Check authenticates and verifies directory access without saving. Passwords are never returned. Active aliases appear as smb://<name> in browsing and transfer destinations. SMB1 is disabled.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action: {type: string, enum: [list, save, remove, check], default: list}
+                previous_name: {type: string, maxLength: 63, description: Saved connection to edit or check}
+                name: {type: string, maxLength: 63}
+                path: {type: string, maxLength: 1023, description: 'Actual smb://server/share[/folder] address; required for save/check'}
+                username: {type: string, maxLength: 255, description: Empty uses Guest; DOMAIN\user is supported}
+                password: {type: string, maxLength: 511, writeOnly: true, description: Omit to preserve the saved password; empty explicitly clears it}
+                active: {type: boolean, default: true}
+      responses:
+        "200":
+          description: Connection list or successful mutation/check
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, dialect, connections]
+                properties:
+                  status: {type: integer, const: 0}
+                  dialect: {type: integer, description: Negotiated dialect for check; otherwise zero}
+                  connections:
+                    type: array
+                    maxItems: 16
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [name, path, username, active, password_set]
+                      properties:
+                        name: {type: string}
+                        path: {type: string}
+                        username: {type: string}
+                        active: {type: boolean}
+                        password_set: {type: boolean}
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Busy"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /api/v1/packages:
     post:
       operationId: listPackages
       summary: Browse one folder of package sources
       tags: [Packages]
-      description: Internal /data plus mounted external USB/ext drives are allowed; /data/pkgs remains a shortcut. Installed app/patch/addcont trees and symlinks are excluded. Lists at most 256 entries per page without recursion.
+      description: Internal /data, mounted USB/ext drives and active named SMB connections are allowed; /data/pkgs remains a shortcut. Installed app/patch/addcont trees are excluded. Lists at most 256 native or 32 SMB entries per page without recursion; advance by the returned limit.
       requestBody:
         required: true
         content:
@@ -977,11 +1040,83 @@ paths:
               type: object
               required: [path, destination_dir]
               properties:
-                path: {type: string, description: Path to a supported image or game folder}
+                path: {type: string, description: Native or named smb:// path to a supported image or game folder}
                 destination_dir: {type: string, description: Existing writable parent directory for the new copy}
       responses:
         "202":
           description: Source installation accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorageJobResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Busy"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/files/mkdir:
+    post:
+      operationId: createBrowserDirectory
+      summary: Create one directory in a browser-selected local or SMB parent
+      tags: [Storage]
+      description: Resolves an existing directory beneath the browser roots, checks create access and system-path protection, and creates one child without overwriting. Scan roots may contain newly created directories. Does not trigger a scan or registration.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path, name]
+              properties:
+                path: {type: string, maxLength: 1023, pattern: "^(/|smb://)", description: Existing parent directory}
+                name: {type: string, minLength: 1, maxLength: 255, description: Single folder component, at most 255 UTF-8 bytes; separators, control characters and reserved characters are rejected}
+      responses:
+        "200":
+          description: Directory created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, path]
+                properties:
+                  status: {type: integer, const: 0}
+                  path: {type: string, description: Full path of the created directory}
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Busy"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/sources/delete:
+    post:
+      operationId: deleteBrowserSource
+      summary: Delete a browser-selected folder, image or PKG
+      description: Uses the shared storage worker. Requires confirm=true. SMB alias roots and local storage roots cannot be deleted. Local system paths and read-only destinations are protected. Folders/images in or containing scan roots are protected; PKGs may be removed from scan roots. Policy is rechecked in the worker before deletion. Queued PKGs block deletion. Recursive deletion cannot be cancelled once it begins.
+      tags: [Storage]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path, confirm]
+              properties:
+                path: {type: string, maxLength: 1023, pattern: "^(/|smb://)"}
+                confirm: {type: boolean, const: true}
+      responses:
+        "202":
+          description: Asynchronous deletion accepted
           content:
             application/json:
               schema:
@@ -1372,7 +1507,9 @@ components:
       content:
         application/json:
           schema:
-            $ref: "#/components/schemas/StorageSpaceResponse"
+            oneOf:
+              - $ref: "#/components/schemas/StorageSpaceResponse"
+              - $ref: "#/components/schemas/SmbStorageSpaceResponse"
 
     GamesSuccess:
       description: Complete game snapshot
@@ -1638,9 +1775,9 @@ components:
           $ref: "#/components/schemas/TitleId"
         destination_dir:
           type: string
-          pattern: "^/.+"
+          pattern: "^(/.+|smb://.+)$"
           maxLength: 1023
-          description: Existing directory under a configured non-runtime scan root. The original source basename is preserved.
+          description: Existing directory under a configured non-runtime scan root or active named SMB connection. The original source basename is preserved.
 
     StorageDeleteRequest:
       type: object
@@ -1660,7 +1797,7 @@ components:
           $ref: "#/components/schemas/TitleId"
         destination_dir:
           type: string
-          pattern: "^/.+"
+          pattern: "^(/.+|smb://.+)$"
           maxLength: 1023
           description: Existing directory under a configured scan root. A TITLE_ID child directory is created.
         delete_source:
@@ -1805,8 +1942,8 @@ components:
           type: array
           items:
             type: string
-            enum: [web_ui, storage_space, list_images, list_games, game_info, game_data_sizes, pkg_install, pkg_browser_stream, game_icon, mount_game, unmount_game, uninstall_game, uninstall_game_content, install_game_source, move_game_source, copy_game_source, delete_game_source, unpack_game_image, storage_job_status, storage_job_cancel, list_manual_sources, add_manual_source, remove_manual_source, manage_settings, read_debug_log, read_kernel_log, rescan]
-          example: [web_ui, storage_space, list_images, list_games, game_info, game_data_sizes, pkg_install, pkg_browser_stream, game_icon, mount_game, unmount_game, uninstall_game, uninstall_game_content, install_game_source, move_game_source, copy_game_source, delete_game_source, unpack_game_image, storage_job_status, storage_job_cancel, list_manual_sources, add_manual_source, remove_manual_source, manage_settings, read_debug_log, read_kernel_log, rescan]
+            enum: [web_ui, storage_space, list_images, list_games, game_info, game_data_sizes, pkg_install, pkg_browser_stream, smb2_smb3, game_icon, mount_game, unmount_game, uninstall_game, uninstall_game_content, install_game_source, move_game_source, copy_game_source, delete_game_source, unpack_game_image, storage_job_status, storage_job_cancel, list_manual_sources, add_manual_source, remove_manual_source, manage_settings, read_debug_log, read_kernel_log, rescan]
+          example: [web_ui, storage_space, list_images, list_games, game_info, game_data_sizes, pkg_install, pkg_browser_stream, smb2_smb3, game_icon, mount_game, unmount_game, uninstall_game, uninstall_game_content, install_game_source, move_game_source, copy_game_source, delete_game_source, unpack_game_image, storage_job_status, storage_job_cancel, list_manual_sources, add_manual_source, remove_manual_source, manage_settings, read_debug_log, read_kernel_log, rescan]
 
     StorageMount:
       type: object
@@ -1862,14 +1999,35 @@ components:
           items:
             $ref: "#/components/schemas/StorageDestination"
 
+    SmbStorageSpaceResponse:
+      type: object
+      additionalProperties: false
+      required: [status, path, filesystem, remote, total_bytes, free_bytes, available_bytes, used_bytes, read_only]
+      properties:
+        status: {type: integer, const: 0}
+        path: {type: string, pattern: "^smb://"}
+        filesystem: {type: string, const: smb}
+        remote: {type: boolean, const: true}
+        total_bytes: {$ref: "#/components/schemas/StorageMount/properties/total_bytes"}
+        free_bytes: {$ref: "#/components/schemas/StorageMount/properties/free_bytes"}
+        available_bytes: {$ref: "#/components/schemas/StorageMount/properties/available_bytes"}
+        used_bytes: {$ref: "#/components/schemas/StorageMount/properties/used_bytes"}
+        read_only: {type: boolean}
+
     StorageDestination:
       type: object
       additionalProperties: false
-      required: [path, source, mount_point, filesystem, total_bytes, free_bytes, available_bytes, used_bytes, read_only]
+      required: [path, filesystem]
       properties:
         path:
           type: string
-          pattern: "^/"
+          pattern: "^(/|smb://)"
+        name:
+          type: string
+          description: Saved SMB connection name
+        remote:
+          type: boolean
+          description: True for SMB destinations; capacity fields are omitted
         source:
           type: string
         mount_point:
@@ -2461,25 +2619,33 @@ components:
 
     PackageListing:
       type: object
-      required: [status, path, parent, roots, entries, offset, truncated]
+      required: [status, path, parent, roots, root_storage, entries, offset, truncated, limit, can_create_directory]
       properties:
         status: {type: integer, enum: [0]}
         path: {type: string}
         parent: {type: string}
         roots: {type: array, items: {type: string}}
+        root_storage:
+          type: array
+          description: Filesystem capacity for local roots in package listings, including read-only and nullfs roots. Empty for directory-picker listings; unavailable root capacities are omitted. SMB capacity comes from the per-path storage request.
+          items:
+            $ref: "#/components/schemas/StorageDestination"
         offset: {type: integer, minimum: 0}
+        limit: {type: integer, enum: [32, 256]}
+        can_create_directory: {type: boolean, description: True for a writable non-system parent in a directory-picker listing; false at the drive selector and for package-only listings}
         truncated: {type: boolean}
         entries:
           type: array
           maxItems: 256
           items:
             type: object
-            required: [name, path, directory, installable, size_bytes]
+            required: [name, path, directory, installable, can_delete, size_bytes]
             properties:
               name: {type: string}
               path: {type: string}
               directory: {type: boolean}
               installable: {type: boolean}
+              can_delete: {type: boolean, description: Path policy and write/delete access permit browser deletion. False for protected roots, system/read-only paths and local scanned folders/images; queued or active jobs can still block mutation.}
               source_type: {type: string, enum: [folder, image], description: Non-PKG source installed by copying without queue support.}
               backport: {type: boolean}
               backport_installed: {type: boolean}

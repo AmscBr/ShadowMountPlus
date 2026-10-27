@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <strings.h>
 #include <sys/stat.h>
@@ -16,6 +17,8 @@
 #include <json-c/json.h>
 
 #include "sm_pkg.h"
+#include "sm_smb.h"
+#include "sm_vfs.h"
 #include "sm_gameinfo.h"
 
 #define PKG_MAGIC_CNT 0x7F434E54u
@@ -31,7 +34,7 @@
 
 typedef struct { sm_pkg_read_fn read; void *ctx; int error; } pkg_reader_t;
 static bool read_at(pkg_reader_t *reader, uint64_t offset, void *buffer, size_t size) {
-  int status = reader->read(reader->ctx, offset, buffer, size);
+  int status = (reader->read)(reader->ctx, offset, buffer, size);
   if (status) { reader->error = status; errno = status; }
   return status == 0;
 }
@@ -599,15 +602,24 @@ static int read_directory_asset(const char *path, const char *name, size_t limit
                                  unsigned char **data, size_t *size) {
   *data = NULL;
   *size = 0;
-  int directory = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
-  if (directory < 0) return errno;
-  int system_dir = openat(directory, "sce_sys", O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
-  int result = system_dir < 0 ? errno : 0;
-  close(directory);
-  if (result) return result;
-  int fd = openat(system_dir, name, O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
-  result = fd < 0 ? errno : 0;
-  close(system_dir);
+  int fd, result;
+  if (sm_smb_path(path)) {
+    char asset[MAX_PATH];
+    int length = snprintf(asset, sizeof(asset), "%s/sce_sys/%s", path, name);
+    if (length < 0 || (size_t)length >= sizeof(asset)) return ENAMETOOLONG;
+    fd = open(asset, O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
+    result = fd < 0 ? errno : 0;
+  } else {
+    int directory = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+    if (directory < 0) return errno;
+    int system_dir = openat(directory, "sce_sys", O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+    result = system_dir < 0 ? errno : 0;
+    close(directory);
+    if (result) return result;
+    fd = openat(system_dir, name, O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
+    result = fd < 0 ? errno : 0;
+    close(system_dir);
+  }
   if (result) return result;
   struct stat before, after;
   if (fstat(fd, &before) != 0) result = errno;

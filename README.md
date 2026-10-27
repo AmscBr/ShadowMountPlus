@@ -51,6 +51,78 @@ Notes:
 - **Use exFAT (`.exfat`) only for titles that need external-drive-style compatibility.**
 - **When building exFAT images manually, keep the cluster size at `64 KB`; smaller clusters can reduce performance.**
 
+## SMB file transfers and installation
+
+Open **Settings → SMB** in the web interface to add a named SMB2/SMB3
+connection. Enter a name such as `NAS`, a share path such as
+`\\nas.home.loc\homebrew` (an optional subfolder is supported), user name and
+password. **Check connection** verifies authentication, access to the configured
+directory and the negotiated SMB dialect. Leading `\\` are added automatically
+if omitted; the UI converts the UNC path to the client's SMB URL internally.
+An empty user name uses Guest;
+`DOMAIN\user` is supported.
+
+Active connections appear as `smb://NAS` in **Installation** and the copy/move
+destination picker. Copy or move game images and folders from console storage
+to the share, or install folders and intact images from the share onto console
+storage. PKGs on SMB are streamed to the system installer through an on-demand
+HTTP range server; local PKGs continue to use native file paths directly.
+Images and folders are copied locally before registration and launching.
+Files copied from SMB to console storage receive permissions `0777`.
+Active SMB connections also appear in the storage overview and summary with
+free space, total capacity and a usage meter. Capacity is loaded separately
+from local disks; an unavailable share does not delay the local storage list.
+The installation browser has trash icons for folders, images and PKGs on SMB
+and local drives. Deletion requires confirmation. Icons are disabled for
+read-only/system paths and local scanned folders/images; PKGs may be deleted
+from scan folders. The shared storage worker rechecks permissions and policy.
+The custom folder picker also offers **New folder** on writable local and SMB
+paths. Enter a name to create and open that folder, then select it as usual.
+**Installation → Drives and folders** shows available and total filesystem
+capacity for each path. It refreshes after copy, move, delete and install jobs,
+including cancelled or failed operations that may have changed disk usage.
+
+SMB-to-local and local-to-SMB copies from 512 KiB overlap reading and writing
+with two buffers, sized for the file and bounded at 4 MiB each. The reader
+thread exists only for the current file and is joined before cleanup.
+Directory transfers reuse an authenticated connection while the directory or
+its child files remain open, including directory creation and removal.
+Uploads overlap server flushes with subsequent files using a bounded window
+of four destination files. Every flush and close must succeed before the
+directory copy completes or a move removes its source. Single-file transfers
+and destinations that deny directory listing retain synchronous completion.
+Small reads stop at the expected remaining size,
+with a one-byte EOF check; a growing source continues to stream normally.
+Bulk SMB requests use a bounded, continuously refilled window independent of
+the file's total size. Reads use requests up to 1 MiB; writes keep up to 4 MiB
+contiguous to avoid concurrent small file extensions on Windows destinations.
+Both respect the server's negotiated limit; SMB2.0.2 retains its 64 KiB limit.
+Small socket buffers are increased to 512 KiB without shrinking larger system defaults.
+Large copies log complete file timing, including open, flush and close.
+
+File-backed PKG HTTP responses of at least 4 MiB overlap source reads with
+ordered socket sends using two buffers. Native files use 2 MiB per buffer;
+SMB ranges of at least 8 MiB use 4 MiB per buffer to widen the SMB request window.
+The reader is joined before response cleanup; resource failures fall back to
+sequential delivery. Short ranges stay sequential, and browser sources retain
+their existing range-cache prefetch. HTTP logs identify SMB sources separately
+and include `wait_ms` for time the sender waits for source data. Timings are
+summed across connections; read/send times can overlap.
+Browser streaming negotiates up to four outstanding 1 MiB uploads within its
+existing 32 MiB cache. HTTP sends each ready segment immediately, including
+unaligned ranges. Older pages and servers retain the two-upload window.
+
+Up to 16 connections are saved in `/data/shadowmount/smb.json`, including
+credentials, with owner-only file permissions. API responses never include
+passwords. Leaving the password empty when editing preserves it; use **Clear
+saved password** to remove it. Connection changes are refused while a storage
+job or PKG queue is active. Disabling a connection hides its paths without
+deleting its settings. SMB1 and background scanning/mounting of shares are not
+supported. Shares are contacted only for explicit browsing, checks and transfers.
+
+Building requires the PS5 payload SDK's `libsmb2` headers and static library,
+in addition to the existing dependencies. See [SMB notices](licenses/SMB-NOTICES.txt).
+
 ## Recommended FS choice
 
 - Prefer **UFS (`.ffpkg`)** in most cases: this is the recommended default image format for ShadowMountPlus.

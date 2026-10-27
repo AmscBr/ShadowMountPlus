@@ -49,13 +49,16 @@ device.
 | --- | --- | --- |
 | `/` | GET | Serve `/data/shadowmount/index.html`, or the embedded page when it is absent |
 | `/api/v1/version` | `{}` | API and ShadowMount versions plus capabilities |
-| `/api/v1/storage` | `{}` | Mounted storage filesystems with total, free and available space |
+| `/api/v1/storage` | `{}` or `{"path":"smb://NAS"}` | Local storage listing and active SMB destinations, or capacity for one SMB path |
 | `/api/v1/images` | `{}` | Complete image snapshot |
 | `/api/v1/scan` | `{"reset_attempts":false}` | Queue an immediate full rescan; optionally reset title and image retry counters |
 | `/api/v1/manual/list` | `{}` | List direct paths to individual game folders or images from `manual.lst` |
 | `/api/v1/manual/add` | `{"path":"/mnt/usb0/games/PPSA12345"}` | Idempotently add one game source to `manual.lst` |
 | `/api/v1/manual/remove` | `{"path":"/mnt/usb0/games/PPSA12345"}` | Remove matching source lines from `manual.lst` |
 | `/api/v1/settings` | `{}` | Read web-managed runtime settings and scan paths |
+| `/api/v1/smb` | `{"action":"list"}` | List, save, remove or check named SMB2/SMB3 connections |
+| `/api/v1/sources/delete` | `{"path":"smb://NAS/Game.pkg","confirm":true}` | Delete a permitted browser-selected folder, image or PKG through the shared storage worker |
+| `/api/v1/files/mkdir` | `{"path":"smb://NAS","name":"New folder"}` | Create one directory beneath an existing local or SMB parent; return its full path |
 | `/api/v1/settings/update` | `{"debug":true,"quiet_mode":false,"update_emulators":true,"fakelib_default_mode":"full","auto_update_ampr":false,"auto_remove_missing_games":false,"auto_remove_missing_delay_seconds":300,"allow_lan_access":true,"fan_target_temperature":0,"scan_paths":["/mnt/usb0/games"]}` | Atomically update the web-managed part of `config.ini` |
 | `/api/v1/debug-log` | `{"max_bytes":131072}` | Read a bounded tail of `debug.log` for the web log dialog |
 | `/api/v1/kernel-log` | `{"max_bytes":131072}` | Read a bounded tail of the SDK kernel-log stream used by crash detection |
@@ -104,6 +107,138 @@ The bundled interface covers all 31 console locales, selects the closest match
 from the browser locale, and keeps a manually selected locale in local storage.
 The eight most recent operations are also kept in that browser's local storage,
 including their original event times, and restored after a page reload.
+
+## SMB connections
+
+The installation **Drives and folders** sidebar shows available and total
+filesystem capacity beneath every root path. `/packages` includes `root_storage`
+records for local roots; folders on the same filesystem share its capacity.
+These are filesystem statistics, not recursive folder-size measurements.
+SMB roots reuse the storage overview's per-path capacity results. Completion,
+failure or cancellation of copy, move, delete and install jobs refreshes the
+storage snapshot and, when visible, the installation listing. Opening the tab
+or using its Refresh button also updates capacity. Older asynchronous storage
+responses cannot overwrite a newer snapshot, and capacity updates preserve
+the focused root button.
+
+The directory picker offers **New folder** when `/files` returns
+`can_create_directory:true`. It accepts one folder name, creates it through
+`POST /api/v1/files/mkdir`, and opens the result for selection. The name must
+fit 255 UTF-8 bytes and cannot contain path separators, control characters or
+reserved characters. Existing paths are not overwritten. Read-only and system
+parents are rejected by the API; writable scan roots remain valid parents.
+SMB create rights are checked without writing a probe file. Creation uses the
+existing mutation gates and does not register a game or request a scan.
+
+Installation listings include `can_delete` for each entry. The trash icon is
+disabled when that value is false, a storage job is active, or packages are
+queued. `POST /api/v1/sources/delete` requires an exact `path` and boolean
+`confirm:true`; it accepts local browser roots and SMB aliases and returns
+HTTP 202 with the normal storage-job response. The root itself cannot be
+deleted. Local system paths and read-only paths are protected. Local folders
+and images in scan roots, and folders containing scan roots, cannot be deleted
+here; PKGs in scan roots are allowed. Active/prepared-game protection remains
+in effect. Registered local descendants are released before recursive deletion;
+affected titles or failed runtime cleanup trigger a local recovery scan. Ordinary
+unregistered-file deletion and SMB-only deletion do not
+trigger a local scan. The worker rechecks policy before deleting; cancellation
+is available during preparation/measurement and closes when deletion starts.
+For SMB, an OPEN/CLOSE access probe checks parent write and target delete rights
+and read-only attributes without creating, writing or deleting a probe file.
+
+`POST /api/v1/storage` with `{"path":"smb://NAS"}` queries capacity for one
+active saved SMB connection or a directory beneath it. It returns `status`,
+`path`, `filesystem`, `remote`, `total_bytes`, `free_bytes`, `available_bytes`,
+`used_bytes` and `read_only`. Available space uses the server's `f_bavail`,
+which can reflect the connected user's quota. Errors affect only that request.
+The default `{}` storage listing does not contact SMB servers. The web
+interface renders local storage immediately, then queries active shares
+sequentially on each refresh. It displays capacity and usage in the storage
+overview, storage summary and destination picker; a failed query shows
+unavailable capacity rather than zero. There is no periodic capacity poll.
+
+`POST /api/v1/smb` accepts `action=list|save|remove|check` (default `list`).
+`save` and `check` accept `name`, `path`, `username`, `password`, `active` and
+optional `previous_name`. `name` is a unique alias of at most 63 UTF-8 bytes;
+slashes, control characters and `: @ ? # %` are forbidden. `path` is an actual
+`smb://server/share[/subdirectory]` address, optionally with `server:port`.
+An empty user name uses Guest; `DOMAIN\user` is accepted. New connections are
+active by default. `previous_name` selects a saved connection for editing or
+checking; omitted fields retain their saved values except `name` and `path`,
+which remain required. An omitted password preserves it; `"password":""`
+explicitly clears it. `remove` requires only `name`.
+
+Successful responses contain `status=0`, `dialect` (zero except after `check`),
+and `connections`: objects containing `name`, `path`, `username`, `active` and
+`password_set`. Passwords are never returned. `check` tests the submitted
+settings without saving, including an inactive connection, and reports the
+negotiated SMB2/SMB3 dialect (for example 0x0210 or 0x0311). It verifies directory
+access, not write permission. `save` validates syntax and atomically persists
+up to 16 connections in `/data/shadowmount/smb.json` with permissions 0600.
+Save/remove return `EBUSY` while a storage job or PKG queue is active.
+
+Active aliases are exposed as `smb://<name>[/relative/path]` in `/packages`,
+`/files`, and `/storage.destinations`. Remote destinations have `remote=true`
+and `filesystem=smb`; capacity fields are omitted to avoid network polling.
+`/packages` and `/files` return a `limit` field: 32 remote entries or 256 native
+entries per page. Advance by this limit when `truncated=true`.
+`/games/copy`, `/games/move` and `/games/unpack` accept an SMB destination.
+`/sources/install` accepts SMB folders and images as sources with a local
+destination. `/packages/install` and the package queue accept SMB PKGs; the
+payload streams their requested ranges to AppInstUtil and closes the source
+on completion, cancellation, sleep or shutdown. Local PKGs retain direct native
+path installation. No SMB path is added to scanner roots or manual.lst;
+installed folder/image copies are registered using their local destination.
+
+SMB operations negotiate SMB2/SMB3, use bounded I/O deadlines, and do not create
+background watchers or reconnect loops. Cross-filesystem moves delete the
+source only after copying and flushing the complete destination; a failed or
+cancelled copy preserves its source. If the share becomes unreachable, partial
+destination cleanup may require manual removal after reconnecting.
+
+Copies of at least 512 KiB between local storage and SMB use two buffers to
+overlap source reads and destination writes. Files copied from SMB to local
+storage receive permissions `0777`, applied explicitly after writing so the
+process umask does not restrict them. Failure to set permissions fails the copy.
+Medium files use blocks from
+256 KiB to 1 MiB; large files use 4 MiB blocks. Reads are bounded by the expected
+remaining source size and probe EOF with one byte. Growing sources continue
+streaming after that probe rather than being truncated to the cached size.
+The temporary reader is stopped
+and joined before descriptors are closed or partial destinations are removed;
+resource shortages fall back to sequential copying. Flush and move finalization
+still occur only after the complete data transfer. SMB I/O keeps at most eight
+requests outstanding, refilling completed slots immediately and respecting the
+server's negotiated request size (64 KiB for SMB2.0.2). Parallel requests no
+longer require a file of at least 256 MiB. The five-second I/O deadline follows
+response progress rather than the total duration of a moving request window.
+Short replies caused by a small credit budget drain the active window before
+their remaining ranges are completed, avoiding invalid zero-credit requests.
+SMB receive/send buffers smaller than 512 KiB are enlarged when the socket
+supports it. Larger system defaults and signing/encryption policy are retained.
+An open directory pins its authenticated session for child-file operations;
+files may outlive directory enumeration and release that session on last close.
+Directory creation and removal also reuse a matching pinned session.
+Reuse is scoped to the directory's calling thread and requires matching server,
+share and credentials, keeping independent API requests isolated. A transport failure
+invalidates the owner and all its borrowed handles, including cached directory
+entries; it never silently reconnects an existing file. Write-only destinations
+fall back to independent connections when an optional directory pin is denied.
+Directory uploads keep at most four destination files open, overlapping each
+asynchronous server flush with subsequent file transfers. All flush and close
+results are checked before completing the directory or finalizing a move.
+Queues drain before entering a subdirectory, releasing its session, or removing
+a partial destination. Single-file copies and write-only shares retain
+synchronous flush completion.
+For transfers of at least 32 MiB, `[SMB] copy pipeline` logs `elapsed_ms`,
+`data_ms`, `read_ms`, `write_ms`, `wait_ms`, `open_ms`, `flush_ms`, `close_ms`
+and `deferred_ms`
+once per file. `elapsed_ms` covers the complete file copy including open, flush
+and close; `data_ms` isolates the data pipeline. `deferred_ms` measures time
+between queuing a flush and consuming its result; `flush_ms` is the remaining
+wait at that point. Deferred completion overlaps later file transfers, so
+per-file elapsed times must not be added to estimate total copy time. Read
+and write times also overlap.
 
 ## Responses
 
@@ -263,17 +398,21 @@ or get added to the bar a second time. These calls add no background polling.
 
 The `game_data_sizes` capability advertises these fields.
 
-`POST /api/v1/storage` returns capacity-bearing mounted filesystems and omits
+`POST /api/v1/storage` with `{}` returns capacity-bearing mounted filesystems and omits
 virtual mounts such as `devfs`, `nullfs` and `tmpfs`. Each item contains the
 device `source`, `mount_point`, `filesystem`, `total_bytes`, `free_bytes`,
 `available_bytes`, `used_bytes` and `read_only`. `available_bytes` is the space
 available for new files; `used_bytes` is calculated against that value. The
-`destinations` array contains only writable, currently available managed
+Local entries in the `destinations` array contain writable, currently available managed
 `/data/homebrew`, `/mnt/ext*/homebrew` and `/mnt/usb*/homebrew` paths. Scanned
 `/mnt/ext*` and `/mnt/usb*` roots are included as additional destinations. Each
 item adds the selectable `path` to the same filesystem metadata. Writable nullfs
 aliases such as `/data/homebrew` are valid destinations but remain omitted from
-the mount overview to avoid duplicates. `/mnt/ext1/homebrew` is also advertised
+the mount overview to avoid duplicates. Active SMB aliases are additional remote
+destinations; their capacity is queried separately as described above.
+Their `source` is the configured server/share path; the web overview displays
+it in UNC form beneath the alias.
+`/mnt/ext1/homebrew` is also advertised
 when its writable ext1 mount is available and only the homebrew folder is absent;
 listing storage does not create it. The folder is created on an explicit
 copy/move/unpack request. Other missing destination directories remain invalid.
@@ -281,7 +420,8 @@ For USB game sources, the web picker places `/data/homebrew` and an available
 `/mnt/ext1/homebrew` before other choices.
 
 The web storage overview uses `mounts` to show the internal `/user` filesystem
-and mounted `/mnt/ext0..1` and `/mnt/usb0..7` disks once per filesystem/source.
+and mounted `/mnt/ext0..1` and `/mnt/usb0..7` disks once per filesystem/source,
+plus active remote connections from `destinations`.
 System partitions and game mounts are omitted from that overview. The separate
 `destinations` list supplies folder choices for copying, moving and unpacking.
 
@@ -576,10 +716,13 @@ For a file on a computer, `POST /api/v1/packages/stream` accepts
 The response advertises `chunk_bytes` (1 MiB) and `stream_port`. Connect to
 `ws://<console>:<stream_port>/<token>/ws` on the existing on-demand package
 server. One source connection is accepted per job. Server text messages are
-`{"op":"ready","window":2}`, `{"op":"range","id":1,"offset":0,"size":1048576}`
+`{"op":"ready","window":2,"max_window":4}`, `{"op":"range","id":1,"offset":0,"size":1048576}`
 and `{"op":"ack","id":1}`. Reply to each range with a binary message containing
 a little-endian 64-bit range ID followed by exactly the requested bytes.
-Two reads/transfers overlap; an acknowledgement releases its window slot.
+The initial window permits two outstanding transfers. When `max_window` is 4,
+the client can enable four by sending the exact text `{"op":"window","size":4}`.
+An acknowledgement releases its window slot. Older pages keep two outstanding
+transfers; new pages also accept older servers without `max_window`.
 The web client sends file-backed Blobs with the range ID prepended, avoiding
 an explicit JavaScript ArrayBuffer read and full-segment copy.
 Demand notifications wake the connection immediately, without polling.
@@ -598,8 +741,11 @@ ready segments without active readers. This prevents competing read-ahead window
 from repeatedly discarding each other's unread data. No staging PKG is saved to
 storage. The installer only counts each delivered byte once.
 
-The installer's HTTP server batches disk and RAM reads into at most 2 MiB
-blocks and requests a 512 KiB socket send buffer.
+The installer's HTTP server sends browser data one ready cache segment at a
+time, at most 1 MiB. Reads also stop at segment boundaries for unaligned HTTP
+ranges, so the first ready segment does not wait for the next upload. Native
+files use 2 MiB blocks; long SMB ranges use 4 MiB. The socket send buffer
+request remains 512 KiB.
 The browser listener also sets a 512 KiB receive buffer before `listen()`, so
 uploads inherit the larger initial receive window during the TCP handshake.
 Successful full and partial responses include `Date`, a stable

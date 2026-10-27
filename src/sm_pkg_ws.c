@@ -123,7 +123,7 @@ int sm_pkg_ws_decode(unsigned char *data, size_t size, unsigned char *opcode,
                      int *fin, size_t *offset, size_t *length) {
   if (size < 2) return 0;
   unsigned char op = data[0] & 15;
-  if ((data[0] & 0x70) || !(data[1] & 0x80) || (op != 0 && op != 2 && op != 8 && op != 9 && op != 10)) return -1;
+  if ((data[0] & 0x70) || !(data[1] & 0x80) || (op != 0 && op != 1 && op != 2 && op != 8 && op != 9 && op != 10)) return -1;
   uint64_t count = data[1] & 127;
   size_t header = 2;
   if (count == 126) {
@@ -179,15 +179,18 @@ void sm_pkg_ws_serve(int fd, const char *key, const void *initial, size_t size,
   int failure = ECONNRESET;
   int length = snprintf(text, sizeof(text), "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: %s\r\n\r\n", accept);
   if (length <= 0 || !ws_send_all(fd, text, (size_t)length)) goto end;
-  if (!send_frame(fd, 1, "{\"op\":\"ready\",\"window\":2}", 25)) goto end;
+  // Older pages ignore max_window and keep their original two-block limit.
+  unsigned window = 2;
+  length = snprintf(text, sizeof(text), "{\"op\":\"ready\",\"window\":2,\"max_window\":%u}", SM_PKG_STREAM_CLIENTS);
+  if (length <= 0 || !send_frame(fd, 1, text, (size_t)length)) goto end;
   if (size) memcpy(input, initial, size);
   size_t used = size, assembled = 0;
   bool fragmented = false;
-  uint64_t pending[2] = {0};
+  uint64_t pending[SM_PKG_STREAM_CLIENTS] = {0};
   unsigned close_code = 1000;
   while (atomic_load(running)) {
     bool refill = false;
-    for (unsigned client = 1; client <= 2; ++client) {
+    for (unsigned client = 1; client <= window; ++client) {
       if (pending[client - 1]) continue;
       sm_pkg_range_t range;
       int status = sm_pkg_stream_try_request(stream, client, &range);
@@ -207,6 +210,15 @@ void sm_pkg_ws_serve(int fd, const char *key, const void *initial, size_t size,
       unsigned char *payload = input + offset;
       if (opcode == 8) goto close;
       if (opcode == 9) { if (!send_frame(fd, 10, payload, count)) goto end; }
+      else if (opcode == 1) {
+        static const char request[] = "{\"op\":\"window\",\"size\":4}";
+        if (!fin || fragmented || count != sizeof(request) - 1 ||
+            memcmp(payload, request, sizeof(request) - 1)) {
+          close_code = 1002; failure = EPROTO; goto close;
+        }
+        window = SM_PKG_STREAM_CLIENTS;
+        refill = true;
+      }
       else if (opcode != 10) {
         if ((opcode == 2 && fragmented) || (opcode == 0 && !fragmented) || count > WS_MESSAGE_MAX - assembled) {
           close_code = 1002; failure = EPROTO; goto close;
@@ -226,8 +238,9 @@ void sm_pkg_ws_serve(int fd, const char *key, const void *initial, size_t size,
           if (total < 8) { close_code = 1002; failure = EPROTO; goto close; }
           uint64_t id = 0;
           for (unsigned i = 0; i < 8; ++i) id |= (uint64_t)complete[i] << (8 * i);
-          unsigned slot = id == pending[0] ? 0 : id == pending[1] ? 1 : 2;
-          if (!id || slot == 2) { close_code = 1002; failure = EPROTO; goto close; }
+          unsigned slot = 0;
+          while (slot < SM_PKG_STREAM_CLIENTS && pending[slot] != id) ++slot;
+          if (!id || slot == SM_PKG_STREAM_CLIENTS) { close_code = 1002; failure = EPROTO; goto close; }
           int replied = sm_pkg_stream_reply(stream, id, complete + 8, total - 8);
           if (replied) {
             failure = replied;
@@ -244,7 +257,10 @@ void sm_pkg_ws_serve(int fd, const char *key, const void *initial, size_t size,
     }
     if (refill) continue;
     // A completed upload can have queued more demand while frames were decoded.
-    if ((!pending[0] || !pending[1]) && used == 0) {
+    bool available = false;
+    for (unsigned i = 0; i < window; ++i)
+      if (!pending[i]) available = true;
+    if (available && used == 0) {
       struct pollfd ready = {.fd = wake, .events = POLLIN};
       if (poll(&ready, 1, 0) > 0) {
         unsigned char bytes[128]; while (read(wake, bytes, sizeof(bytes)) > 0) {}

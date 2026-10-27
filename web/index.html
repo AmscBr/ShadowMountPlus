@@ -294,6 +294,26 @@
 
     .manual-path { overflow: hidden; color: var(--muted); font: 11px/1.4 ui-monospace, monospace; text-overflow: ellipsis; white-space: nowrap; }
     .settings-form { display: grid; gap: 10px; margin-top: 12px; }
+    .smb-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; }
+    .smb-form .setting-row { flex-direction: column; align-items: stretch; gap: 7px; }
+    .smb-form .setting-row input { width: 100%; min-width: 0; }
+    #smbList { display: grid; gap: 10px; }
+    .smb-form .settings-actions, .smb-form .smb-hint { grid-column: 1 / -1; }
+    .smb-form .console-setting, .smb-connection .console-setting { min-height: 44px; border: 0; }
+    .smb-connection { display: flex; align-items: center; gap: 18px; min-width: 0; padding: 16px 18px; border: 1px solid var(--line); border-radius: 14px; background: #101e32; }
+    .smb-connection-info { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0; }
+    .smb-connection-info > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .smb-connection-info > .console-setting { flex-shrink: 0; overflow: visible; }
+    .smb-connection-info strong { max-width: 25%; }
+    .smb-connection-path { flex: 1; }
+    .smb-connection-user { max-width: 35%; }
+    .smb-connection .settings-actions { margin-left: auto; flex-shrink: 0; flex-wrap: nowrap; }
+    @media (max-width: 680px) {
+      .smb-form { grid-template-columns: 1fr; }
+      .smb-connection { flex-wrap: wrap; gap: 10px; }
+      .smb-connection-info { flex-basis: 100%; }
+      .smb-connection .settings-actions { max-width: 100%; flex-wrap: wrap; justify-content: flex-end; }
+    }
     .settings-form .check { white-space: normal; }
     .setting-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 12px; }
     .setting-row select, .setting-row input { width: 112px; }
@@ -461,8 +481,10 @@
     .package-cover svg { width: 40px; height: 40px; flex-shrink: 0; color: #9ebbd7; }
     .package-sources { display: flex; flex-direction: column; gap: 18px; align-self: stretch; }
     .package-sources .panel { padding: 18px; min-width: 0; flex-shrink: 0; }
-    .package-roots.console-list { display: grid; grid-auto-rows: 50px; gap: 8px; margin-top: 14px; max-height: 466px; overflow-y: auto; padding: 5px; }
-    .package-roots .btn { text-align: left; min-width: 0; overflow-wrap: anywhere; white-space: normal; }
+    .package-roots.console-list { display: grid; grid-auto-rows: 68px; gap: 8px; margin-top: 14px; max-height: 610px; overflow-y: auto; padding: 5px; }
+    .package-roots .btn { display: flex; flex-direction: column; align-items: stretch; justify-content: center; gap: 5px; text-align: left; min-width: 0; white-space: normal; }
+    .package-root-path, .package-root-space { display: block; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .package-root-space { color: var(--muted); font-size: 13px; line-height: 1.25; }
     .package-roots .active, .path-roots .active { border-color: var(--blue); background: #203d5e; }
     .package-content { min-width: 0; }
     .package-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
@@ -476,7 +498,9 @@
     .package-cover img { width: 100%; height: 100%; object-fit: cover; }
     .package-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; width: 316px; flex-shrink: 0; max-width: 42%; }
     .package-actions .btn { width: 100%; height: 56px; min-width: 0; min-height: 56px; padding: 8px 12px; font-size: 16px; line-height: 1.2; white-space: normal; overflow-wrap: anywhere; }
+    .package-actions.source-delete-actions { grid-template-columns: repeat(2, minmax(0, 1fr)) 46px; gap: 20px; width: 400px; max-width: 50%; }
     .package-actions.source-single { grid-template-columns: minmax(0, 1fr); width: 148px; }
+    .package-actions.source-single.source-delete-actions, .package-actions.backport-actions.source-delete-actions { grid-template-columns: minmax(0, 1fr) 46px; width: 214px; }
     .package-queue { position: sticky; top: 16px; z-index: 2; display: flex; flex-direction: column; margin-top: 0; padding: 18px; }
     .package-queue-head { flex-shrink: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
     .package-queue-head .btn { grid-column: 1 / -1; min-width: 0; width: 100%; padding: 10px 12px; white-space: normal; overflow-wrap: anywhere; }
@@ -495,6 +519,10 @@
     .package-file { overflow-wrap: anywhere; font-size: 14px; }
     @media (max-width: 850px) { .package-workbench { grid-template-columns: minmax(0, 1fr); } .package-sources { display: grid; align-self: start; grid-template-columns: repeat(2, minmax(0, 1fr)); } .package-queue { position: static; max-height: none; } }
     @media (max-width: 540px) { .package-sources { display: contents; } .package-content { grid-row: 2; } .package-queue { grid-row: 3; } .package-remote { grid-row: 4; } .package-row { gap: 12px; padding: 14px; } .package-row > .btn { min-width: 90px; } }
+    .package-actions .source-delete, .package-row > .source-delete { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 46px; width: 46px; min-width: 46px; max-width: 46px; height: 46px; min-height: 46px; padding: 0; align-self: center; }
+    .source-delete svg { width: 22px; height: 22px; pointer-events: none; }
+    .package-row > .package-browse { flex: 1; min-width: 0; max-width: none; justify-content: flex-start; text-align: left; border: 0; background: transparent; overflow-wrap: anywhere; }
+    @media (max-width: 540px) { .package-actions.source-delete-actions, .package-actions.source-single.source-delete-actions, .package-actions.backport-actions.source-delete-actions { width: 100%; max-width: none; } }
     .section-head { margin: 0 0 18px; }
     .games { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 26px 20px; align-items: start; }
     .game-card { display: block; position: relative; min-width: 0; min-height: 0; padding: 9px; border: 2px solid transparent; border-radius: 18px; background: rgba(17, 30, 50, .7); transition: border-color .15s, background .15s; }
@@ -578,7 +606,11 @@
     .path-browse::before { content: ""; display: inline-block; width: 26px; height: 21px; background: currentColor; border-radius: 3px; clip-path: polygon(0 0, 40% 0, 52% 18%, 100% 18%, 100% 100%, 0 100%); }
     .modal-card.path-card { width: 1000px; height: calc(100vh - 80px); max-height: 620px; }
     .path-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 14px 20px; }
-    .path-current { flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
+    .path-current { flex: 1 1 60px; min-width: 0; overflow-wrap: anywhere; }
+    .path-icon.btn { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 46px; width: 46px; height: 46px; min-height: 46px; padding: 0; }
+    .path-icon svg { width: 24px; height: 24px; pointer-events: none; }
+    #pathCreateForm { display: grid; grid-template-columns: minmax(0, 1fr) auto 46px; }
+    #pathFolderName { width: 100%; min-width: 0; }
     .path-body { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; padding: 0 20px 12px; flex: 1; min-height: 0; }
     .path-body .console-list { min-height: 0; max-height: none; overflow-y: auto; }
     .path-body .btn { width: 100%; min-width: 0; min-height: 50px; font-size: 18px; white-space: normal; overflow-wrap: anywhere; text-align: left; }
@@ -777,6 +809,8 @@
     .no-flex-gap .package-toolbar > *, .no-flex-gap .path-toolbar > * { margin-bottom: 10px; }
     .no-flex-gap .package-toolbar { margin-bottom: 6px; }
     .no-flex-gap .path-toolbar { margin-bottom: -10px; }
+    .no-flex-gap #pathCreateForm { gap: 10px; margin-bottom: 0; }
+    .no-flex-gap #pathCreateForm > * { -webkit-margin-end: 0; margin-inline-end: 0; margin-bottom: 0; }
     .no-flex-gap .path-roots > :not(:last-child), .no-flex-gap .path-entries > :not(:last-child) { margin-bottom: 8px; }
     .no-flex-gap .control-bar > :not(:last-child) { -webkit-margin-end: 32px; margin-inline-end: 32px; }
     @media (max-width: 1250px) {
@@ -907,6 +941,7 @@
           <button class="btn console-section" type="button" data-console-section="system" aria-controls="consoleSystem" aria-pressed="false" data-i18n="consoleSystem">System</button>
           <button class="btn console-section" type="button" data-console-section="library" aria-controls="consoleLibrary" aria-pressed="false" data-i18n="library">Library</button>
           <button class="btn console-section" type="button" data-console-section="sources" aria-controls="consoleSources" aria-pressed="false" data-i18n="consoleSources">Sources</button>
+          <button class="btn console-section" type="button" data-console-section="smb" aria-controls="consoleSmb" aria-pressed="false">SMB</button>
           <button class="btn console-section" type="button" data-console-section="logs" aria-controls="consoleLogs" aria-pressed="false" data-i18n="consoleLogs">Logs</button>
         </nav>
         <div class="console-content">
@@ -960,6 +995,25 @@
                 <div class="manual-list console-list" id="manualList"><span class="subtle" data-i18n="loading">Loading?</span></div>
               </div>
               <div class="panel console-wide console-scan"><div><label class="check console-setting"><span data-i18n="resetAttempts">Reset attempt counters</span><input id="resetAttempts" type="checkbox" role="switch"></label><p class="subtle console-hint" data-i18n="resetAttemptsDescription">This option applies only to the next forced scan.</p></div><button class="btn primary" id="consoleScan" type="button" data-i18n="scan">Scan</button></div>
+            </div>
+          </section>
+          <section class="console-pane" id="consoleSmb" data-console-pane="smb" hidden aria-labelledby="smbHeading">
+            <div class="console-heading"><h2 id="smbHeading" data-i18n="smbConnections">SMB connections</h2><p class="subtle" data-i18n="smbDescription">SMB2/SMB3 shares for installation and file transfers.</p></div>
+            <div class="console-grid">
+              <div id="smbList" class="console-wide"></div>
+              <div class="panel console-wide">
+                <form id="smbForm" class="smb-form" novalidate autocomplete="off">
+                  <input type="hidden" id="smbPreviousName">
+                  <label class="setting-row"><span data-i18n="smbName">Connection name</span><input id="smbName" maxlength="63" required placeholder="NAS"></label>
+                  <label class="setting-row"><span data-i18n="smbPath">Share path</span><input id="smbPath" maxlength="1019" required placeholder="\\nas.home.loc\homebrew"></label>
+                  <label class="setting-row"><span data-i18n="smbUsername">User name</span><input id="smbUsername" maxlength="255" autocomplete="username" placeholder="DOMAIN\user"></label>
+                  <label class="setting-row"><span data-i18n="smbPassword">Password</span><input id="smbPassword" type="password" maxlength="511" autocomplete="new-password"></label>
+                  <label class="check console-setting"><span data-i18n="smbActive">Active</span><input id="smbActive" type="checkbox" role="switch" checked></label>
+                  <label class="check"><span data-i18n="smbClearPassword">Clear saved password</span><input id="smbClearPassword" type="checkbox"></label>
+                  <p class="subtle smb-hint" data-i18n="smbPasswordHint">Leave the password empty when editing to keep it. Empty user name uses Guest.</p>
+                  <div class="settings-actions"><button class="btn primary" id="smbSave" type="submit" data-i18n="smbSave">Save connection</button><button class="btn" id="smbCheck" type="button" data-i18n="smbCheck">Check connection</button><button class="btn" id="smbNew" type="button" data-i18n="smbNew">New connection</button></div>
+                </form>
+              </div>
             </div>
           </section>
           <section class="console-pane" id="consoleLogs" data-console-pane="logs" hidden aria-labelledby="logsHeading">
@@ -1044,7 +1098,16 @@
   <div class="modal" id="pathModal" hidden role="dialog" aria-modal="true" aria-labelledby="pathTitle">
     <div class="modal-card path-card">
       <div class="modal-head"><h2 id="pathTitle" data-i18n="packageDevices">Drives and folders</h2><button class="btn close" id="closePath" type="button" aria-label="Close" data-i18n-aria-label="close">&times;</button></div>
-      <div class="path-toolbar"><button class="btn small" id="pathDrives" type="button" data-i18n="storage">Storage</button><button class="btn small" id="pathUp" type="button" data-i18n="back">Back</button><span class="subtle path-current" id="pathCurrent" dir="ltr"></span></div>
+      <div class="path-toolbar">
+        <button class="btn small path-icon" id="pathDrives" type="button" aria-label="Storage" data-i18n-aria-label="storage" title="Storage" data-i18n-title="storage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m3 10 9-7 9 7M5 9v12h5v-7h4v7h5V9"/></svg></button>
+        <button class="btn small path-icon" id="pathUp" type="button" aria-label="Back" data-i18n-aria-label="back" title="Back" data-i18n-title="back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 12H4m7-7-7 7 7 7"/></svg></button>
+        <span class="subtle path-current" id="pathCurrent" dir="ltr"></span>
+        <button class="btn small path-icon" id="pathNewFolder" type="button" aria-label="New folder" data-i18n-aria-label="newFolder" title="New folder" data-i18n-title="newFolder" aria-controls="pathCreateForm" aria-expanded="false" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 7V5a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Zm6 6h6m-3-3v6"/></svg></button>
+      </div>
+      <form class="path-toolbar" id="pathCreateForm" hidden autocomplete="off">
+        <input id="pathFolderName" maxlength="255" required aria-label="Folder name" data-i18n-aria-label="folderName" placeholder="Folder name" data-i18n-placeholder="folderName">
+        <button class="btn small primary" id="pathCreateSubmit" type="submit" data-i18n="createFolder">Create</button><button class="btn small path-icon" id="pathCreateCancel" type="button" aria-label="Cancel" data-i18n-aria-label="cancel" title="Cancel" data-i18n-title="cancel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M6 18 18 6"/></svg></button>
+      </form>
       <div class="path-body"><div class="path-roots console-list" id="pathRoots"></div><div class="path-entries console-list" id="pathEntries" aria-live="polite"></div></div>
       <div class="path-pages" id="pathPages" hidden><button class="btn small" id="pathPrevious" type="button" aria-label="Back" data-i18n-aria-label="back">←</button><span class="subtle" id="pathPageRange"></span><button class="btn small" id="pathNext" type="button" aria-label="Continue" data-i18n-aria-label="continueAction">→</button></div>
       <div class="modal-actions"><button class="btn" type="button" id="cancelPath" data-i18n="cancel">Cancel</button><button class="btn primary" id="choosePath" type="button" data-i18n="selectAction" disabled>Select</button></div>
@@ -1154,6 +1217,7 @@
         busy: false,
         storageJob: null,
         storageDestinations: [],
+        storageRequest: 0,
         destinationRequest: null,
         storagePollTimer: 0,
         reportedStorageJob: "",
@@ -1171,7 +1235,8 @@
         packageQueueLoading: false,
         packageRequest: 0,
         browserStream: null,
-        pathPicker: null
+        pathPicker: null,
+        smbConnections: [], smbBusy: false, smbRequest: 0
       };
       const $ = (id) => document.getElementById(id);
       const navigation = {
@@ -2565,6 +2630,32 @@
         "id-ID": ["B", "KiB", "MiB", "GiB", "TiB"],
         "uk-UA": ["Б", "КіБ", "МіБ", "ГіБ", "ТіБ"]
       };
+      const smbText = {
+        smbConnections: "SMB connections", smbDescription: "SMB2/SMB3 shares for installation and file transfers. Active shares appear as smb://<name>.",
+        smbName: "Connection name", smbPath: "Share path", smbUsername: "User name", smbPassword: "Password", smbActive: "Active",
+        smbClearPassword: "Clear saved password", smbPasswordHint: "Leave the password empty when editing to keep it. Empty user name uses Guest.",
+        smbSave: "Save connection", smbCheck: "Check connection", smbNew: "New connection", smbEdit: "Edit",
+        smbRemove: "Remove", smbRemoveConfirm: "Remove SMB connection {name}?", smbChecked: "Connection verified. Protocol: {protocol}.", smbSavedOk: "SMB connection saved",
+        sourceDeleteConfirm: "Delete this file or folder?\n\n{path}",
+        sourceDeleteBlocked: "Deletion is unavailable for read-only or system paths and folders or images in scan paths.",
+        newFolder: "New folder", folderName: "Folder name", createFolder: "Create", folderCreated: "Folder created", invalidFolderName: "Enter a single folder name without path separators or reserved characters.",
+        smbInvalid: "Enter a connection name and a path such as \\\\server\\share. Names cannot contain /, \\, :, @, ?, # or %.",
+        smbEnabled: "Active", smbDisabled: "Inactive", smbEmpty: "No SMB connections yet."
+      };
+      extendedTranslationKeys.push(...Object.keys(smbText));
+      for (const catalog of Object.values(translations)) Object.assign(catalog, smbText);
+      Object.assign(translations["ru-RU"], {
+        smbConnections: "SMB-подключения", smbDescription: "Ресурсы SMB2/SMB3 для установки и передачи файлов. Активные подключения доступны как smb://<название>.",
+        smbName: "Название подключения", smbPath: "Путь к ресурсу", smbUsername: "Логин", smbPassword: "Пароль", smbActive: "Активно",
+        smbClearPassword: "Удалить сохранённый пароль", smbPasswordHint: "При изменении оставьте пароль пустым, чтобы сохранить его. Пустой логин означает Guest.",
+        smbSave: "Сохранить подключение", smbCheck: "Проверить подключение", smbNew: "Новое подключение", smbEdit: "Изменить",
+        smbRemove: "Удалить", smbRemoveConfirm: "Удалить SMB-подключение {name}?", smbChecked: "Подключение проверено. Протокол: {protocol}.", smbSavedOk: "SMB-подключение сохранено",
+        sourceDeleteConfirm: "Удалить этот файл или папку?\n\n{path}",
+        sourceDeleteBlocked: "Удаление недоступно для системных путей и каталогов только для чтения, а также папок и образов в каталогах сканирования.",
+        newFolder: "Новая папка", folderName: "Название папки", createFolder: "Создать", folderCreated: "Папка создана", invalidFolderName: "Введите название одной папки без разделителей пути и запрещённых символов.",
+        smbInvalid: "Укажите название и путь вида \\\\сервер\\ресурс. В названии недопустимы /, \\, :, @, ?, # и %.",
+        smbEnabled: "Активно", smbDisabled: "Неактивно", smbEmpty: "SMB-подключений пока нет."
+      });
       const supportedLanguages = Object.keys(translations);
       const defaultLanguage = "en-US";
       function resolveLanguage(language) {
@@ -2609,12 +2700,16 @@
         document.querySelectorAll("[data-i18n-aria-label]").forEach((item) => {
           item.setAttribute("aria-label", t(item.dataset.i18nAriaLabel));
         });
+        document.querySelectorAll("[data-i18n-title]").forEach((item) => {
+          item.title = t(item.dataset.i18nTitle);
+        });
         if (state.apiVersion) {
           $("version").textContent = `Shadow Mount+ ${state.apiVersion.shadowmount_version} · API v${state.apiVersion.api_version}`;
         }
         if (state.connectionStatus) setConnection(state.connectionStatus, state.connectionKey);
         if (!$("logModal").hidden) $("logTitle").textContent = t(state.logTitleKey);
         renderActivity();
+        renderSmbConnections();
         if (persist) {
           try { localStorage.setItem("shadowmount.language", currentLanguage); } catch (_) { /* Keep the in-memory selection. */ }
         }
@@ -2973,20 +3068,21 @@
         if (!job.job_id || job.active || state.reportedStorageJob === key) return;
         state.reportedStorageJob = key;
         const operation = storageOperationLabel(job.operation, job.source_type);
+        const title = job.title_name || job.title_id || job.source;
         if (job.state === "completed") {
-          logActivity(t("operationCompleted", { operation, title: job.title_id }));
+          logActivity(t("operationCompleted", { operation, title }));
           toast(t("operationCompletedShort", { operation }));
         } else if (job.state === "cancelled") {
-          logActivity(t("operationCancelled", { operation, title: job.title_id }));
+          logActivity(t("operationCancelled", { operation, title }));
           toast(t("operationCancelledShort", { operation }));
         } else if (job.state === "failed") {
           const reason = job.native_status ? t("packageInstallError", { code: `0x${(job.native_status >>> 0).toString(16).padStart(8, "0").toUpperCase()}` }) : operationErrorMessage(job.result_error_reason,
             job.result_error || t("statusError", { status: job.result_status }));
-          logActivity(t("operationError", { operation, title: job.title_id, error: reason }), "error");
+          logActivity(t("operationError", { operation, title, error: reason }), "error");
           toast(reason, true);
         }
         refreshAll();
-        if ((job.operation === "install" || job.source_type === "backport") && navigation.view === "packages") refreshPackages();
+        if (navigation.view === "packages") refreshPackages();
       }
 
       function scheduleStorageJobPoll() {
@@ -3041,14 +3137,33 @@
         return meter;
       }
 
+      function renderStorageCapacity(mount, summaryItem, space, meter, pending = false) {
+        const known = Number.isFinite(mount.total_bytes) && mount.total_bytes > 0 &&
+          Number.isFinite(mount.available_bytes) && mount.available_bytes >= 0;
+        const available = known ? Math.min(mount.available_bytes, mount.total_bytes) : 0;
+        const label = known ? t("freeSpace", { size: formatBytes(available) }) : t(pending ? "loading" : "unavailable");
+        replaceContent(summaryItem, node("span", "", `${mount.mount_point} · ${label}`));
+        replaceContent(space, node("span", "", label));
+        replaceContent(meter);
+        if (!known) return;
+        const usedPercent = Math.max(0, Math.min(100, ((mount.total_bytes - available) / mount.total_bytes) * 100));
+        space.append(node("span", "", t("totalSpace", { size: formatBytes(mount.total_bytes) })));
+        summaryItem.append(storageMeter(mount.mount_point, usedPercent));
+        meter.append(storageMeter(mount.mount_point, usedPercent));
+      }
+
       async function refreshStorage() {
         const list = $("storageList");
         const summary = $("storageSummary");
+        const request = ++state.storageRequest;
         try {
           const data = await api("/storage");
+          if (request !== state.storageRequest) return;
           state.storageDestinations = (data.destinations || []).slice().sort((left, right) =>
             String(left.path).localeCompare(String(right.path))
           );
+          state.storageDestinations.forEach(destination => { if (destination.remote) destination.capacity_pending = true; });
+          renderPackageRootCapacity();
           const seen = new Set();
           const mounts = (data.mounts || []).filter((mount) =>
             mount.mount_point === "/user" || /^\/mnt\/(?:usb[0-7]|ext[01])$/.test(mount.mount_point)
@@ -3061,6 +3176,10 @@
             seen.add(key);
             return true;
           });
+          mounts.push(...state.storageDestinations.filter(destination => destination.remote).map(destination => ({
+            ...destination, mount_point: destination.path,
+            source: normalizeSmbSharePath(destination.source) || destination.path
+          })));
           if (!$("destinationModal").hidden) renderDestinationPicker();
           replaceContent(list);
           replaceContent(summary);
@@ -3070,12 +3189,9 @@
             return;
           }
 
+          const remoteRows = [];
           mounts.forEach((mount) => {
-            const total = Number(mount.total_bytes) || 0;
-            const available = Number(mount.available_bytes) || 0;
-            const usedPercent = total > 0 ? Math.max(0, Math.min(100, ((total - available) / total) * 100)) : 0;
             const summaryItem = node("div", "storage-summary-item");
-            summaryItem.append(node("span", "", `${mount.mount_point} · ${t("freeSpace", { size: formatBytes(available) })}`), storageMeter(mount.mount_point, usedPercent));
             summary.append(summaryItem);
             const row = node("div", "storage-row");
             const head = node("div", "storage-head");
@@ -3087,14 +3203,36 @@
             meta.title = mount.source || "";
             row.append(meta);
             const space = node("div", "storage-space");
-            space.append(node("span", "", t("freeSpace", { size: formatBytes(available) })));
-            space.append(node("span", "", t("totalSpace", { size: formatBytes(total) })));
-            row.append(space);
-            row.append(storageMeter(mount.mount_point, usedPercent));
+            const meter = node("div");
+            row.append(space, meter);
+            renderStorageCapacity(mount, summaryItem, space, meter, mount.remote);
             list.append(row);
+            if (mount.remote) remoteRows.push({ mount, row, summaryItem, space, meter });
           });
+          // Load shares on demand, one at a time. Offline servers never delay local storage.
+          void (async () => {
+            for (const { mount, row, summaryItem, space, meter } of remoteRows) {
+              if (request !== state.storageRequest || !list.contains(row)) break;
+              try {
+                const capacity = await api("/storage", { path: mount.path });
+                if (request !== state.storageRequest || !list.contains(row)) break;
+                Object.assign(mount, capacity);
+                const destination = state.storageDestinations.find(item => item.path === mount.path);
+                if (destination) Object.assign(destination, capacity);
+                if (!$("destinationModal").hidden) renderDestinationPicker();
+              } catch (_) {
+                if (request !== state.storageRequest || !list.contains(row)) break;
+              }
+              const destination = state.storageDestinations.find(item => item.path === mount.path);
+              if (destination) destination.capacity_pending = false;
+              renderPackageRootCapacity();
+              renderStorageCapacity(mount, summaryItem, space, meter);
+            }
+          })();
         } catch (error) {
+          if (request !== state.storageRequest) return;
           state.storageDestinations = [];
+          renderPackageRootCapacity();
           if (!$("destinationModal").hidden) renderDestinationPicker();
           replaceContent(list, node("span", "subtle", errorMessage(error)));
           replaceContent(summary, node("span", "", t("unavailable")));
@@ -3175,6 +3313,125 @@
           row.append(value, remove);
           list.append(row);
         });
+      }
+
+      function normalizeSmbSharePath(path) {
+        const address = String(path || "").trim().replace(/^smb:\/\//i, "").replace(/\//g, "\\").replace(/^\\+/, "");
+        return address ? "\\\\" + address : "";
+      }
+
+      function renderSmbConnections() {
+        const list = $("smbList");
+        replaceContent(list);
+        if (!state.smbConnections.length) list.append(node("span", "subtle", t("smbEmpty")));
+        state.smbConnections.forEach(connection => {
+          const row = node("div", "smb-connection");
+          const info = node("div", "smb-connection-info");
+          const activeLabel = node("label", "check console-setting");
+          const active = node("input");
+          active.type = "checkbox";
+          active.dataset.connectionName = connection.name;
+          active.setAttribute("role", "switch");
+          active.setAttribute("aria-label", `${t("smbActive")}: ${connection.name}`);
+          active.checked = Boolean(connection.active);
+          active.disabled = state.smbBusy;
+          active.addEventListener("change", async () => {
+            const hadFocus = document.activeElement === active;
+            const saved = await changeSmbConnection("save", {
+              previous_name: connection.name, name: connection.name, path: connection.path,
+              username: connection.username, active: active.checked
+            }, false);
+            if (!saved) active.checked = Boolean(connection.active);
+            else if (hadFocus && document.activeElement === document.body && !$("consoleSmb").hidden) {
+              const replacement = Array.from(list.querySelectorAll("input")).find(input => input.dataset.connectionName === connection.name);
+              if (replacement) focusControl(replacement);
+            }
+          });
+          activeLabel.append(active);
+          info.append(activeLabel, node("strong", "", connection.name), node("span", "subtle smb-connection-path", normalizeSmbSharePath(connection.path)),
+            node("span", "subtle smb-connection-user", connection.username || "Guest"));
+          for (const field of info.children) field.title = field.textContent;
+          const actions = node("div", "settings-actions");
+          actions.append(actionButton(t("smbEdit"), () => editSmbConnection(connection)),
+            actionButton(t("smbCheck"), () => changeSmbConnection("check", {
+              previous_name: connection.name, name: connection.name, path: connection.path,
+              username: connection.username, active: connection.active
+            })), actionButton(t("smbRemove"), async () => {
+              if (await confirmAction(t("smbRemoveConfirm", { name: connection.name })))
+                changeSmbConnection("remove", { name: connection.name });
+            }));
+          actions.querySelectorAll("button").forEach(button => { button.disabled = state.smbBusy; });
+          row.append(info, actions); list.append(row);
+        });
+      }
+
+      function editSmbConnection(connection = null) {
+        if (state.smbBusy) return;
+        $("smbForm").reset();
+        $("smbPreviousName").value = connection?.name || "";
+        $("smbName").value = connection?.name || "";
+        $("smbPath").value = normalizeSmbSharePath(connection?.path);
+        $("smbUsername").value = connection?.username || "";
+        $("smbActive").checked = connection ? Boolean(connection.active) : true;
+        $("smbPassword").value = ""; $("smbPassword").disabled = false;
+        focusControl($("smbName"));
+      }
+
+      function smbFormValues() {
+        const name = $("smbName").value.trim();
+        $("smbPath").value = normalizeSmbSharePath($("smbPath").value);
+        const address = $("smbPath").value.slice(2).replace(/\\/g, "/");
+        if (!name || /[\/\\:@?#%\u0000-\u001f\u007f]/.test(name) || name === "." || name === ".." || !/^[^/]+\/[^/]+/.test(address))
+          throw new Error(t("smbInvalid"));
+        const previous_name = $("smbPreviousName").value;
+        const values = { name, path: `smb://${address}`, previous_name, username: $("smbUsername").value.trim(), active: $("smbActive").checked };
+        if ($("smbClearPassword").checked) values.password = "";
+        else if ($("smbPassword").value || !previous_name) values.password = $("smbPassword").value;
+        return values;
+      }
+
+      async function refreshSmbConnections() {
+        if (state.smbBusy) return;
+        const request = ++state.smbRequest;
+        try {
+          const result = await api("/smb");
+          if (request !== state.smbRequest) return;
+          state.smbConnections = result.connections || []; renderSmbConnections();
+        } catch (_) {
+          if (request === state.smbRequest) $("smbList").textContent = t("unavailable");
+        }
+      }
+
+      async function changeSmbConnection(action, values = null, resetForm = true) {
+        if (state.smbBusy) return false;
+        try { values = values || smbFormValues(); }
+        catch (error) { toast(error.message, true); return false; }
+        state.smbBusy = true;
+        ++state.smbRequest;
+        $("consoleSmb").querySelectorAll("input, button").forEach(input => { input.disabled = true; });
+        try {
+          const result = await api("/smb", { ...values, action });
+          if (action === "check") {
+            const protocols = { 0x202: "SMB 2.0.2", 0x210: "SMB 2.1", 0x300: "SMB 3.0", 0x302: "SMB 3.0.2", 0x311: "SMB 3.1.1" };
+            toast(t("smbChecked", { protocol: protocols[result.dialect] || "SMB" }));
+          }
+          else {
+            state.smbConnections = result.connections || []; renderSmbConnections();
+            if (resetForm) {
+              state.smbBusy = false; editSmbConnection(); state.smbBusy = true;
+            } else if ($("smbPreviousName").value === values.previous_name) {
+              $("smbActive").checked = Boolean(values.active);
+            }
+            toast(t("smbSavedOk")); refreshStorage();
+            refreshPackages("");
+          }
+          return true;
+        } catch (error) { toast(errorMessage(error), true); return false; }
+        finally {
+          state.smbBusy = false;
+          $("consoleSmb").querySelectorAll("input, button").forEach(input => { input.disabled = false; });
+          $("smbPassword").disabled = $("smbClearPassword").checked;
+        }
       }
 
       async function refreshSettings() {
@@ -3679,12 +3936,52 @@
 
       function closePathPicker() {
         $("pathModal").hidden = true;
+        $("pathCreateForm").hidden = true;
+        $("pathNewFolder").setAttribute("aria-expanded", "false");
         state.pathPicker = null;
+      }
+
+      function showCreateDirectory() {
+        const picker = state.pathPicker;
+        if (!picker?.data?.can_create_directory || picker.creating || state.storageJob?.active) return;
+        $("pathCreateForm").hidden = false;
+        $("pathFolderName").value = "";
+        $("pathNewFolder").setAttribute("aria-expanded", "true");
+        focusControl($("pathFolderName"));
+      }
+
+      async function createPickerDirectory(event) {
+        event.preventDefault();
+        const picker = state.pathPicker, data = picker?.data;
+        if (!data?.path || !data.can_create_directory || picker.creating || state.storageJob?.active) return;
+        const name = $("pathFolderName").value.trim();
+        if (!name || name === "." || name === ".." || /[\/\\:*?"<>|\u0000-\u001f\u007f]/.test(name) ||
+            new Blob([name]).size > 255 || (data.path.startsWith("smb://") && /[. ]$/.test(name))) {
+          toast(t("invalidFolderName"), true); return;
+        }
+        picker.creating = true;
+        renderPathPicker();
+        try {
+          const result = await api("/files/mkdir", { path: data.path, name });
+          if (state.pathPicker !== picker) return;
+          picker.creating = false;
+          await browsePath(result.path);
+          toast(t("folderCreated"));
+        } catch (error) {
+          if (state.pathPicker === picker) toast(errorMessage(error), true);
+        } finally {
+          picker.creating = false;
+          if (state.pathPicker === picker) {
+            renderPathPicker();
+            if (!$("pathCreateForm").hidden) focusControl($("pathFolderName"));
+          }
+        }
       }
 
       function choosePath(path) {
         const picker = state.pathPicker;
         if (!picker || !path) return;
+        if (path.startsWith("smb://") && (picker.target !== "customDestination" || state.destinationRequest?.operation === "install")) return;
         const input = $(picker.target);
         input.value = path;
         input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -3699,43 +3996,53 @@
         replaceContent(roots);
         const selectedRoot = (data.roots || []).filter(path => data.path === path || data.path.startsWith(`${path}/`))
           .sort((a, b) => b.length - a.length)[0];
-        (data.roots || []).forEach(path => {
+        const allowSmb = picker.target === "customDestination" && state.destinationRequest?.operation !== "install";
+        const visibleRoots = (data.roots || []).filter(path => allowSmb || !path.startsWith("smb://"));
+        visibleRoots.forEach(path => {
           const button = actionButton(path, () => browsePath(path));
+          button.disabled = Boolean(picker.creating);
           button.classList.toggle("active", path === selectedRoot);
           roots.append(button);
         });
         $("pathCurrent").textContent = data.path || t("storage");
-        $("pathUp").disabled = !data.path;
-        $("choosePath").disabled = !data.path;
+        $("pathDrives").disabled = Boolean(picker.creating);
+        $("pathUp").disabled = !data.path || picker.creating;
+        $("pathNewFolder").disabled = !data.path || !data.can_create_directory || picker.creating || Boolean(state.storageJob?.active);
+        for (const id of ["pathFolderName", "pathCreateSubmit", "pathCreateCancel"]) $(id).disabled = Boolean(picker.creating);
+        $("choosePath").disabled = !data.path || picker.creating || (!allowSmb && data.path.startsWith("smb://"));
         const destination = state.destinationRequest;
         if (picker.target === "customDestination" && destination && ["copy", "move", "install"].includes(destination.operation)) {
-          const source = String(destination.game.path || "").replace(/\/+/g, "/").replace(/\/+$/, "");
+          const source = normalizeBrowserPath(destination.game.path);
           if (source && data.path === source.slice(0, source.lastIndexOf("/"))) $("choosePath").disabled = true;
         }
         replaceContent(list);
         const entries = (data.entries || []).slice().sort((a, b) => Number(Boolean(b.directory)) - Number(Boolean(a.directory)) || a.name.localeCompare(b.name, currentLanguage));
-        if (!data.path) (data.roots || []).forEach(path => {
+        if (!data.path) visibleRoots.forEach(path => {
           list.append(actionButton(path, () => browsePath(path), "package-folder"));
         });
         else entries.forEach(entry => {
           const button = actionButton(entry.name, () => entry.directory ? browsePath(entry.path) : choosePath(entry.path), entry.directory ? "package-folder" : "");
+          button.disabled = Boolean(picker.creating);
           button.dataset.path = entry.path;
           list.append(button);
         });
         if (!list.children.length) list.append(node("span", "subtle", t("listEmpty")));
         list.scrollTop = 0;
         $("pathPages").hidden = !(data.offset || data.truncated);
-        $("pathPrevious").disabled = !data.offset;
-        $("pathNext").disabled = !data.truncated;
+        $("pathPrevious").disabled = !data.offset || picker.creating;
+        $("pathNext").disabled = !data.truncated || picker.creating;
         $("pathPageRange").textContent = `${data.offset + 1}–${data.offset + entries.length}`;
       }
 
       async function browsePath(path = "", offset = 0, fallback = null) {
         const picker = state.pathPicker;
-        if (!picker) return;
+        if (!picker || picker.creating) return;
         const request = ++picker.request;
         picker.data = null;
-        $("choosePath").disabled = $("pathUp").disabled = true;
+        $("pathDrives").disabled = false;
+        $("pathCreateForm").hidden = true;
+        $("pathNewFolder").setAttribute("aria-expanded", "false");
+        $("choosePath").disabled = $("pathUp").disabled = $("pathNewFolder").disabled = true;
         $("pathPages").hidden = true;
         $("pathCurrent").textContent = path || t("storage");
         replaceContent($("pathEntries"), node("span", "subtle", t("loading")));
@@ -3769,6 +4076,12 @@
         state.destinationRequest = null;
       }
 
+      function normalizeBrowserPath(path) {
+        const value = String(path || "");
+        return value.startsWith("smb://") ? `smb://${value.slice(6).replace(/\/+/g, "/").replace(/\/+$/, "")}`
+          : value.replace(/\/+/g, "/").replace(/\/+$/, "") || "/";
+      }
+
       function renderDestinationPicker() {
         const request = state.destinationRequest;
         if (!request) return;
@@ -3780,12 +4093,13 @@
         replaceContent(choices);
         const fromUsb = /^\/mnt\/usb[0-7](?:\/|$)/.test(request.game.path || "");
         const priority = path => path === "/data/homebrew" ? 0 : path === "/mnt/ext1/homebrew" ? 1 : 2;
-        const normalize = path => String(path || "").replace(/\/+/g, "/").replace(/\/+$/, "") || "/";
+        const normalize = normalizeBrowserPath;
         const source = normalize(request.game.path);
         const parent = source.slice(0, source.lastIndexOf("/")) || "/";
         const transfer = ["copy", "move", "install"].includes(request.operation);
         const destinations = state.storageDestinations.filter(destination =>
-          !transfer || !request.game.path || normalize(destination.path) !== parent
+          (request.operation !== "install" || !destination.path.startsWith("smb://")) &&
+          (!transfer || !request.game.path || normalize(destination.path) !== parent)
         );
         if (!destinations.length) {
           choices.append(node("span", "subtle", t(state.storageDestinations.length ? "noOtherDestinations" : "storageNotFound")));
@@ -3793,7 +4107,7 @@
         if (fromUsb) destinations.sort((left, right) => priority(left.path) - priority(right.path));
         destinations.forEach((destination) => {
           const button = actionButton(
-            `${destination.path} · ${t("freeSpace", { size: formatBytes(Number(destination.available_bytes)) })}`,
+            destination.remote && !Number.isFinite(destination.available_bytes) ? destination.path : `${destination.path} · ${t("freeSpace", { size: formatBytes(Number(destination.available_bytes)) })}`,
             () => chooseStorageDestination(destination.path)
           );
           button.setAttribute("data-destination", destination.path);
@@ -4018,7 +4332,8 @@
           button.classList.toggle("active", selected);
           button.setAttribute("aria-pressed", String(selected));
         }
-        $("consoleSave").hidden = section === "overview";
+        $("consoleSave").hidden = section === "overview" || section === "smb";
+        if (section === "smb") refreshSmbConnections();
         if (!$("consoleView").hidden) window.scrollTo(0, 0);
       }
 
@@ -4036,7 +4351,7 @@
         }
         window.scrollTo(0, 0);
         focusControl($({ library: "libraryTab", console: "consoleTab", packages: "packagesTab" }[view]));
-        if (view === "packages") refreshPackages();
+        if (view === "packages") { refreshPackages(); refreshStorage(); }
       }
 
       function switchMainTab(direction) {
@@ -4142,7 +4457,8 @@
           install.textContent = t(installed ? "packageInstalled" : missing ? "packageNoBase" : entry.kind === "base" && entry.base_installed ? "packageReplace" : entry.kind === "patch" ? "packageUpdate" : "packageInstall");
           install.disabled = !entry.installable || installed || missing || queued || Boolean(state.storageJob?.active);
           add.textContent = t(queued ? "packageQueued" : "packageEnqueue");
-          add.disabled = !entry.installable || installed || queued || (missing && !baseQueued && !(!state.packageQueue && entry.base_queued)) || queue.length >= 32 || state.packageQueueLoading;
+          add.disabled = !entry.installable || installed || queued || (missing && !baseQueued && !(!state.packageQueue && entry.base_queued)) || queue.length >= 32 || state.packageQueueLoading ||
+            Boolean(state.storageJob?.active && state.storageJob.operation === "delete" && !state.storageJob.title_id);
         });
         $("packageList").querySelectorAll(".backport-install").forEach(button => {
           button.disabled = button.dataset.selfSource === "true" || Boolean(state.storageJob?.active);
@@ -4150,11 +4466,40 @@
         $("packageList").querySelectorAll(".source-install").forEach(button => {
           button.disabled = Boolean(state.storageJob?.active);
         });
-        $("packageList").querySelectorAll(".backport-delete").forEach(button => {
-          button.disabled = Boolean(state.storageJob?.active);
+        $("packageList").querySelectorAll(".source-delete").forEach(button => {
+          button.disabled = button.dataset.canDelete !== "true" || Boolean(state.storageJob?.active) || queue.length > 0 || state.packageQueueLoading;
         });
         $("packageQueueStart").disabled = !queue.length || Boolean(state.storageJob?.active) || state.packageQueueLoading;
         $("packageQueueClear").disabled = !queue.length || state.packageQueueLoading;
+      }
+
+      function trashButton(label, action, className) {
+        const button = actionButton("", action, className);
+        button.setAttribute("aria-label", label);
+        button.title = label;
+        const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        icon.setAttribute("viewBox", "0 0 24 24");
+        icon.setAttribute("fill", "none");
+        icon.setAttribute("stroke", "currentColor");
+        icon.setAttribute("stroke-width", "1.8");
+        icon.setAttribute("stroke-linecap", "round");
+        icon.setAttribute("stroke-linejoin", "round");
+        icon.setAttribute("aria-hidden", "true");
+        icon.setAttribute("focusable", "false");
+        const shape = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        shape.setAttribute("d", "M3 6h18M9 6V3h6v3M5 6l1 14h12l1-14M10 10v6m4-6v6");
+        icon.appendChild(shape);
+        button.appendChild(icon);
+        return button;
+      }
+
+      function appendSourceDelete(container, entry) {
+        const remove = trashButton(`${t("remove")}: ${entry.path}`, () => deleteBrowserSource(entry), "danger source-delete");
+        remove.dataset.path = entry.path;
+        remove.dataset.canDelete = String(entry.can_delete === true);
+        if (entry.can_delete !== true) remove.title = t("sourceDeleteBlocked");
+        container.classList.add("source-delete-actions");
+        container.append(remove);
       }
 
       function renderPackageQueue() {
@@ -4164,23 +4509,8 @@
         queue.forEach((entry, index) => {
           const row = node("div", "package-queue-row");
           row.append(node("span", "", `${index + 1}. ${entry.title_name || entry.title_id} · ${packageKind(entry.kind)} · ${entry.version || "—"}`));
-          const remove = actionButton("", () => changePackageQueue("remove", entry.path), "package-queue-remove");
           const label = `${t("remove")}: ${entry.title_name || entry.title_id}`;
-          remove.setAttribute("aria-label", label);
-          remove.title = label;
-          const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-          icon.setAttribute("viewBox", "0 0 24 24");
-          icon.setAttribute("fill", "none");
-          icon.setAttribute("stroke", "currentColor");
-          icon.setAttribute("stroke-width", "1.8");
-          icon.setAttribute("stroke-linecap", "round");
-          icon.setAttribute("stroke-linejoin", "round");
-          icon.setAttribute("aria-hidden", "true");
-          icon.setAttribute("focusable", "false");
-          const shape = document.createElementNS("http://www.w3.org/2000/svg", "path");
-          shape.setAttribute("d", "M3 6h18M9 6V3h6v3M5 6l1 14h12l1-14M10 10v6m4-6v6");
-          icon.appendChild(shape);
-          remove.appendChild(icon);
+          const remove = trashButton(label, () => changePackageQueue("remove", entry.path), "package-queue-remove");
           row.append(remove);
           list.append(row);
         });
@@ -4255,6 +4585,23 @@
         return cover;
       }
 
+      function renderPackageRootCapacity() {
+        const local = state.packages?.root_storage || [];
+        $("packageRoots").querySelectorAll("button[data-path]").forEach(button => {
+          const path = button.dataset.path;
+          const capacity = local.find(item => item.path === path) || state.storageDestinations.find(item => item.path === path) ||
+            state.storageDestinations.filter(item => item.mount_point && (path === item.mount_point || path.startsWith(`${item.mount_point}/`)))
+              .sort((left, right) => right.mount_point.length - left.mount_point.length)[0];
+          const info = button.querySelector(".package-root-space");
+          if (!info) return;
+          const known = Number.isFinite(capacity?.total_bytes) && capacity.total_bytes > 0 && Number.isFinite(capacity.available_bytes) && capacity.available_bytes >= 0;
+          info.textContent = known
+            ? `${t("freeSpace", { size: formatBytes(Math.min(capacity.available_bytes, capacity.total_bytes)) })} ${t("totalSpace", { size: formatBytes(capacity.total_bytes) })}`
+            : t(capacity?.capacity_pending ? "loading" : "unavailable");
+          info.title = info.textContent;
+        });
+      }
+
       function renderPackages() {
         const data = state.packages;
         if (!data) return;
@@ -4262,11 +4609,21 @@
         replaceContent(roots);
         const selectedRoot = (data.roots || []).filter(path => data.path === path || data.path.startsWith(`${path}/`))
           .sort((left, right) => right.length - left.length)[0];
-        (data.roots || []).forEach(path => {
-          const button = actionButton(path, () => refreshPackages(path, true));
+        (data.roots || []).forEach((path, index) => {
+          const button = actionButton("", () => refreshPackages(path, true));
+          button.dataset.path = path;
+          button.title = path;
+          button.setAttribute("aria-label", path);
+          const label = node("span", "package-root-path", path);
+          label.setAttribute("dir", "ltr");
+          const info = node("span", "package-root-space");
+          info.id = `packageRootSpace${index}`;
+          button.setAttribute("aria-describedby", info.id);
+          button.append(label, info);
           button.classList.toggle("active", path === selectedRoot);
           roots.append(button);
         });
+        renderPackageRootCapacity();
         $("packagePath").textContent = data.path || t("storage");
         $("packageUp").disabled = !data.path;
         replaceContent(list);
@@ -4293,6 +4650,7 @@
             const actions = node("div", entry.directory ? "package-actions" : "package-actions source-single");
             actions.append(actionButton(t("packageInstall"), () => storageOperation(entry, "install"), "primary source-install"));
             if (entry.directory) actions.append(actionButton(t("browse"), () => refreshPackages(entry.path, true)));
+            appendSourceDelete(actions, entry);
             row.append(installationCover(entry), info, actions);
             list.append(row);
             return;
@@ -4311,16 +4669,17 @@
               const install = actionButton(t(selfSource ? "packageInstalled" : entry.backport_installed ? "replaceBackport" : "installBackport"), () => installBackport(entry), "primary backport-install");
               install.dataset.selfSource = String(selfSource);
               install.dataset.path = entry.path;
-              const remove = actionButton(t("deleteBackport"), () => deleteBackport(entry), "danger backport-delete");
-              remove.dataset.path = entry.path;
               const actions = node("div", "package-actions backport-actions");
-              actions.append(install, remove);
+              actions.append(install);
+              appendSourceDelete(actions, entry);
               row.append(installationCover(entry), info, actions);
               list.append(row);
               return;
             }
-            const folder = actionButton(entry.name, () => refreshPackages(entry.path, true), "package-row package-folder");
+            const folder = node("div", "package-row package-folder");
             folder.dataset.path = entry.path;
+            folder.append(actionButton(entry.name, () => refreshPackages(entry.path, true), "package-browse"));
+            appendSourceDelete(folder, entry);
             list.append(folder);
             return;
           }
@@ -4341,6 +4700,7 @@
           add.dataset.path = entry.path;
           const actions = node("div", "package-actions");
           actions.append(install, add);
+          appendSourceDelete(actions, entry);
           row.append(cover, info, actions);
           list.append(row);
         });
@@ -4348,8 +4708,8 @@
         updatePackageActions();
         if (data.offset || data.truncated) {
           const pages = node("div", "package-toolbar");
-          const previous = actionButton(t("back"), () => refreshPackages(data.path, true, Math.max(0, data.offset - 256)));
-          const next = actionButton(t("continueAction"), () => refreshPackages(data.path, true, (data.offset || 0) + 256));
+          const previous = actionButton(t("back"), () => refreshPackages(data.path, true, Math.max(0, data.offset - (data.limit || 256))));
+          const next = actionButton(t("continueAction"), () => refreshPackages(data.path, true, (data.offset || 0) + (data.limit || 256)));
           previous.disabled = !data.offset;
           next.disabled = !data.truncated;
           pages.append(previous, next);
@@ -4384,11 +4744,11 @@
         } catch (error) { toast(errorMessage(error), true); }
       }
 
-      async function deleteBackport(entry) {
-        if (state.storageJob?.active) return;
-        if (!await confirmAction(t("deleteBackportConfirm", { path: entry.path }))) return;
+      async function deleteBrowserSource(entry) {
+        if (!entry.can_delete || state.storageJob?.active || state.packageQueueLoading || state.packageQueue?.entries?.length) return;
+        if (!await confirmAction(t("sourceDeleteConfirm", { path: entry.path }))) return;
         try {
-          renderStorageJob(await api("/backports/delete", { path: entry.path }));
+          renderStorageJob(await api("/sources/delete", { path: entry.path, confirm: true }));
           scheduleStorageJobPoll();
         } catch (error) { toast(errorMessage(error), true); }
       }
@@ -4465,6 +4825,7 @@
           const socket = new WebSocket(url.href);
           session.socket = socket;
           const pending = new Set();
+          let windowSize = 2;
           let settled = false;
           const finish = error => {
             if (settled) return;
@@ -4479,10 +4840,22 @@
             if (!message || typeof message !== "object" || Array.isArray(message)) {
               finish(new Error(t("packageStreamLost"))); return;
             }
-            if (message.op === "ready") return;
+            if (message.op === "ready") {
+              const maxWindow = message.max_window === undefined ? message.window : message.max_window;
+              if (!Number.isSafeInteger(message.window) || message.window < 1 ||
+                  !Number.isSafeInteger(maxWindow) || maxWindow < message.window || maxWindow > 4 || pending.size) {
+                finish(new Error(t("packageStreamLost"))); return;
+              }
+              windowSize = maxWindow;
+              if (maxWindow > message.window) {
+                try { socket.send(JSON.stringify({ op: "window", size: maxWindow })); }
+                catch (error) { finish(error); }
+              }
+              return;
+            }
             if (message.op === "ack") { pending.delete(message.id); return; }
             if (message.op !== "range" || !Number.isSafeInteger(message.id) || message.id <= 0 ||
-                pending.has(message.id) || pending.size >= 2 || !Number.isSafeInteger(message.offset) ||
+                pending.has(message.id) || pending.size >= windowSize || !Number.isSafeInteger(message.offset) ||
                 !Number.isSafeInteger(message.size) || message.size <= 0 || message.size > session.chunkBytes ||
                 message.offset < 0 || message.offset > session.file.size - message.size) {
               finish(new Error(t("packageStreamLost"))); return;
@@ -4768,7 +5141,7 @@
       $("packagesTab").addEventListener("click", () => switchView("packages"));
       $("packageHome").addEventListener("click", () => refreshPackages("", true));
       $("packageUp").addEventListener("click", () => refreshPackages(state.packages?.parent || "", true));
-      $("packageRefresh").addEventListener("click", () => refreshPackages());
+      $("packageRefresh").addEventListener("click", () => { refreshPackages(); refreshStorage(); });
       $("packageQueueStart").addEventListener("click", () => changePackageQueue("start"));
       $("packageQueueClear").addEventListener("click", () => changePackageQueue("clear"));
       $("packageChoose").disabled = playStationBrowser;
@@ -4888,9 +5261,16 @@
       $("pathModal").addEventListener("click", event => { if (event.target === $("pathModal")) closePathPicker(); });
       $("pathDrives").addEventListener("click", () => browsePath());
       $("pathUp").addEventListener("click", () => browsePath(state.pathPicker?.data?.parent || ""));
+      $("pathNewFolder").addEventListener("click", showCreateDirectory);
+      $("pathCreateForm").addEventListener("submit", createPickerDirectory);
+      $("pathCreateCancel").addEventListener("click", () => {
+        $("pathCreateForm").hidden = true;
+        $("pathNewFolder").setAttribute("aria-expanded", "false");
+        focusControl($("pathNewFolder"));
+      });
       $("choosePath").addEventListener("click", () => choosePath(state.pathPicker?.data?.path));
-      $("pathPrevious").addEventListener("click", () => { const data = state.pathPicker?.data; if (data) browsePath(data.path, Math.max(0, data.offset - 256)); });
-      $("pathNext").addEventListener("click", () => { const data = state.pathPicker?.data; if (data?.truncated) browsePath(data.path, data.offset + 256); });
+      $("pathPrevious").addEventListener("click", () => { const data = state.pathPicker?.data; if (data) browsePath(data.path, Math.max(0, data.offset - (data.limit || 256))); });
+      $("pathNext").addEventListener("click", () => { const data = state.pathPicker?.data; if (data?.truncated) browsePath(data.path, data.offset + (data.limit || 256)); });
       $("closeDestination").addEventListener("click", closeDestinationPicker);
       $("destinationModal").addEventListener("click", (event) => { if (event.target === $("destinationModal")) closeDestinationPicker(); });
       $("closeModal").addEventListener("click", closeModal);
@@ -4902,9 +5282,14 @@
         $("fanTemperature").append(option);
       }
       restoreActivity();
+      $("smbForm").addEventListener("submit", event => { event.preventDefault(); changeSmbConnection("save"); });
+      $("smbCheck").addEventListener("click", () => changeSmbConnection("check"));
+      $("smbNew").addEventListener("click", () => editSmbConnection());
+      $("smbPath").addEventListener("change", () => { $("smbPath").value = normalizeSmbSharePath($("smbPath").value); });
+      $("smbClearPassword").addEventListener("change", () => { $("smbPassword").disabled = $("smbClearPassword").checked; });
       applyLanguage(currentLanguage);
       initializeTabHistory();
-      Promise.all([refreshAll(), refreshManual(), refreshSettings(), refreshStorageJob()]);
+      Promise.all([refreshAll(), refreshManual(), refreshSettings(), refreshStorageJob(), refreshSmbConnections()]);
     })();
   </script>
 </body>
