@@ -624,7 +624,7 @@
     .path-icon svg { width: 24px; height: 24px; pointer-events: none; }
     #pathCreateForm { display: grid; grid-template-columns: minmax(0, 1fr) auto 46px; }
     #pathFolderName { width: 100%; min-width: 0; }
-    .path-body { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; padding: 0 20px 12px; flex: 1; min-height: 0; }
+    .path-body { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 16px; padding: 0 20px 12px; flex: 1; min-height: 0; }
     .path-body .console-list { min-height: 0; max-height: none; overflow-y: auto; }
     .path-body .btn { width: 100%; min-width: 0; min-height: 50px; font-size: 18px; white-space: normal; overflow-wrap: anywhere; text-align: left; }
     .path-roots, .path-entries { display: flex; flex-direction: column; gap: 8px; }
@@ -4470,10 +4470,11 @@
         const selectedRoot = (data.roots || []).filter(path => data.path === path || data.path.startsWith(`${path}/`))
           .sort((a, b) => b.length - a.length)[0];
         const allowSmb = picker.target === "customDestination" && state.destinationRequest?.operation !== "install";
+        const selectingDestination = picker.target === "customDestination";
         const visibleRoots = (data.roots || []).filter(path => allowSmb || !path.startsWith("smb://"));
         visibleRoots.forEach(path => {
           const button = actionButton(path, () => browsePath(path));
-          button.disabled = Boolean(picker.creating);
+          button.disabled = Boolean(picker.creating) || (selectingDestination && storagePathReadOnly(path, data.root_storage));
           button.classList.toggle("active", path === selectedRoot);
           if (storagePathReadOnly(path, data.root_storage)) button.append(badge("RO"));
           roots.append(button);
@@ -4495,12 +4496,13 @@
         const entries = (data.entries || []).slice().sort((a, b) => Number(Boolean(b.directory)) - Number(Boolean(a.directory)) || a.name.localeCompare(b.name, currentLanguage));
         if (!data.path) visibleRoots.forEach(path => {
           const button = actionButton(path, () => browsePath(path), "package-folder");
+          button.disabled = Boolean(picker.creating) || (selectingDestination && storagePathReadOnly(path, data.root_storage));
           if (storagePathReadOnly(path, data.root_storage)) button.append(badge("RO"));
           list.append(button);
         });
         else entries.forEach(entry => {
           const button = actionButton(entry.name, () => entry.directory ? browsePath(entry.path) : choosePath(entry.path), entry.directory ? "package-folder" : "");
-          button.disabled = Boolean(picker.creating);
+          button.disabled = Boolean(picker.creating) || (selectingDestination && storagePathReadOnly(entry.path, data.root_storage));
           button.dataset.path = entry.path;
           if (storagePathReadOnly(entry.path, data.root_storage)) button.append(badge("RO"));
           list.append(button);
@@ -4516,6 +4518,9 @@
       async function browsePath(path = "", offset = 0, fallback = null) {
         const picker = state.pathPicker;
         if (!picker || picker.creating) return;
+        if (picker.target === "customDestination" && storagePathReadOnly(path, picker.data?.root_storage)) {
+          path = ""; offset = 0; fallback = null;
+        }
         const request = ++picker.request;
         picker.data = null;
         $("pathDrives").disabled = false;
@@ -4590,12 +4595,19 @@
             () => chooseStorageDestination(destination.path)
           );
           button.setAttribute("data-destination", destination.path);
-          if (destination.read_only) {
+          if (storagePathReadOnly(destination.path)) {
             button.append(badge("RO"));
             button.disabled = true;
           }
           choices.append(button);
         });
+        syncCustomDestinationControls();
+      }
+
+      function syncCustomDestinationControls() {
+        const readOnly = storagePathReadOnly($("customDestination").value.trim(), state.pathPicker?.data?.root_storage || state.packages?.root_storage);
+        $("destinationAction").disabled = readOnly;
+        $("destinationAction").title = readOnly ? t("smbReadOnly") : "";
       }
 
       function storageOperation(game, operation) {
@@ -4615,6 +4627,9 @@
         const request = state.destinationRequest;
         const path = String(destination || "").trim();
         if (!request || !path) return;
+        if (storagePathReadOnly(path, state.pathPicker?.data?.root_storage || state.packages?.root_storage)) {
+          toast(t("smbReadOnly"), true); return;
+        }
         const deleteSource = request.operation === "unpack" && $("unpackDeleteSource").checked;
         if (deleteSource && !await confirmAction(t("unpackDeleteConfirm"))) return;
         closeDestinationPicker();
@@ -5073,6 +5088,10 @@
 
       function storagePathReadOnly(path, roots = []) {
         if (!path) return false;
+        if (path.startsWith("smb://")) {
+          const name = path.slice(6).split("/", 1)[0];
+          if (state.smbConnections?.some(connection => connection.name === name && connection.read_only)) return true;
+        }
         let length = -1, readOnly = false;
         for (const items of [roots || [], state.storageDestinations]) {
           for (const item of items) {
@@ -5777,6 +5796,7 @@
         focusControl($("pathNewFolder"));
       });
       $("choosePath").addEventListener("click", () => choosePath(state.pathPicker?.data?.path));
+      $("customDestination").addEventListener("input", syncCustomDestinationControls);
       $("pathPrevious").addEventListener("click", () => { const data = state.pathPicker?.data; if (data) browsePath(data.path, Math.max(0, data.offset - (data.limit || 256))); });
       $("pathNext").addEventListener("click", () => { const data = state.pathPicker?.data; if (data?.truncated) browsePath(data.path, data.offset + (data.limit || 256)); });
       $("closeDestination").addEventListener("click", closeDestinationPicker);
