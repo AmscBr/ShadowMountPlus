@@ -12,6 +12,7 @@
 #include <pthread.h>
 #include <smb2/smb2.h>
 #include <smb2/libsmb2.h>
+#include <smb2/smb2-errors.h>
 #include <strings.h>
 #include <sys/socket.h>
 
@@ -81,7 +82,7 @@ static int base_address(const sm_smb_connection_t *c, sm_smb_address_t *a) {
     memcpy(a->domain, user, length);
     user = domain + 1;
   }
-  strlcpy(a->user, *user ? user : "Guest", sizeof(a->user));
+  strlcpy(a->user, user, sizeof(a->user));
   strlcpy(a->password, c->password, sizeof(a->password));
   return 0;
 }
@@ -384,7 +385,9 @@ bool sm_smb_path_within(const char *path, const char *root) {
          (!length || !a.relative[length] || a.relative[length] == '/');
 }
 
-static struct smb2_context *connect_address(const sm_smb_address_t *a) {
+static struct smb2_context *connect_address_attempt(const sm_smb_address_t *a, bool anonymous,
+                                                   uint32_t *native_status) {
+  if (native_status) *native_status = 0;
   if (should_stop_requested() || runtime_sleep_mode_active()) {
     errno = ECANCELED;
     return NULL;
@@ -396,12 +399,20 @@ static struct smb2_context *connect_address(const sm_smb_address_t *a) {
   }
   smb2_set_version(ctx, SMB2_VERSION_ANY);
   smb2_set_timeout(ctx, 5);
-  smb2_set_user(ctx, a->user);
-  smb2_set_password(ctx, a->password);
-  if (a->domain[0]) smb2_set_domain(ctx, a->domain);
-  smb2_set_security_mode(ctx, SMB2_NEGOTIATE_SIGNING_ENABLED);
-  int status = smb2_connect_share(ctx, a->server, a->share, a->user);
+  smb2_set_user(ctx, anonymous ? "" : a->user[0] ? a->user : "Guest");
+  smb2_set_domain(ctx, anonymous ? "" : a->domain[0] ? a->domain : "WORKGROUP");
+  // NULL selects anonymous NTLM; an empty string authenticates an account.
+  // Set the password last and do not reload it through connect_share's user.
+  smb2_set_password(ctx, anonymous ? NULL : a->password);
+  smb2_set_security_mode(ctx, a->user[0] || a->password[0] ? SMB2_NEGOTIATE_SIGNING_ENABLED : 0);
+  int status = smb2_connect_share(ctx, a->server, a->share, NULL);
+  if (should_stop_requested() || runtime_sleep_mode_active()) {
+    smb2_destroy_context(ctx);
+    errno = ECANCELED;
+    return NULL;
+  }
   if (status < 0) {
+    if (native_status) *native_status = (uint32_t)smb2_get_nterror(ctx);
     smb2_destroy_context(ctx);
     errno = -status;
     return NULL;
@@ -410,14 +421,27 @@ static struct smb2_context *connect_address(const sm_smb_address_t *a) {
   // transfers without reducing larger system defaults or making tuning fatal.
   int saved_errno = errno;
   int options[] = {SO_SNDBUF, SO_RCVBUF};
+  int fd = smb2_get_fd(ctx);
   for (size_t i = 0; i < sizeof(options) / sizeof(options[0]); ++i) {
     int current = 0, desired = 512 * 1024;
     socklen_t size = sizeof(current);
-    int fd = smb2_get_fd(ctx);
     if (getsockopt(fd, SOL_SOCKET, options[i], &current, &size) == 0 && current < desired)
       (void)setsockopt(fd, SOL_SOCKET, options[i], &desired, sizeof(desired));
   }
   errno = saved_errno;
+  return ctx;
+}
+
+static struct smb2_context *connect_address(const sm_smb_address_t *a) {
+  uint32_t status = 0;
+  struct smb2_context *ctx = connect_address_attempt(a, false, &status);
+  if (ctx || a->user[0] || a->password[0]) return ctx;
+  if (status != SMB2_STATUS_ACCESS_DENIED && status != SMB2_STATUS_LOGON_FAILURE &&
+      status != SMB2_STATUS_ACCOUNT_DISABLED && status != SMB2_STATUS_ACCOUNT_RESTRICTION &&
+      status != SMB2_STATUS_LOGON_TYPE_NOT_GRANTED) return NULL;
+  int saved_errno = errno;
+  ctx = connect_address_attempt(a, true, NULL);
+  if (!ctx && errno != ECANCELED) errno = saved_errno;
   return ctx;
 }
 
