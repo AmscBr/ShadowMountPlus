@@ -958,7 +958,7 @@ paths:
     post:
       operationId: uninstallGameContent
       summary: Delete the installed patch or one installed DLC
-      description: Uses AppUnInstallPat or AppUnInstallAddcont without deleting the base game. DLC content_id must belong to title_id and have native installed state 4. Blocked during rest mode, active/prepared games, scanning and storage/install operations. Successful deletion invalidates app.db metadata; clients should reload game information and sizes.
+      description: Uses AppUnInstallPat or AppUnInstallAddcont without deleting the base game. DLC content_id must belong to title_id and have native installed state 4. Other titles may be modified during gameplay. Blocked for the live title, a prepared or mounted target, rest mode, launch/exit transitions, scanning and storage/install operations. Successful deletion invalidates app.db metadata; clients should reload game information and sizes.
       tags: [Games]
       requestBody:
         required: true

@@ -191,10 +191,13 @@ Homebrew IDs contain four uppercase ASCII letters and five digits, excluding
 `CUSA`, `PPSA`, and `NPXS` prefixes. Confirmed running homebrew does not defer scans or block
 source copy/move/delete operations and uninstalls for unrelated titles. This
 applies to folder, image and installed-PKG applications. Ordinary PS4/PS5 games
-allow the same work while AppFocus confirms they are in the background. The
-live application's own title, source, and backing image chain remain protected;
-operations affecting them return `game_active`. Returning to an ordinary game,
-unknown focus, and pending launches/exits defer new background work.
+allow the same work regardless of AppFocus, including while in the foreground. The
+live application's own title, source, backing image chain, mounted fakelib
+overlay source and retained NSFS backport sources remain protected;
+operations affecting them return `game_active`. Pending launches/exits and
+unknown runtime ownership defer new work. Forced, scheduled and dirty-root
+scans use the same protection. Directory traversal is paced while a game runs
+(10 ms per directory and 2 ms per 32 entries); idle waits do not poll for this.
 
 Image items expose `path`, `mount_point`, `size`, modification time, `unit_id`,
 `backend`, `complete`, `source_available`, `mapped` and `mounted`. Game items expose
@@ -297,9 +300,12 @@ before finalizing starts. `completed` means the selected filesystem has been
 unmounted, not merely that the system accepted the request. `usb_eject_unconfirmed`
 means keep the drive connected and refresh storage; no automatic retry occurs.
 
-Ejection is blocked by active games, pending installation, prepared runtime
-mounts, attached images, ShadowMount-owned title mounts and other mounted
-partitions of the same physical device. Dependency failures distinguish
+Ejection is blocked when the selected volume contains the live game's source
+or backing chain, or its native PKG storage cannot be resolved. Unrelated
+volumes may be ejected during gameplay. Pending installation, launch/exit
+transitions, prepared inactive runtime mounts, attached images,
+ShadowMount-owned title mounts and other mounted partitions of the same
+physical device also block ejection. Dependency failures distinguish
 `usb_mount_busy`, `usb_partition_busy` and `usb_image_busy`. A failed job
 includes `blocking_source` and `blocking_target`: a physical image path, or the
 source and target of one blocking mount. Empty fields mean no dependency path
@@ -396,9 +402,12 @@ The response includes the three mode fields, `saved: true` and
 Reaching the 128-title override limit fails without modifying the file;
 removing an override remains possible at the limit.
 
-Mount mutations remain conservative. They return HTTP 409 with `status` set to
-`EBUSY` while a game is active, while ShellCore owns another prepared title,
-during suspend, or while a conflicting mount/release is in progress. Clients
+Mount mutations return HTTP 409 with `status` set to
+`EBUSY` when they affect a live title, its source or a shared backing image,
+while an inactive title owns a prepared runtime, during suspend, or while a
+conflicting scan, storage operation, launch or release is in progress. An
+independent title may be mounted/unmounted during gameplay without replacing
+the live runtime owner; scanner cleanup may release these transient mounts. Clients
 must not retry this response in a tight loop. HTTP 404 with `ENOENT` means the
 title has no ShadowMount `mount.lnk` tracker.
 The optional mount `mode` is request-scoped and does not change `config.ini`.
@@ -448,9 +457,10 @@ The debug-log route returns at most 256 KiB and never modifies or rotates the lo
 The kernel-log route returns a kernel-log snapshot.
 
 Uninstall returns success after the system accepts the request; the on-disk
-removal itself is asynchronous. It returns `EBUSY` while a
-game is active, another title owns a prepared runtime mount, or batch install
-work is pending. An unchanged discoverable source may be installed again by a
+removal itself is asynchronous. It returns `EBUSY` for the live title, during
+launch/exit transitions, while a conflicting inactive runtime is prepared, or
+while batch install work is pending. Other titles may be uninstalled while a
+game runs. An unchanged discoverable source may be installed again by a
 later scan, so remove its manual entry or source first when that is not wanted.
 
 ## Game installation and browser streaming

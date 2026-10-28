@@ -40,11 +40,11 @@ Notes:
   registration, and source copy/move/delete operations on other titles, whether
   the application uses a folder, image, or installed PKG. Its own runtime, source
   and all backing image layers remain protected. Operations that would release
-  a shared image are refused. Ordinary games allow the same work after a
-  confirmed loss of AppFocus (for example, returning to the home menu), while
-  retaining protection for their own runtime and sources. Returning focus to an
-  ordinary game pauses scanning again. Unknown focus and pending launch/exit
-  transitions still defer background work.
+  a shared image are refused. Ordinary PS4/PS5 games allow the same work while
+  running, regardless of AppFocus. Forced and scheduled scans keep the live
+  title and its backing chain protected, and pace directory traversal while a
+  game is active. Pending launch/exit transitions and unknown runtime ownership
+  still defer work.
 - Backend, read-only mode, and sector size can be configured via `/data/shadowmount/config.ini`.
 - Debug logging is enabled by default (`debug=1`) and writes to console plus `/data/shadowmount/debug.log` (set `debug=0` to disable).
 - **UFS (`.ffpkg`) is the recommended image format for normal use.**

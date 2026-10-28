@@ -1438,17 +1438,16 @@ static bool run_full_scan_cycle_impl(bool startup_sync, const char *reason,
 static bool run_full_scan_cycle(bool startup_sync, const char *reason,
                                 bool *unstable_found_out) {
   pthread_mutex_lock(&g_scanner_cycle_mutex);
-  bool guard = sm_game_lifecycle_has_active_game();
-  bool claimed = !guard || sm_shellcore_try_begin_external_mutation();
+  bool claimed = sm_shellcore_try_begin_external_mutation();
   bool completed = true;
-  if (!claimed || (guard && sm_shellcore_background_work_blocked())) {
+  if (!claimed || sm_shellcore_background_work_blocked()) {
     if (unstable_found_out)
       *unstable_found_out = true;
   } else {
     completed = run_full_scan_cycle_impl(startup_sync, reason,
                                          unstable_found_out);
   }
-  if (guard && claimed)
+  if (claimed)
     sm_shellcore_end_external_mutation();
   if (!completed && !should_stop_requested() && !runtime_sleep_mode_active()) {
     if (unstable_found_out)
@@ -1511,17 +1510,16 @@ static bool run_targeted_scan_cycle_impl(int scan_root_index,
 static bool run_targeted_scan_cycle(int scan_root_index,
                                     bool *unstable_found_out) {
   pthread_mutex_lock(&g_scanner_cycle_mutex);
-  bool guard = sm_game_lifecycle_has_active_game();
-  bool claimed = !guard || sm_shellcore_try_begin_external_mutation();
+  bool claimed = sm_shellcore_try_begin_external_mutation();
   bool completed = true;
-  if (!claimed || (guard && sm_shellcore_background_work_blocked())) {
+  if (!claimed || sm_shellcore_background_work_blocked()) {
     if (unstable_found_out)
       *unstable_found_out = true;
   } else {
     completed = run_targeted_scan_cycle_impl(scan_root_index,
                                              unstable_found_out);
   }
-  if (guard && claimed)
+  if (claimed)
     sm_shellcore_end_external_mutation();
   if (!completed && !should_stop_requested() && !runtime_sleep_mode_active()) {
     if (unstable_found_out)

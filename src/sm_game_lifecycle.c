@@ -101,10 +101,6 @@ static void publish_background_game_state(bool was_active) {
   bool active = published_game_active(pid, pending);
   uint64_t state = active ? GAME_BACKGROUND_BLOCKED : GAME_BACKGROUND_IDLE;
   const char *title = g_active_game_title_id;
-  uint64_t focus = atomic_load(&g_app_focus_state);
-  bool background = g_active_game_app_id != 0 &&
-      (focus & GAME_APP_FOCUS_KNOWN) != 0 &&
-      (uint32_t)focus != g_active_game_app_id;
   if (pid > 0 && is_supported_game_title_id(title)) {
     uint64_t prefix = 0;
     for (size_t i = 0; i < 4u; ++i)
@@ -113,9 +109,9 @@ static void publish_background_game_state(bool was_active) {
     for (size_t i = 4u; i < 9u; ++i)
       number = number * 10u + (uint32_t)(title[i] - '0');
     state = GAME_BACKGROUND_TITLE_BASE + prefix * GAME_BACKGROUND_TITLE_RANGE + number;
-    bool ordinary_game = strncmp(title, "PPSA", 4u) == 0 ||
-                         strncmp(title, "CUSA", 4u) == 0;
-    if (pending || (ordinary_game && !background))
+    // A confirmed live title can be protected individually, irrespective of
+    // focus. Transitions still block work until ownership is settled.
+    if (pending)
       state |= GAME_BACKGROUND_TITLE_BLOCKED;
   }
   uint64_t previous = atomic_exchange(&g_background_game_state, state);

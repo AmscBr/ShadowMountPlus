@@ -2130,8 +2130,13 @@ static void handle_mount_operation(struct MHD_Connection *fd,
   }
 
   const bool *mount_mode = mode_present ? &mount_read_only : NULL;
+  if (!sm_scanner_try_begin_external_mutation()) {
+    send_error_response(fd, 409, EBUSY, "scanner or storage operation is busy");
+    return;
+  }
   int status = mount ? sm_shellcore_mount_title_runtime(title_id, mount_mode)
                      : sm_shellcore_unmount_title_runtime(title_id);
+  sm_scanner_end_external_mutation();
   log_debug("  [API] HTTP %s game: title=%s mode=%s status=%d",
             mount ? "mount" : "unmount", title_id,
             !mount ? "n/a" : mode_present
@@ -2968,7 +2973,8 @@ static void handle_content_uninstall(struct MHD_Connection *connection,
   if (!status && sm_shellcore_title_is_protected(title_id)) {
     status = EBUSY; error = "game_active";
   }
-  if (!status && (sm_shellcore_service_has_prepared_mount() || is_data_mounted(title_id))) {
+  if (!status && (sm_shellcore_service_title_is_prepared(title_id) ||
+      sm_shellcore_background_work_blocked() || is_data_mounted(title_id))) {
     status = EBUSY; error = "runtime_prepared";
   }
   if (!status && !is_installed(title_id)) status = ENOENT;
@@ -3895,14 +3901,39 @@ static int check_usb_eject_mount(const char *path, const char *source,
   return 0;
 }
 
-static const char *usb_eject_block_reason(void) {
+static const char *usb_eject_block_reason(const char *path) {
   const char *reason = runtime_mutation_block_reason();
   if (reason)
     return reason;
-  if (sm_game_lifecycle_has_active_game())
+  if (sm_shellcore_source_is_protected(path))
     return "game_active";
-  if (sm_shellcore_service_has_prepared_mount())
+  if (sm_shellcore_background_work_blocked())
     return "runtime_prepared";
+  char title_id[MAX_TITLE_ID], runtime_path[MAX_PATH];
+  if (!sm_game_lifecycle_background_title(title_id))
+    return "game_active";
+  if (title_id[0] && !read_mount_link(title_id, runtime_path, sizeof(runtime_path))) {
+    // Native PKGs have no mount.lnk. Resolve their installed storage before
+    // allowing an unrelated volume to be ejected; unknown storage fails closed.
+    sm_game_cache_snapshot_entry_t entry;
+    if (!find_installed_pkg_game(title_id, &entry))
+      return "game_active";
+    if (paths_overlap(entry.path, path))
+      return "game_active";
+    // A native patch or DLC can live on a different volume from the base.
+    static const char *const trees[] = {
+        "user/app", "ps5/user/app", "user/patch", "ps5/user/patch",
+        "user/addcont", "ps5/user/addcont"};
+    for (size_t i = 0; i < sizeof(trees) / sizeof(trees[0]); ++i) {
+      char content[MAX_PATH];
+      int length = snprintf(content, sizeof(content), "%s/%s/%s", path,
+                            trees[i], title_id);
+      struct stat st;
+      if (length < 0 || (size_t)length >= sizeof(content) ||
+          stat(content, &st) == 0 || (errno != ENOENT && errno != ENOTDIR))
+        return "game_active";
+    }
+  }
   return NULL;
 }
 
@@ -3936,7 +3967,7 @@ static void run_usb_eject_job(uint64_t job_id, const char *path,
     error = "runtime_busy";
   }
   if (!status) {
-    error = usb_eject_block_reason();
+    error = usb_eject_block_reason(path);
     if (error)
       status = EBUSY;
   }
@@ -3958,7 +3989,7 @@ static void run_usb_eject_job(uint64_t job_id, const char *path,
   if (!status && (should_stop_requested() || runtime_sleep_mode_active())) {
     status = ECANCELED;
   }
-  if (!status && (error = usb_eject_block_reason()) != NULL)
+  if (!status && (error = usb_eject_block_reason(path)) != NULL)
     status = EBUSY;
   if (!status) {
     // Recheck after the watcher handshake, before resolving a live device ID.
@@ -4629,7 +4660,6 @@ static void handle_directory_create(struct MHD_Connection *connection, struct js
     int length = snprintf(child, sizeof(child), "%s/%s", parent, name);
     if (length < 0 || (size_t)length >= sizeof(child)) status = ENAMETOOLONG;
   }
-  if (!status && sm_shellcore_source_is_protected(child)) { status = EBUSY; error = "game_active"; }
   if (!status) {
     pthread_mutex_lock(&g_storage_job.mutex);
     bool busy = !g_storage_job.accepting || storage_job_is_active(g_storage_job.state) || g_storage_job.pkg_queue_running;
@@ -4643,6 +4673,14 @@ static void handle_directory_create(struct MHD_Connection *connection, struct js
   if (!status) {
     shellcore_mutation = sm_shellcore_try_begin_external_mutation();
     if (!shellcore_mutation) { status = EBUSY; error = "runtime_busy"; }
+  }
+  // A launch may have completed between path resolution and taking the gate.
+  if (!status) {
+    error = runtime_mutation_block_reason();
+    if (error) status = EBUSY;
+    else if (sm_shellcore_source_is_protected(child)) {
+      status = EBUSY; error = "game_active";
+    }
   }
   if (!status && !browser_directory_creatable(parent))
     status = should_stop_requested() || runtime_sleep_mode_active() ? ECANCELED : EACCES;
