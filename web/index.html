@@ -248,7 +248,8 @@
     }
 
     .storage-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-    .storage-path { overflow: hidden; font-size: 13px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+    .storage-path { flex: 1; min-width: 0; overflow: hidden; font-size: 13px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+    .storage-head > .badge { flex-shrink: 0; white-space: nowrap; }
     .storage-meta { overflow: hidden; margin-top: 3px; color: var(--muted); font: 11px/1.4 ui-monospace, monospace; text-overflow: ellipsis; white-space: nowrap; }
     .storage-space { display: flex; justify-content: space-between; gap: 8px; margin-top: 7px; color: var(--muted); font-size: 11px; }
 
@@ -307,6 +308,7 @@
     .smb-connection-info { display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0; }
     .smb-connection-info > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .smb-connection-info > .console-setting { flex-shrink: 0; overflow: visible; }
+    .smb-connection-info > .badge { flex-shrink: 0; overflow: visible; }
     .smb-connection-info strong { max-width: 25%; }
     .smb-connection-path { flex: 1; }
     .smb-connection-user { max-width: 35%; }
@@ -489,6 +491,12 @@
     .package-roots.console-list { display: grid; grid-auto-rows: 68px; gap: 8px; margin-top: 14px; max-height: 610px; overflow-y: auto; padding: 5px; }
     .package-roots .btn { display: flex; flex-direction: column; align-items: stretch; justify-content: center; gap: 5px; text-align: left; min-width: 0; white-space: normal; }
     .package-root-path, .package-root-space { display: block; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .package-root-head { display: flex; align-items: center; gap: 8px; }
+    .no-flex-gap .package-root-head { gap: 0; }
+    .no-flex-gap .package-root-head > :not(:last-child) { margin-inline-end: 8px; -webkit-margin-end: 8px; }
+    .package-root-head .package-root-path { flex: 1; }
+    .package-root-head > .badge, .path-roots .badge, .path-entries .badge { flex-shrink: 0; }
+    .path-roots .badge, .path-entries .badge { margin-inline-start: 8px; -webkit-margin-start: 8px; }
     .package-root-space { color: var(--muted); font-size: 13px; line-height: 1.25; }
     .package-roots .active, .path-roots .active { border-color: var(--blue); background: #203d5e; }
     .package-content { min-width: 0; }
@@ -817,6 +825,8 @@
     .no-flex-gap #pathCreateForm { gap: 10px; margin-bottom: 0; }
     .no-flex-gap #pathCreateForm > * { -webkit-margin-end: 0; margin-inline-end: 0; margin-bottom: 0; }
     .no-flex-gap .path-roots > :not(:last-child), .no-flex-gap .path-entries > :not(:last-child) { margin-bottom: 8px; }
+    .no-flex-gap .storage-head > .badge { -webkit-margin-end: 0; margin-inline-end: 0; }
+    .no-flex-gap .storage-head > .badge + .badge { -webkit-margin-start: 8px; margin-inline-start: 8px; }
     .no-flex-gap .control-bar > :not(:last-child) { -webkit-margin-end: 32px; margin-inline-end: 32px; }
     @media (max-width: 1250px) {
       .no-flex-gap .topbar > :not(:last-child) { -webkit-margin-end: 14px; margin-inline-end: 14px; }
@@ -3611,6 +3621,9 @@
             const path = node("span", "storage-path", mount.mount_point);
             path.title = mount.mount_point;
             head.append(path, badge(mount.filesystem || "FS", "live"));
+            const readOnly = badge("RO");
+            readOnly.hidden = !mount.read_only;
+            head.append(readOnly);
             row.append(head);
             const meta = node("div", "storage-meta", `${mount.filesystem || t("unknown")} · ${mount.source || "—"}`);
             meta.title = mount.source || "";
@@ -3634,18 +3647,21 @@
             }
             renderStorageCapacity(mount, summaryItem, space, meter, mount.remote);
             list.append(row);
-            if (mount.remote) remoteRows.push({ mount, row, summaryItem, space, meter });
+            if (mount.remote) remoteRows.push({ mount, row, summaryItem, space, meter, readOnly });
           });
           // Load shares on demand, one at a time. Offline servers never delay local storage.
           void (async () => {
-            for (const { mount, row, summaryItem, space, meter } of remoteRows) {
+            for (const { mount, row, summaryItem, space, meter, readOnly } of remoteRows) {
               if (request !== state.storageRequest || !list.contains(row)) break;
               try {
                 const capacity = await api("/storage", { path: mount.path });
                 if (request !== state.storageRequest || !list.contains(row)) break;
+                const wasReadOnly = Boolean(mount.read_only);
                 Object.assign(mount, capacity);
+                readOnly.hidden = !mount.read_only;
                 const destination = state.storageDestinations.find(item => item.path === mount.path);
                 if (destination) Object.assign(destination, capacity);
+                if (wasReadOnly !== Boolean(mount.read_only)) updatePackageActions();
                 if (!$("destinationModal").hidden) renderDestinationPicker();
               } catch (_) {
                 if (request !== state.storageRequest || !list.contains(row)) break;
@@ -3778,6 +3794,11 @@
           info.append(activeLabel, node("strong", "", connection.name), node("span", "subtle smb-connection-path", normalizeSmbSharePath(connection.path)),
             node("span", "subtle smb-connection-user", connection.username || (connection.password_set ? "Guest" : t("smbGuestAccess"))));
           for (const field of info.children) field.title = field.textContent;
+          if (connection.read_only) {
+            const mode = badge("RO");
+            mode.title = t("smbReadOnly");
+            info.append(mode);
+          }
           const actions = node("div", "settings-actions");
           actions.append(actionButton(t("smbEdit"), () => editSmbConnection(connection)),
             actionButton(t("smbCheck"), () => changeSmbConnection("check", {
@@ -4392,7 +4413,8 @@
 
       function showCreateDirectory() {
         const picker = state.pathPicker;
-        if (!picker?.data?.can_create_directory || picker.creating || state.storageJob?.active) return;
+        if (!picker?.data?.can_create_directory || picker.creating || state.storageJob?.active ||
+            storagePathReadOnly(picker.data.path, picker.data.root_storage)) return;
         $("pathCreateForm").hidden = false;
         $("pathFolderName").value = "";
         $("pathNewFolder").setAttribute("aria-expanded", "true");
@@ -4402,7 +4424,8 @@
       async function createPickerDirectory(event) {
         event.preventDefault();
         const picker = state.pathPicker, data = picker?.data;
-        if (!data?.path || !data.can_create_directory || picker.creating || state.storageJob?.active) return;
+        if (!data?.path || !data.can_create_directory || picker.creating || state.storageJob?.active ||
+            storagePathReadOnly(data.path, data.root_storage)) return;
         const name = $("pathFolderName").value.trim();
         if (!name || name === "." || name === ".." || /[\/\\:*?"<>|\u0000-\u001f\u007f]/.test(name) ||
             new Blob([name]).size > 255 || (data.path.startsWith("smb://") && /[. ]$/.test(name))) {
@@ -4430,6 +4453,7 @@
       function choosePath(path) {
         const picker = state.pathPicker;
         if (!picker || !path) return;
+        if (picker.target === "customDestination" && storagePathReadOnly(path, picker.data?.root_storage)) return;
         if (path.startsWith("smb://") && (picker.target !== "customDestination" || state.destinationRequest?.operation === "install")) return;
         const input = $(picker.target);
         input.value = path;
@@ -4451,14 +4475,17 @@
           const button = actionButton(path, () => browsePath(path));
           button.disabled = Boolean(picker.creating);
           button.classList.toggle("active", path === selectedRoot);
+          if (storagePathReadOnly(path, data.root_storage)) button.append(badge("RO"));
           roots.append(button);
         });
         $("pathCurrent").textContent = data.path || t("storage");
+        const readOnly = storagePathReadOnly(data.path, data.root_storage);
         $("pathDrives").disabled = Boolean(picker.creating);
         $("pathUp").disabled = !data.path || picker.creating;
-        $("pathNewFolder").disabled = !data.path || !data.can_create_directory || picker.creating || Boolean(state.storageJob?.active);
+        $("pathNewFolder").disabled = !data.path || !data.can_create_directory || readOnly || picker.creating || Boolean(state.storageJob?.active);
         for (const id of ["pathFolderName", "pathCreateSubmit", "pathCreateCancel"]) $(id).disabled = Boolean(picker.creating);
         $("choosePath").disabled = !data.path || picker.creating || (!allowSmb && data.path.startsWith("smb://"));
+        if (picker.target === "customDestination" && readOnly) $("choosePath").disabled = true;
         const destination = state.destinationRequest;
         if (picker.target === "customDestination" && destination && ["copy", "move", "install"].includes(destination.operation)) {
           const source = normalizeBrowserPath(destination.game.path);
@@ -4467,12 +4494,15 @@
         replaceContent(list);
         const entries = (data.entries || []).slice().sort((a, b) => Number(Boolean(b.directory)) - Number(Boolean(a.directory)) || a.name.localeCompare(b.name, currentLanguage));
         if (!data.path) visibleRoots.forEach(path => {
-          list.append(actionButton(path, () => browsePath(path), "package-folder"));
+          const button = actionButton(path, () => browsePath(path), "package-folder");
+          if (storagePathReadOnly(path, data.root_storage)) button.append(badge("RO"));
+          list.append(button);
         });
         else entries.forEach(entry => {
           const button = actionButton(entry.name, () => entry.directory ? browsePath(entry.path) : choosePath(entry.path), entry.directory ? "package-folder" : "");
           button.disabled = Boolean(picker.creating);
           button.dataset.path = entry.path;
+          if (storagePathReadOnly(entry.path, data.root_storage)) button.append(badge("RO"));
           list.append(button);
         });
         if (!list.children.length) list.append(node("span", "subtle", t("listEmpty")));
@@ -4560,6 +4590,10 @@
             () => chooseStorageDestination(destination.path)
           );
           button.setAttribute("data-destination", destination.path);
+          if (destination.read_only) {
+            button.append(badge("RO"));
+            button.disabled = true;
+          }
           choices.append(button);
         });
       }
@@ -4916,7 +4950,10 @@
           button.disabled = Boolean(state.storageJob?.active);
         });
         $("packageList").querySelectorAll(".source-delete").forEach(button => {
-          button.disabled = button.dataset.canDelete !== "true" || Boolean(state.storageJob?.active) || queue.length > 0 || state.packageQueueLoading;
+          const readOnly = storagePathReadOnly(button.dataset.path, state.packages?.root_storage);
+          button.hidden = readOnly;
+          button.parentElement.classList.toggle("source-delete-actions", !button.hidden);
+          button.disabled = readOnly || button.dataset.canDelete !== "true" || Boolean(state.storageJob?.active) || queue.length > 0 || state.packageQueueLoading;
         });
         $("packageQueueStart").disabled = !queue.length || Boolean(state.storageJob?.active) || state.packageQueueLoading;
         $("packageQueueClear").disabled = !queue.length || state.packageQueueLoading;
@@ -5034,14 +5071,30 @@
         return cover;
       }
 
+      function storagePathReadOnly(path, roots = []) {
+        if (!path) return false;
+        let length = -1, readOnly = false;
+        for (const items of [roots || [], state.storageDestinations]) {
+          for (const item of items) {
+            const root = item.path?.length > 1 && item.path.endsWith("/") ? item.path.replace(/\/+$/, "") : item.path;
+            if (!root || (path !== root && !path.startsWith(root === "/" ? root : `${root}/`))) continue;
+            if (root.length > length) { length = root.length; readOnly = Boolean(item.read_only); }
+            else if (root.length === length) readOnly = readOnly || Boolean(item.read_only);
+          }
+        }
+        return readOnly;
+      }
+
       function renderPackageRootCapacity() {
         const local = state.packages?.root_storage || [];
         $("packageRoots").querySelectorAll("button[data-path]").forEach(button => {
           const path = button.dataset.path;
-          const capacity = local.find(item => item.path === path) || state.storageDestinations.find(item => item.path === path) ||
+          const capacity = local.find(item => item.path === path && Number.isFinite(item.total_bytes)) || state.storageDestinations.find(item => item.path === path) || local.find(item => item.path === path) ||
             state.storageDestinations.filter(item => item.mount_point && (path === item.mount_point || path.startsWith(`${item.mount_point}/`)))
               .sort((left, right) => right.mount_point.length - left.mount_point.length)[0];
           const info = button.querySelector(".package-root-space");
+          const mode = button.querySelector(".package-root-mode");
+          if (mode) { mode.hidden = !storagePathReadOnly(path, local); mode.title = t("smbReadOnly"); }
           if (!info) return;
           const known = Number.isFinite(capacity?.total_bytes) && capacity.total_bytes > 0 && Number.isFinite(capacity.available_bytes) && capacity.available_bytes >= 0;
           info.textContent = known
@@ -5065,10 +5118,15 @@
           button.setAttribute("aria-label", path);
           const label = node("span", "package-root-path", path);
           label.setAttribute("dir", "ltr");
+          const head = node("span", "package-root-head");
+          const mode = badge("RO");
+          mode.className += " package-root-mode";
+          mode.hidden = true;
+          head.append(label, mode);
           const info = node("span", "package-root-space");
           info.id = `packageRootSpace${index}`;
           button.setAttribute("aria-describedby", info.id);
-          button.append(label, info);
+          button.append(head, info);
           button.classList.toggle("active", path === selectedRoot);
           roots.append(button);
         });
@@ -5083,6 +5141,7 @@
         if (!data.path) {
           (data.roots || []).forEach(path => {
             const button = actionButton(path, () => refreshPackages(path, true), "package-row package-folder");
+            if (storagePathReadOnly(path, data.root_storage)) button.append(badge("RO"));
             list.append(button);
           });
         } else entries.forEach(entry => {

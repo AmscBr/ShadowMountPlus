@@ -4911,7 +4911,7 @@ static void handle_file_listing(struct MHD_Connection *connection, struct json_o
     if (package_root(root, managed) && stat(root, &st) == 0 && S_ISDIR(st.st_mode)) {
       if (!append_json_string(roots, root)) goto oom;
       struct statfs filesystem;
-      if (packages && statfs(root, &filesystem) == 0 && filesystem_has_capacity(&filesystem)) {
+      if (statfs(root, &filesystem) == 0 && filesystem_has_capacity(&filesystem)) {
         struct json_object *item = filesystem_to_json(&filesystem);
         if (!item || !add_json_string(item, "path", root) || json_object_array_add(root_storage, item) != 0) {
           if (item) json_object_put(item);
@@ -4920,7 +4920,13 @@ static void handle_file_listing(struct MHD_Connection *connection, struct json_o
       }
     }
   }
-  if(!append_smb_paths(roots,false)) goto oom;
+  size_t smb_root_offset = json_object_array_length(root_storage);
+  if(!append_smb_paths(root_storage,true)) goto oom;
+  for (size_t i = smb_root_offset; i < json_object_array_length(root_storage); ++i) {
+    struct json_object *item = json_object_array_get_idx(root_storage, i);
+    const char *root = json_object_get_string(json_object_object_get(item, "path"));
+    if (!append_json_string(roots, root)) goto oom;
+  }
   char resolved[MAX_PATH] = "", parent[MAX_PATH] = "";
   size_t page_limit = 256;
   bool truncated = false;
