@@ -9,10 +9,9 @@ PS5's IPv4 address. Set `api_bind_address=127.0.0.1` for PS5-only access, or
 select a specific PS5 IPv4 address. Existing explicit settings are preserved.
 `api_port` accepts values from 1 through 65535.
 These settings are applied on runtime config reload. `api_enabled` defaults to
-`1`; setting it to `0` stops the listener and joins the libmicrohttpd service
-and worker threads. Re-enabling it restarts the HTTP service without restarting
-the payload. An already-running storage job is allowed to finish, but no new
-jobs can be submitted while the API is disabled.
+`1`; setting it to `0` stops the HTTP service. Re-enabling it restarts the
+service without restarting the payload. An already-running storage job is
+allowed to finish, but no new jobs can be submitted while the API is disabled.
 
 `/data/shadowmount/index.html` overrides the web interface bundled into the
 payload. If the file is absent, the same `web/index.html` built into the ELF is
@@ -21,21 +20,15 @@ served automatically, so enabling the API always provides a landing page.
 The API has no authentication. Bind it to a network-facing address only on a
 trusted network.
 
-The internal `/system_tmp/shadowmount.sock` Unix socket remains private to the
-SceShellCore bridge and must not be used by third-party applications.
-
-The HTTP service uses libmicrohttpd with eight fixed polling workers. It accepts
-up to 32 concurrent connections, uses a listen backlog of 32 and closes idle
-connections after 15 seconds. Slow clients therefore do not serialize unrelated
-requests or create an unbounded number of threads. If daemon startup fails, the
-service retries with an interruptible 250 ms to 5 s backoff. Suspend, shutdown
-and config reload stop the daemon cleanly; resume recreates it.
+The service accepts up to 32 concurrent connections and closes idle
+connections after 15 seconds. The listener resumes automatically after suspend.
 
 Every JSON API operation uses `POST`, includes `Content-Type: application/json`
-and contains one JSON object. `GET /` returns the optional web interface and the
-icon endpoint returns PNG bytes. Connections are closed after one response;
-chunked request bodies are not supported. The maximum request body is 4096 bytes.
-The parsed request-header limit remains 8192 bytes.
+and contains one JSON object. `GET /` returns the web interface; icon endpoints
+return PNG or JPEG bytes. Ordinary API connections close after one response;
+the streaming endpoints described below support persistent connections and
+binary uploads. Chunked request bodies are not supported. The maximum JSON
+request body is 4096 bytes; the request-header limit is 8192 bytes.
 
 All responses include `Access-Control-Allow-Origin: *`. Browser preflight
 requests using `OPTIONS` are supported and allow `GET`, `POST`, the `Content-Type`
@@ -50,27 +43,28 @@ device.
 | `/` | GET | Serve `/data/shadowmount/index.html`, or the embedded page when it is absent |
 | `/api/v1/version` | `{}` | API and ShadowMount versions plus capabilities |
 | `/api/v1/storage` | `{}` or `{"path":"smb://NAS"}` | Local storage listing and active SMB destinations, or capacity for one SMB path |
+| `/api/v1/storage/eject` | `{"path":"/mnt/usb0","source":"/dev/da1p1","mount_id":"1122334455667788"}` | Safely unmount an external USB drive; returns an asynchronous storage job |
 | `/api/v1/images` | `{}` | Complete image snapshot |
 | `/api/v1/scan` | `{"reset_attempts":false}` | Queue an immediate full rescan; optionally reset title and image retry counters |
 | `/api/v1/manual/list` | `{}` | List direct paths to individual game folders or images from `manual.lst` |
 | `/api/v1/manual/add` | `{"path":"/mnt/usb0/games/PPSA12345"}` | Idempotently add one game source to `manual.lst` |
 | `/api/v1/manual/remove` | `{"path":"/mnt/usb0/games/PPSA12345"}` | Remove matching source lines from `manual.lst` |
-| `/api/v1/settings` | `{}` | Read web-managed runtime settings and scan paths |
+| `/api/v1/settings` | `{}` | Read API-managed runtime settings and scan paths |
 | `/api/v1/smb` | `{"action":"list"}` | List, save, remove or check named SMB2/SMB3 connections |
-| `/api/v1/sources/delete` | `{"path":"smb://NAS/Game.pkg","confirm":true}` | Delete a permitted browser-selected folder, image or PKG through the shared storage worker |
+| `/api/v1/sources/delete` | `{"path":"smb://NAS/Game.pkg","confirm":true}` | Start asynchronous deletion of a permitted folder, image or PKG |
 | `/api/v1/files/mkdir` | `{"path":"smb://NAS","name":"New folder"}` | Create one directory beneath an existing local or SMB parent; return its full path |
-| `/api/v1/settings/update` | `{"debug":true,"quiet_mode":false,"update_emulators":true,"fakelib_default_mode":"full","auto_update_ampr":false,"auto_remove_missing_games":false,"auto_remove_missing_delay_seconds":300,"allow_lan_access":true,"fan_target_temperature":0,"scan_paths":["/mnt/usb0/games"]}` | Atomically update the web-managed part of `config.ini` |
-| `/api/v1/debug-log` | `{"max_bytes":131072}` | Read a bounded tail of `debug.log` for the web log dialog |
-| `/api/v1/kernel-log` | `{"max_bytes":131072}` | Read a bounded tail of the SDK kernel-log stream used by crash detection |
+| `/api/v1/settings/update` | `{"debug":true,"quiet_mode":false,"update_emulators":true,"fakelib_default_mode":"full","auto_update_ampr":false,"auto_remove_missing_games":false,"auto_remove_missing_delay_seconds":300,"allow_lan_access":true,"fan_target_temperature":0,"scan_paths":["/mnt/usb0/games"]}` | Update the API-managed part of `config.ini` |
+| `/api/v1/debug-log` | `{"max_bytes":131072}` | Read a bounded tail of `debug.log` |
+| `/api/v1/kernel-log` | `{"max_bytes":131072}` | Read a bounded tail of the kernel log |
 | `/api/v1/games` | `{"include_size":false}` | Detailed game snapshot; optional physical source-size calculation |
-| `/api/v1/games/info` | `{"title_id":"PPSA12345"}` | Detailed app.db and source information for one game; size is always calculated |
+| `/api/v1/games/info` | `{"title_id":"PPSA12345"}` | Detailed installed-game and source information for one game; size is always calculated |
 | `/api/v1/games/fakelib` | `{"title_id":"PPSA12345","mode":"emulators"}` | Persist the PS5 game's fakelib policy for its next launch |
 | `/api/v1/games/fakelib` | `{"title_id":"PPSA12345","ignore_global_fakelib":true}` | Ignore the global fakelib overlay for this PS5 game on its next launch |
 | `/api/v1/games/icon?title_id=PPSA12345[&size=thumb\|card\|cover]` | GET | Stream the original PNG or a cached icon variant |
 | `/api/v1/games/mount` | `{"title_id":"PPSA12345","mode":"ro"}` | Mount a managed game, optionally overriding its image mode with `ro`/`rw` |
 | `/api/v1/games/unmount` | `{"title_id":"PPSA12345"}` | Unmount a managed game |
-| `/api/v1/games/uninstall` | `{"title_id":"PPSA12345"}` | Request uninstallation through AppInstUtil |
-| `/api/v1/games/content/uninstall` | `{"title_id":"PPSA12345","kind":"patch"}` or `{"title_id":"PPSA12345","kind":"dlc","content_id":"…"}` | Remove only the patch or the specified installed DLC through AppInstUtil |
+| `/api/v1/games/uninstall` | `{"title_id":"PPSA12345"}` | Request game uninstallation |
+| `/api/v1/games/content/uninstall` | `{"title_id":"PPSA12345","kind":"patch"}` or `{"title_id":"PPSA12345","kind":"dlc","content_id":"…"}` | Remove only the patch or the specified installed DLC |
 | `/api/v1/games/move` | `{"title_id":"PPSA12345","destination_dir":"/mnt/usb1/games"}` | Start an asynchronous move job |
 | `/api/v1/games/copy` | `{"title_id":"PPSA12345","destination_dir":"/mnt/usb1/games"}` | Start an asynchronous copy job |
 | `/api/v1/games/unpack` | `{"title_id":"PPSA12345","destination_dir":"/mnt/usb1/games","delete_source":false}` | Mount an image read-only and asynchronously copy the game into a folder |
@@ -98,64 +92,37 @@ curl -sS http://127.0.0.1:10101/api/v1/games/mount \
   -d '{"title_id":"PPSA12345","mode":"rw"}'
 ```
 
-An autonomous example library UI is provided as `web/index.html`. Copy it to
-`/data/shadowmount/index.html` on the PS5 and open the configured API listener
-in a browser, for example `http://192.168.1.50:10101/`. The file is read for
-each request, so it can be replaced without restarting ShadowMount. If it is
-missing, `GET /` returns HTTP 404 with the normal JSON error response.
-The bundled interface covers all 31 console locales, selects the closest match
-from the browser locale, and keeps a manually selected locale in local storage.
-The eight most recent operations are also kept in that browser's local storage,
-including their original event times, and restored after a page reload.
+## Files and SMB connections
 
-## SMB connections
+`/packages` includes `root_storage` records with available and total filesystem
+capacity for local roots. Folders on the same filesystem share its capacity;
+these values are not recursive folder-size measurements.
 
-The installation **Drives and folders** sidebar shows available and total
-filesystem capacity beneath every root path. `/packages` includes `root_storage`
-records for local roots; folders on the same filesystem share its capacity.
-These are filesystem statistics, not recursive folder-size measurements.
-SMB roots reuse the storage overview's per-path capacity results. Completion,
-failure or cancellation of copy, move, delete and install jobs refreshes the
-storage snapshot and, when visible, the installation listing. Opening the tab
-or using its Refresh button also updates capacity. Older asynchronous storage
-responses cannot overwrite a newer snapshot, and capacity updates preserve
-the focused root button.
+`POST /api/v1/files/mkdir` accepts `path` for an existing parent and `name` for
+one new directory, and returns its full path. `/files` reports
+`can_create_directory` for the selected parent. The name must fit 255 UTF-8
+bytes and cannot contain path separators, control characters or reserved
+characters. Existing paths are not overwritten. Read-only and system parents
+are rejected; writable scan roots remain valid parents. Creating a directory
+does not register a game or request a scan.
 
-The directory picker offers **New folder** when `/files` returns
-`can_create_directory:true`. It accepts one folder name, creates it through
-`POST /api/v1/files/mkdir`, and opens the result for selection. The name must
-fit 255 UTF-8 bytes and cannot contain path separators, control characters or
-reserved characters. Existing paths are not overwritten. Read-only and system
-parents are rejected by the API; writable scan roots remain valid parents.
-SMB create rights are checked without writing a probe file. Creation uses the
-existing mutation gates and does not register a game or request a scan.
-
-Installation listings include `can_delete` for each entry. The trash icon is
-disabled when that value is false, a storage job is active, or packages are
-queued. `POST /api/v1/sources/delete` requires an exact `path` and boolean
+Installation listings include `can_delete` for each entry.
+`POST /api/v1/sources/delete` requires an exact `path` and boolean
 `confirm:true`; it accepts local browser roots and SMB aliases and returns
-HTTP 202 with the normal storage-job response. The root itself cannot be
-deleted. Local system paths and read-only paths are protected. Local folders
-and images in scan roots, and folders containing scan roots, cannot be deleted
-here; PKGs in scan roots are allowed. Active/prepared-game protection remains
-in effect. Registered local descendants are released before recursive deletion;
-affected titles or failed runtime cleanup trigger a local recovery scan. Ordinary
-unregistered-file deletion and SMB-only deletion do not
-trigger a local scan. The worker rechecks policy before deleting; cancellation
-is available during preparation/measurement and closes when deletion starts.
-For SMB, an OPEN/CLOSE access probe checks parent write and target delete rights
-and read-only attributes without creating, writing or deleting a probe file.
+HTTP 202 with the storage-job response. The root itself cannot be deleted.
+Local system and read-only paths are protected. Local folders and images in
+scan roots, and folders containing scan roots, cannot be deleted here; PKGs in
+scan roots are allowed. Active/prepared-game protection applies. Deletion of
+registered local sources or failed runtime cleanup requests a recovery scan;
+unregistered-file and SMB-only deletion do not. Cancellation is available
+during preparation/measurement and closes when deletion starts.
 
 `POST /api/v1/storage` with `{"path":"smb://NAS"}` queries capacity for one
 active saved SMB connection or a directory beneath it. It returns `status`,
 `path`, `filesystem`, `remote`, `total_bytes`, `free_bytes`, `available_bytes`,
 `used_bytes` and `read_only`. Available space uses the server's `f_bavail`,
 which can reflect the connected user's quota. Errors affect only that request.
-The default `{}` storage listing does not contact SMB servers. The web
-interface renders local storage immediately, then queries active shares
-sequentially on each refresh. It displays capacity and usage in the storage
-overview, storage summary and destination picker; a failed query shows
-unavailable capacity rather than zero. There is no periodic capacity poll.
+The default `{}` storage listing does not contact SMB servers.
 
 `POST /api/v1/smb` accepts `action=list|save|remove|check` (default `list`).
 `save` and `check` accept `name`, `path`, `username`, `password`, `active` and
@@ -173,8 +140,8 @@ and `connections`: objects containing `name`, `path`, `username`, `active` and
 `password_set`. Passwords are never returned. `check` tests the submitted
 settings without saving, including an inactive connection, and reports the
 negotiated SMB2/SMB3 dialect (for example 0x0210 or 0x0311). It verifies directory
-access, not write permission. `save` validates syntax and atomically persists
-up to 16 connections in `/data/shadowmount/smb.json` with permissions 0600.
+access, not write permission. `save` validates syntax and persists up to 16
+connections.
 Save/remove return `EBUSY` while a storage job or PKG queue is active.
 
 Active aliases are exposed as `smb://<name>[/relative/path]` in `/packages`,
@@ -184,72 +151,27 @@ and `filesystem=smb`; capacity fields are omitted to avoid network polling.
 entries per page. Advance by this limit when `truncated=true`.
 `/games/copy`, `/games/move` and `/games/unpack` accept an SMB destination.
 `/sources/install` accepts SMB folders and images as sources with a local
-destination. `/packages/install` and the package queue accept SMB PKGs; the
-payload streams their requested ranges to AppInstUtil and closes the source
-on completion, cancellation, sleep or shutdown. Local PKGs retain direct native
-path installation. No SMB path is added to scanner roots or manual.lst;
+destination. `/packages/install` and the package queue accept SMB PKGs; their
+source must remain available until installation completes or is cancelled.
+No SMB path is added to scanner roots or `manual.lst`;
 installed folder/image copies are registered using their local destination.
 
-SMB operations negotiate SMB2/SMB3, use bounded I/O deadlines, and do not create
-background watchers or reconnect loops. Cross-filesystem moves delete the
-source only after copying and flushing the complete destination; a failed or
-cancelled copy preserves its source. If the share becomes unreachable, partial
-destination cleanup may require manual removal after reconnecting.
-
-Copies of at least 512 KiB between local storage and SMB use two buffers to
-overlap source reads and destination writes. Files copied from SMB to local
-storage receive permissions `0777`, applied explicitly after writing so the
-process umask does not restrict them. Failure to set permissions fails the copy.
-Medium files use blocks from
-256 KiB to 1 MiB; large files use 4 MiB blocks. Reads are bounded by the expected
-remaining source size and probe EOF with one byte. Growing sources continue
-streaming after that probe rather than being truncated to the cached size.
-The temporary reader is stopped
-and joined before descriptors are closed or partial destinations are removed;
-resource shortages fall back to sequential copying. Flush and move finalization
-still occur only after the complete data transfer. SMB I/O keeps at most eight
-requests outstanding, refilling completed slots immediately and respecting the
-server's negotiated request size (64 KiB for SMB2.0.2). Parallel requests no
-longer require a file of at least 256 MiB. The five-second I/O deadline follows
-response progress rather than the total duration of a moving request window.
-Short replies caused by a small credit budget drain the active window before
-their remaining ranges are completed, avoiding invalid zero-credit requests.
-SMB receive/send buffers smaller than 512 KiB are enlarged when the socket
-supports it. Larger system defaults and signing/encryption policy are retained.
-An open directory pins its authenticated session for child-file operations;
-files may outlive directory enumeration and release that session on last close.
-Directory creation and removal also reuse a matching pinned session.
-Reuse is scoped to the directory's calling thread and requires matching server,
-share and credentials, keeping independent API requests isolated. A transport failure
-invalidates the owner and all its borrowed handles, including cached directory
-entries; it never silently reconnects an existing file. Write-only destinations
-fall back to independent connections when an optional directory pin is denied.
-Directory uploads keep at most four destination files open, overlapping each
-asynchronous server flush with subsequent file transfers. All flush and close
-results are checked before completing the directory or finalizing a move.
-Queues drain before entering a subdirectory, releasing its session, or removing
-a partial destination. Single-file copies and write-only shares retain
-synchronous flush completion.
-For transfers of at least 32 MiB, `[SMB] copy pipeline` logs `elapsed_ms`,
-`data_ms`, `read_ms`, `write_ms`, `wait_ms`, `open_ms`, `flush_ms`, `close_ms`
-and `deferred_ms`
-once per file. `elapsed_ms` covers the complete file copy including open, flush
-and close; `data_ms` isolates the data pipeline. `deferred_ms` measures time
-between queuing a flush and consuming its result; `flush_ms` is the remaining
-wait at that point. Deferred completion overlaps later file transfers, so
-per-file elapsed times must not be added to estimate total copy time. Read
-and write times also overlap.
+SMB operations use SMB2/SMB3. Cross-filesystem moves delete the source only
+after the complete destination has been copied and flushed. Failed or
+cancelled copies preserve their source. If the share becomes unreachable,
+partial destination cleanup may require manual removal after reconnecting.
+Files copied from SMB to local storage receive permissions `0777`; failure
+to set them fails the copy.
 
 ## Responses
 
 JSON responses include `X-ShadowMount-Local-Time` when the console's local-time
 conversion succeeds. Its integer value is Unix seconds shifted by the console's
 current timezone and daylight-saving offset. Treat it as local wall-clock fields
-(decode with UTC calendar functions), not as an absolute UTC timestamp. The web
-interface uses this value to timestamp its recent operations independently of
-the browser's timezone and clock. Older payloads omit this optional header.
+(decode with UTC calendar functions), not as an absolute UTC timestamp.
+Older payloads omit this optional header.
 
-Every response contains numeric `status`. It is zero on success, or a positive
+JSON API responses contain numeric `status`. It is zero on success, or a positive
 errno value on failure. Error responses also contain `error` and use an
 appropriate HTTP status such as 400, 404, 409, 413 or 415.
 
@@ -272,46 +194,25 @@ applies to folder, image and installed-PKG applications. Ordinary PS4/PS5 games
 allow the same work while AppFocus confirms they are in the background. The
 live application's own title, source, and backing image chain remain protected;
 operations affecting them return `game_active`. Returning to an ordinary game,
-unknown focus, and pending launches/exits defer new background work. Focus
-changes wake the scanner; unblocking makes the next full resync due immediately.
+unknown focus, and pending launches/exits defer new background work.
 
 Image items expose `path`, `mount_point`, `size`, modification time, `unit_id`,
-`backend`, `complete`, `source_available`, `mapped` and `mounted`. Game items
-combine ShadowMount's game cache with `tbl_contentinfo` from app.db. They expose
+`backend`, `complete`, `source_available`, `mapped` and `mounted`. Game items expose
 the physical `path`, `runtime_path`, `source_type` (`folder` or `image`), image
 filesystem type, PS4/PS5 platform, title/content IDs, name, last-launch and
 install timestamps, game `version`, relative `icon_url`, app.db size, and runtime state.
 `backport_path` contains the directory found by the shared backport resolver,
 or an empty string when absent. It respects configured roots, the internal
 fallback and title-prefix matching. This reports presence independently of
-fakelib policy or whether an overlay is currently mounted. The library shows
-a Backport badge and details display the resolved path.
-Icon requests without `size` return the original PNG. `size=thumb` retains the
-legacy PNG variant capped at 128 pixels. `size=card` and `size=cover` are capped
-at 256 and 512 pixels: opaque icons use JPEG quality 90 with 4:4:4 sampling;
-icons containing alpha remain PNG. If JPEG would exceed the source PNG size,
-a PNG candidate is compared and retained when smaller (the original bytes
-are reused when no resizing is needed). The response Content-Type is `image/jpeg`
-or `image/png` as appropriate. Aspect ratio is preserved and small sources
-are never enlarged. Resizing averages source areas with premultiplied alpha.
-The web UI selects card/cover using responsive image sizes and screen density,
-loads covers lazily, and falls back to the original if a cached request fails.
+fakelib policy or whether an overlay is currently mounted.
 
-Variants are generated only on demand and published through unique temporary
-files plus atomic rename. Cache v3 keys include the variant size and a source
-fingerprint (path, device/inode, size and nanosecond modification time); the
-same fingerprint and cache version also version the public icon URL. A source
-changed during encoding is not published under its old key. On a cache miss,
-obsolete generations and abandoned temporary files older than five minutes
-for that title are removed, while its current variants remain. No worker or
-periodic cache scan is added. Generation stops on shutdown/rest requests, and
-an unavailable cache falls back to serving the original PNG.
+Icon requests without `size` return the original PNG. `size=thumb` returns a
+PNG capped at 128 pixels. `size=card` and `size=cover` are capped at 256 and 512
+pixels and may return JPEG or PNG, as indicated by `Content-Type`. Aspect ratio
+is preserved and small sources are never enlarged. If a variant is unavailable,
+the original PNG is returned. Icon URLs are versioned when the source changes.
 
-`version` comes from `AppInfoJson` (`CONTENT_VERSION`, falling back to `APP_VER`)
-and is an empty string when unavailable.
-The timestamp values from `AppInfoJson` (`#_last_access_time` and
-`#_install_time`) take precedence over the stale top-level columns when they
-are present.
+`version` is an empty string when unavailable.
 
 `POST /api/v1/games` does not walk game directories by default. Set
 `include_size=true` to add `size_status` and, on success, `size_bytes` to every
@@ -343,66 +244,32 @@ errno-style status and omits its bytes, without publishing a partial total.
 Symlink directories are not followed. Separate patch files are measured;
 updates merged into the base package remain part of the game's main size.
 
-The web detail dialog shows a compact colored bar and a labeled legend for
-the source, patches, DLC, saves and downloads. Their sum is shown only when
-all five measurements succeed. The app.db figure is displayed separately as
-a system reference and is excluded from this total.
-
 Details also return `patch_info_status`, a `patch` object (`installed`,
 `version`, `size_bytes`), `dlc_info_status`, a `dlc` array and
-`dlc_info_truncated`. Patch metadata uses `GetPatchInstallStatus`; DLC records
-use `GetAddcontInfoList2` with 16-entry pages and a 256-record cap. The native
-list's returned count is the total matching count, not the page length. DLC
-records contain `content_id`, `title_name`, `version`, `size_status` and, when
-valid, `size_bytes`. Native errors leave filesystem size results intact.
+`dlc_info_truncated`. The DLC list is capped at 256 records. Records contain
+`content_id`, `title_name`, `version`, `size_status` and, when valid,
+`size_bytes`. Metadata errors leave filesystem size results intact.
 Library entries include `patch_info_status` and `dlc_info_status`, with
 `has_patch` and `dlc_count` present only when their respective query succeeds.
-These use GetPatchInstallStatus and AppGetAddcontNum, without file size scans
-or DLC enumeration. Since patch download history may be absent for an installed
-patch, presence also checks regular, nonempty `patch.pkg` files in the same
-five internal/ext0/ext1 roots used for patch sizes. This rule is shared by
-the library version marker and detail card; installation progress still uses native
-download status alone. In the filesystem fallback, the existing game version
-and measured patch size supply detail metadata.
-The library shows a localized patch marker beside the version and a DLC badge
-with the count; failed queries do not display a badge.
 
-The web dialog appends the localized original version in parentheses beside
-the current version when a patch is installed. `base_version` is read from the
-base PKG only for game details, with title ID and base-PKG classification
-checks. Patch detection and original-version annotations apply only to PKG games. Empty means the original version
-could not be read; the UI displays unavailable rather than assuming 1.00.
-A button with an SVG
-disclosure arrow expands DLC names, content IDs, versions and system-recorded sizes.
-Games without listed DLC do not show an empty disclosure button. Expanded
-lists may scroll within the detail body; the bottom action row stays visible.
+`base_version` reports the original base-PKG version in game details, or an
+empty string if unavailable. Patch detection and `base_version` apply only to
+PKG games.
 
-Patch removal is available in the bottom action row; each expanded DLC row has its
-own delete button. Both actions require confirmation and reload the card's
-metadata and sizes. The content uninstall route checks runtime/scanner guards
-and serializes against storage submissions. DLC deletion passes the content ID
-suffix in a zero-padded 32-byte directory-name buffer to AppUnInstallAddcont;
-patch deletion calls AppUnInstallPat. Neither requests whole-game removal.
-The `uninstall_game_content` capability advertises the route.
+`POST /api/v1/games/content/uninstall` removes only the patch (`kind=patch`) or
+the DLC identified by `content_id` (`kind=dlc`). Runtime protections and
+conflicting storage operations can block the request. The
+`uninstall_game_content` capability advertises this route.
 
 `system_content_size_status` and, on success, `system_content_size_bytes`
-expose `AppGetSize` for comparison. This is a system-accounted installed total,
-not the physical source size.
-
-`GetContentSize` with a base-content record returned the system-accounted
-total too; `GetContentSize2` returned `0x80F50005` on the tested titles.
-For DEATHLOOP's DLC the native record reported 1,245,184 bytes while its files
-totalled 1,246,202 bytes. These different accounting scopes are why the size
-bar retains filesystem counts; native totals never replace folder/image sizes
-or get added to the bar a second time. These calls add no background polling.
-
-The `game_data_sizes` capability advertises these fields.
+report the system-accounted installed total, separately from physical source
+size. The `game_data_sizes` capability advertises the size fields.
 
 `POST /api/v1/storage` with `{}` returns capacity-bearing mounted filesystems and omits
 virtual mounts such as `devfs`, `nullfs` and `tmpfs`. Each item contains the
 device `source`, `mount_point`, `filesystem`, `total_bytes`, `free_bytes`,
 `available_bytes`, `used_bytes` and `read_only`. `available_bytes` is the space
-available for new files; `used_bytes` is calculated against that value. The
+available for new files; `used_bytes` is calculated against that value.
 Local entries in the `destinations` array contain writable, currently available managed
 `/data/homebrew`, `/mnt/ext*/homebrew` and `/mnt/usb*/homebrew` paths. Scanned
 `/mnt/ext*` and `/mnt/usb*` roots are included as additional destinations. Each
@@ -410,20 +277,37 @@ item adds the selectable `path` to the same filesystem metadata. Writable nullfs
 aliases such as `/data/homebrew` are valid destinations but remain omitted from
 the mount overview to avoid duplicates. Active SMB aliases are additional remote
 destinations; their capacity is queried separately as described above.
-Their `source` is the configured server/share path; the web overview displays
-it in UNC form beneath the alias.
+Their `source` is the configured server/share path.
 `/mnt/ext1/homebrew` is also advertised
 when its writable ext1 mount is available and only the homebrew folder is absent;
 listing storage does not create it. The folder is created on an explicit
 copy/move/unpack request. Other missing destination directories remain invalid.
-For USB game sources, the web picker places `/data/homebrew` and an available
-`/mnt/ext1/homebrew` before other choices.
 
-The web storage overview uses `mounts` to show the internal `/user` filesystem
-and mounted `/mnt/ext0..1` and `/mnt/usb0..7` disks once per filesystem/source,
-plus active remote connections from `destinations`.
-System partitions and game mounts are omitted from that overview. The separate
-`destinations` list supplies folder choices for copying, moving and unpacking.
+`storage_eject` advertises `POST /api/v1/storage/eject`. Mount items add
+`ejectable`: true for `/mnt/usb0..7` and extended USB storage `/mnt/ext0`;
+internal storage, M.2 (`/mnt/ext1`), and SMB destinations are excluded. Send the
+`mount_point` as `path`, its current `source`, and the opaque 16-character
+hexadecimal `mount_id` from the same listing unchanged. It identifies the
+mounted filesystem so a replacement disk cannot inherit an old request.
+Missing or malformed IDs return HTTP 400; a stale
+source or ID returns HTTP 409 (`usb_mount_changed`). Identity is checked again
+immediately before issuing the system command. The accepted response is HTTP 202 with `operation=eject`;
+poll the existing `/games/storage/status` route. Cancellation is possible only
+before finalizing starts. `completed` means the selected filesystem has been
+unmounted, not merely that the system accepted the request. `usb_eject_unconfirmed`
+means keep the drive connected and refresh storage; no automatic retry occurs.
+
+Ejection is blocked by active games, pending installation, prepared runtime
+mounts, attached images, ShadowMount-owned title mounts and other mounted
+partitions of the same physical device. Dependency failures distinguish
+`usb_mount_busy`, `usb_partition_busy` and `usb_image_busy`. A failed job
+includes `blocking_source` and `blocking_target`: a physical image path, or the
+source and target of one blocking mount. Empty fields mean no dependency path
+is available. Idle applications may retain mounts or attached images, so these
+paths do not imply that an application is running. Release the listed
+dependency and retry explicitly. Dependency details are cleared when a new
+job starts. `usb_disk_busy` identifies other dependency/precondition failures;
+`usb_eject_failed` indicates a system error.
 
 `copy` and `move` preserve the source basename and require an existing
 destination under a configured non-runtime scan root (with the ext1 homebrew
@@ -433,9 +317,8 @@ only one of these jobs can be active. A second start returns HTTP 409/`EBUSY`.
 `delete` still requires `confirm=true`. If a cached source is already absent
 (`ENOENT` or `ENOTDIR`), it instead returns HTTP 200 with `source_missing=true`
 and `scan_queued=true`, without creating a job or directly uninstalling the title.
-The scanner reconciles stale cache and links when runtime is safe. An absent
-source can also mean disconnected storage; permission and I/O errors remain
-failures. Unknown titles still return HTTP 404.
+An absent source can also mean disconnected storage; permission and I/O errors
+remain failures. Unknown titles still return HTTP 404.
 The status response contains the phase,
 byte-based percentage, processed/total bytes,
 processed/total files, average processed-byte rate, elapsed time and final
@@ -466,10 +349,9 @@ A partial copy destination is removed. A delete job becomes non-cancellable
 when it enters `deleting`, before its first physical removal. Likewise, once a
 cross-filesystem move enters
 `finalizing` and starts deleting the complete source, cancellation is rejected
-to avoid leaving the only source tree partially removed. The scanner and
-ShellCore mutation gates remain held for the whole job and a rescan is queued
-after success, cancellation or failure. `move` uses `rename()` on one
-filesystem and exact copy-plus-delete across filesystems. A backing image
+to avoid leaving the only source tree partially removed. A rescan is queued
+after success, cancellation or failure. Cross-filesystem moves delete the
+source only after copying the complete destination. A backing image
 shared by several titles is handled as one physical source.
 `unpack` uses the same worker and progress endpoint. It mounts the requested
 image read-only, copies the mounted game tree to `<destination_dir>/<TITLE_ID>`,
@@ -528,18 +410,15 @@ image in the other mode returns HTTP 409 and `EBUSY`.
 With `persistent_image_mounts=1`, unmounting a game releases its per-title
 runtime layers but keeps the backing image mounted.
 
-The scan command queues the existing full-scan path and wakes the scanner. If a
-game runtime mount is active, the request remains pending until the lifecycle
-watcher reports that scanning is safe; it does not create a parallel scan.
-By default retry counters are preserved. With `reset_attempts=true`, immediately
-before the requested full scan starts it clears all title registration and
-install/remount counters plus all path-owned image-mount counters. If several
-scan requests merge while one is pending, one `true` request keeps the reset
-enabled for that scan.
+The scan command queues a full scan. If the runtime is busy, the request
+remains pending until scanning is safe. By default retry counters are preserved.
+With `reset_attempts=true`, title registration, installation and image mount
+retry counters are cleared before the requested scan starts. If pending scan
+requests are combined, one `true` request keeps the reset enabled for that scan.
 
 Manual entries are direct paths to individual game directories or image files;
-they are not recursive scan roots. Updates atomically replace `manual.lst` and preserve comments and
-unrelated lines. Adding an existing normalized path and removing a missing path
+they are not recursive scan roots. Updates preserve unrelated entries. Adding
+an existing normalized path and removing a missing path
 both succeed with `changed: false`. A real change queues a scan. Removing a
 manual source does not uninstall its game; use the uninstall route separately
 when both operations are desired.
@@ -552,54 +431,38 @@ The settings update owns only `debug`, `quiet_mode`, `update_emulators`,
 `auto_remove_missing_delay_seconds`,
 `api_bind_address`, `fan_target_temperature`, and repeated `scanpath` keys. The
 `allow_lan_access` field maps to `0.0.0.0` when enabled and `127.0.0.1` when
-disabled. It atomically rewrites those keys while preserving every unrelated
-`config.ini` line and comment, then wakes the scanner so its existing
-runtime-reload path applies the values and rebuilds scan watches. `api_enabled`
-is deliberately config-only, so the web interface cannot disable the service it
-needs to restore access. A fan target of `0` means system control; explicit
+disabled. Updates preserve unrelated settings and apply through runtime reload.
+`api_enabled` is config-only and cannot be changed through this endpoint.
+A fan target of `0` means system control; explicit
 values must be 50 through 91 degrees Celsius. Unlike `manual.lst`, `scan_paths`
 are recursive library roots. The settings response contains only explicit
 custom roots, never compile-time defaults or internal image-mount roots. Saving
 an empty array removes the custom override and restores compile-time defaults.
 
-`GET /api/v1/settings` returns `fakelib_default_mode` (`full`, `emulators`, or
+`POST /api/v1/settings` returns `fakelib_default_mode` (`full`, `emulators`, or
 `disabled`; initial default `full`). The settings update accepts the same
 optional field; omission preserves its current value for older clients.
 Per-title overrides take priority, and mode changes apply on the next launch.
 
 The debug-log route returns at most 256 KiB and never modifies or rotates the log.
-The kernel-log route reads a `sceKernelDebugGetSdkLogText` snapshot.
+The kernel-log route returns a kernel-log snapshot.
 
-Uninstall returns success after `sceAppInstUtilAppUnInstall` accepts the
-request; the on-disk removal itself is asynchronous. It returns `EBUSY` while a
+Uninstall returns success after the system accepts the request; the on-disk
+removal itself is asynchronous. It returns `EBUSY` while a
 game is active, another title owns a prepared runtime mount, or batch install
 work is pending. An unchanged discoverable source may be installed again by a
 later scan, so remove its manual entry or source first when that is not wanted.
 
-## Test client
+## Game installation and browser streaming
 
-Run the host-side Python client while ShadowMount is active:
+The `pkg_install`, `pkg_browser_stream` and `install_game_source` capabilities
+advertise package installation, browser streaming and folder/image installation.
 
-```sh
-python3 tools/api_test.py 192.168.1.50 10101
-```
-
-It validates CORS preflight, the version response and complete image/game
-snapshots. It also runs 16 parallel version requests while one client holds an
-incomplete request open, then selects the first safe managed game for a
-mount/unmount cycle. The mutation test is skipped if there is no candidate or
-the runtime is busy.
-
-
-### Game installation and browser streaming
-
-`pkg_install`, `pkg_browser_stream` and `install_game_source` advertise the
-Installation tab. The main tabs are Library, Installation and Settings, in that
-order; shoulder-button navigation follows the same order.
 `POST /api/v1/packages` accepts `{"path":"/data/pkgs","offset":0}` and returns
 `path`, `parent`, available `roots`, `entries`, `offset` and `truncated`.
-An empty path lists available roots. Each page contains up to 256 folders, images or PKGs;
-advance `offset` by 256 when `truncated` is true. Browsing is non-recursive and
+An empty path lists available roots. Each page contains up to 256 local entries
+or 32 SMB entries; advance `offset` by the returned `limit` when `truncated`
+is true. Browsing is non-recursive and
 restricted to internal `/data`, mounted `/mnt/usb0..7` and `/mnt/ext0..1`.
 `/data/pkgs` remains a shortcut. Symlinks and installed content trees are excluded. Valid package entries expose
 `title_id`, `title_name`, `content_id`, `version`, `kind` (base/patch/dlc) and
@@ -614,7 +477,7 @@ during browsing (`size_bytes=0`); installation measures the whole source.
 
 `POST /api/v1/sources/install` accepts `path` and `destination_dir`. It copies
 the source directory or intact image under its original name into the selected
-directory, using the shared background storage job. Destinations must be existing
+directory in a background storage job. Destinations must be existing
 directories under `/data` or mounted USB/ext storage; native installed-content
 trees and runtime image mounts are excluded. The optional ext1 homebrew preset
 can be created using the existing storage destination rules. Existing targets,
@@ -622,56 +485,48 @@ the source's own parent, and destinations inside the source are rejected.
 The source is preserved. After copying, the destination is added to `manual.lst`
 and a scan is requested, so custom destination directories are discovered too.
 These installations have no queue support and serialize against active jobs and
-PKG batches. Active-title/source protection, cancellation, sleep and shutdown use
-the existing storage worker. The status popup reports `operation=install` with
+PKG batches. Active-title/source protection and cancellation apply.
+Status reports `operation=install` with
 `source_type=folder|image`; native PKG dependency checks do not treat this as a
 queued base PKG.
 
-Valid entries also include `installed` (base packages installed as native PKGs), `base_installed`,
-`base_queued`, `has_icon` and `icon_revision`. A folder/image registration counts
-as `base_installed` but not `installed`: its base PKG can be installed or queued,
-and the UI labels that action Replace. Native PKG bases are labelled Installed,
-patches with an installed base as Update, and missing dependencies
-as No base game. Direct patch/DLC installation requires the base to be installed.
-`GET /api/v1/packages/icon?path=...&v=...` extracts the embedded icon0.png from a
-permitted PKG. The image is limited to 4 MiB, with file bounds and PNG signature
-checks; packages without artwork use a placeholder.
-For a game directory, add `source_type=folder` and pass the directory as `path`
-to read its `sce_sys/icon0.png`, even before registration. Directory assets use
-bounded reads with symlink/FIFO rejection; the cover cache revision changes with
-the icon file. Missing or unreadable version/SDK fields are shown as unavailable.
+Valid entries also include `installed` (base packages installed as native PKGs),
+`base_installed`, `base_queued`, `has_icon` and `icon_revision`. A folder/image
+registration counts as `base_installed` but not `installed`: its base PKG can
+be installed or queued. Direct patch/DLC installation requires an installed base.
 
-`POST /api/v1/files` supplies the path picker for scan roots, individual game
-sources and storage destinations. It accepts `path` (empty for drives), `offset`
+`GET /api/v1/packages/icon?path=...&v=...` returns the embedded icon0.png from a
+permitted PKG, limited to 4 MiB. For a game directory, add `source_type=folder`
+and pass the directory as `path` to read its `sce_sys/icon0.png`, even before
+registration. Use `icon_revision` for the `v` query parameter to invalidate
+cached artwork when the source changes. Missing or unreadable version fields
+are empty; unavailable `sdk_version` is zero.
+
+`POST /api/v1/files` lists paths for scan roots, individual game sources and
+storage destinations. It accepts `path` (empty for drives), `offset`
 and `include_files` (boolean, default false). The response has the same listing
 envelope as `/packages`: `roots`, `path`, `parent`, `offset`, `truncated` and
 `entries` containing `name`, `path`, `directory`, `size_bytes` and
 `installable=false`. It returns directories only unless files are requested,
-never reads package metadata, and uses the same drive restrictions and 256-entry
-pagination. Selecting a path only fills the input; it does not save settings,
-add a source or start a storage operation.
+never reads package metadata, and uses the same drive restrictions and
+pagination limits as `/packages`.
 
-The Installation view also recognises backport directories named
-`^(PPSA|CUSA)[0-9]{5}.*`, containing a real `fakelib` subdirectory and no
-`sce_sys/keystone` entry. Such directory rows expose `backport=true`,
-`backport_installed` and their nine-character `title_id`. Installed-game metadata
-is matched by Title ID from one app.db snapshot per listing: `title_name`,
-`version` and the versioned `icon_url`. Missing games return empty metadata;
-the UI shows a controller placeholder and a localised Unknown game label.
-`sdk_version` comes from the backport's own `eboot.bin` process parameter
-(plain ELF or readable, uncompressed SELF), independently of the installed
-game. The probe reads bounded headers and 24 parameter bytes, not the full
-executable. Missing, malformed, encrypted or compressed data returns zero and
-the UI omits the SDK label. PKG SDK parsing still uses param.json/param.sfo.
+Listings recognise backport directories named `^(PPSA|CUSA)[0-9]{5}.*`,
+containing a real `fakelib` subdirectory and no `sce_sys/keystone` entry.
+These entries expose `backport=true`, `backport_installed`, their nine-character
+`title_id`, and installed-game metadata matched by title ID: `title_name`,
+`version` and a versioned `icon_url`. Missing games return empty metadata.
+`sdk_version` describes the backport's own executable independently of the
+installed game, or zero if unavailable.
+
 `POST /api/v1/backports/install` accepts `{"path":"/mnt/usb0/PPSA12345 Game"}`
 and copies the whole directory to `/data/homebrew/backports/<original name>`.
 It returns HTTP 202 with the shared storage-job response (`operation=copy`,
-`source_type=backport`). It uses the existing cancellation, progress and mutation
-gates. The list labels these folders as backports and offers Replace backport
-when the same destination already exists. A complete copy is staged beside the
-destination before replacement; failed/cancelled copies leave the installed
-version intact. The short final rename step closes cancellation and rolls back
-the previous directory if publishing the new one fails. The source is preserved.
+`source_type=backport`). Cancellation, progress and active-game protections
+apply. Existing backports
+can be replaced; failed or cancelled copies leave the installed version intact.
+Cancellation closes during finalization. A failed replacement restores the
+previous directory. The source is preserved.
 Installing a destination over itself or an ancestor is rejected.
 No game registration is required.
 
@@ -680,10 +535,10 @@ selected backport directory, including its contents. It does not substitute the
 corresponding internal installation path. The directory must still satisfy the
 backport rules at request time and when the worker starts. The shared job uses
 `operation=delete`, `source_type=backport` and an empty destination; progress is
-shown in the common background-operation popup and the list refreshes when done.
-The existing mutation gates and active-game protections apply. Cancellation is
+available through the storage-status endpoint. Active-game protections apply.
+Cancellation is
 available during preparation/measurement; recursive deletion is irreversible
-once it starts. The UI confirms the full selected path before submitting.
+once it starts.
 
 `POST /api/v1/packages/queue` accepts `action` (`status`, `add`, `remove`, `clear`
 or `start`), and `path` for add/remove. The payload owns up to 32 pending local
@@ -695,143 +550,69 @@ items; cancellation stops the current batch and clears its remaining items.
 The same happens on a batch failure. No files are deleted or retried.
 Starting returns HTTP 202 with StorageJobResponse; other actions return HTTP 200
 with `queue_running`, `queue_completed`, `queue_total` and pending `entries`.
-The queue runs sequentially in the existing storage worker, keeps its mutation
-gates through the batch, survives browser closure and scans once after any
-successful installs. It is kept in memory until payload shutdown.
+The queue runs sequentially, survives browser closure and requests a scan
+after successful installations. It is kept in memory until payload shutdown.
 Storage status adds `queue_count`, `queue_completed`, `queue_total`,
 `queue_running` and the current `package_kind`; its job ID covers the batch.
 
 `POST /api/v1/packages/install` accepts `{"path":"/mnt/usb0/packages/game.pkg"}`.
-It submits local base packages to the existing AppInstUtil session by filesystem
-path, without an HTTP proxy. Paths under `/data/` use the system-visible
-`/user/data/` alias; USB and external-storage paths are passed directly.
-There is one shared job slot for installation and file
-operations, with the same scanner/runtime mutation gates. Patches and DLC
-require an installed base game. Sources are not deleted or automatically retried.
+There is one shared job slot for installation and file operations.
+Patches and DLC require an installed base game. Sources are not deleted or
+automatically retried.
 Local file identity, size and modification times are checked before and during
 installation. System errors preserve the raw `native_status` code.
 
 For a file on a computer, `POST /api/v1/packages/stream` accepts
 `{"name":"game.pkg","size":123456}` and returns the job plus a private `token`.
 The response advertises `chunk_bytes` (1 MiB) and `stream_port`. Connect to
-`ws://<console>:<stream_port>/<token>/ws` on the existing on-demand package
-server. One source connection is accepted per job. Server text messages are
+`ws://<console>:<stream_port>/<token>/ws` on the package stream server.
+One source connection is accepted per job. Server text messages are
 `{"op":"ready","window":2,"max_window":4}`, `{"op":"range","id":1,"offset":0,"size":1048576}`
 and `{"op":"ack","id":1}`. Reply to each range with a binary message containing
 a little-endian 64-bit range ID followed by exactly the requested bytes.
 The initial window permits two outstanding transfers. When `max_window` is 4,
 the client can enable four by sending the exact text `{"op":"window","size":4}`.
-An acknowledgement releases its window slot. Older pages keep two outstanding
-transfers; new pages also accept older servers without `max_window`.
-The web client sends file-backed Blobs with the range ID prepended, avoiding
-an explicit JavaScript ArrayBuffer read and full-segment copy.
-Demand notifications wake the connection immediately, without polling.
+An acknowledgement releases its window slot. If `max_window` is absent,
+clients must keep the initial window of two outstanding transfers.
 The server closes the connection when the operation ends; disconnecting the
 source fails pending reads immediately with `pkg_stream_lost`. Explicit cancellation
 remains a separate cancelled job. Keep the browser page open until completion.
 
-The stream retains up to 32 aligned 1 MiB segments (32 MiB) in RAM and pins
-the header. Bulk reads look ahead at most eight segments, with at most sixteen
-pending requests before speculation stops. Actual reader demand takes priority.
-Within each priority class, requests retain their creation order when cache
-slots are reused. Sequential reads therefore remain sequential on the browser's
-source disk instead of following recycled RAM-slot indices.
-Speculation can evict only already-consumed segments; demanded reads can reclaim
-ready segments without active readers. This prevents competing read-ahead windows
-from repeatedly discarding each other's unread data. No staging PKG is saved to
-storage. The installer only counts each delivered byte once.
-
-The installer's HTTP server sends browser data one ready cache segment at a
-time, at most 1 MiB. Reads also stop at segment boundaries for unaligned HTTP
-ranges, so the first ready segment does not wait for the next upload. Native
-files use 2 MiB blocks; long SMB ranges use 4 MiB. The socket send buffer
-request remains 512 KiB.
-The browser listener also sets a 512 KiB receive buffer before `listen()`, so
-uploads inherit the larger initial receive window during the TCP handshake.
-Successful full and partial responses include `Date`, a stable
-`Last-Modified` validator and `Content-Type: application/octet-stream`.
-The source URI is unique per attempt.
-Debug logs summarize HTTP bytes, elapsed time, source-read time and body-send
-time at most once every 30 seconds, plus a final summary for transfers of at
-least 16 MiB. Read time includes waiting for browser data; send time includes
-waiting for the installer to consume it. Worker times are summed across
-connections and can exceed elapsed wall time when readers overlap.
+No staging PKG is saved to storage.
 
 Compatibility clients can use two concurrent
 `POST /api/v1/packages/stream/request` clients, with
 `{"token":"...","client":1}` or client 2. Each returns an `id`, `offset` and
-`size` immediately; id=0 means no pending range. Idle clients wait 16?100 ms
+`size` immediately; id=0 means no pending range. Idle clients wait 16-100 ms
 before polling again. Reply with
 `POST /api/v1/packages/stream/chunk?token=...&id=...`, Content-Type
 `application/octet-stream`, and exactly that range's bytes. Successful range
 and chunk responses keep the HTTP connection alive. Stable client IDs reclaim
 an unacknowledged range after a lost response. Repeated buffered replies are
 accepted only if their bytes match; an evicted range returns HTTP 409.
-Only transient HTTP transport failures are recovered, at most three consecutive
-failures per client, with 150/300/600 ms delays. The install is never restarted.
 Expired sessions return 404/410.
 
 Both modes publish `operation=install` and `state=preparing|installing` through
 `/api/v1/games/storage/status` and use its existing cancellation endpoint.
-The popup shows the package name, bytes, speed, elapsed time and system state.
-Progress uses only AppInstUtil downloaded/total counters for every PKG kind
-and source. The UI shows indeterminate progress until native counters arrive.
-Direct local base installs require native counters or an explicit terminal
-status; browser/SMB base installs can use complete source coverage to confirm
-a playable status. Updates require native completion evidence.
-Status polling follows the task type returned by `InstallByPackage`. Patches use
-`sceAppInstUtilGetPatchInstallStatus`; general status can report the already
-playable base game with the same content ID. General replacement tasks use
-`GetInstallStatus` and must show progress beyond the existing base status.
-DLC completion requires state `4` (installed) from
-`sceAppInstUtilGetAddcontInstalledStatus`; general status still supplies its
-download counters and errors. DLC without a general download record still uses
-its own installed state. State `1` is not installed and must not complete the job.
-After a successful submission, base games, patches and unconfirmed DLC share a
-fixed 30-second startup deadline while the native status is `none`. The package
-source remains available and cancellation stays available; the package is not
-resubmitted. Native errors still fail immediately. A later `none` starts one
-fixed 30-second visibility-gap deadline instead of immediately failing with I/O
-error. A visible task clears that deadline. A retired patch task can complete
-after its native transfer finishes if the installed result is verified and
-the general status is ready with no pending local copy.
-DLC may lose its download record before its own installed flag is published
-and continues to use that flag within the same bound.
-Empty native status or content-ID replies fail with `EPROTO`; these native
-protocol failures are distinct from `pkg_stream_lost` source failures.
-When a general download record exists, it must also be complete, so an installed
-DLC cannot prematurely finish an in-progress replacement. `sceAppInstUtilGetInstallProgress` and
-`sceAppInstUtilGetInstallProgressInfo` are not used for patch completion: on
-the tested 9.40 console both kept reporting 100% for the installed base while
-its patch was still transferring. Speed is sampled from byte deltas once per
-second and becomes zero when progress stops. Temporary zero or regressing
-counters retain the last usable display sample; each queued package starts
-with fresh progress. System completion does not require fetching
-PKG padding or unused ranges. An early playable state only completes the job
-after all system bytes and any local copy are finished. CancelInstall is used
-only for base installations. Patches and DLC use a managed HTTP source,
-including local PKGs; cancellation retires that source and its connections
-without cancelling the base application. Sleep
-latches cancellation for both disk and PC installations, including coalesced
-sleep/resume events. The install worker retires any per-attempt HTTP/WebSocket
-listener and any running queue; direct local base installs create no such listener.
-The interrupted installation must be restarted.
-The main API listener is recreated automatically after resume using its existing
-bounded bind-recovery backoff. A new installation creates fresh sockets and a
-new stream token. Shutdown uses the same cleanup path.
-A 15-minute inactivity deadline follows progress,
-not the total installation duration.
+Status includes package name, processed/total bytes, speed, elapsed time and
+system state. Progress is indeterminate until system counters are available;
+transferring all source bytes alone does not imply installation completion.
+Each queued package starts with fresh progress.
 
-The PKG parser/range-server foundation was adapted from
-[PR #157](https://github.com/drakmor/ShadowMountPlus/pull/157), with additional
-range, lifetime and source-validation fixes. The browser streaming approach
-was informed by the local ps5-pkg-manager implementation. AppInstUtil uses the
-payload's existing initialization and authid; no helper process or elfldr
-connection is introduced.
+After submission, the job allows up to 30 seconds for system status to appear.
+A later visibility gap also has a 30-second deadline. No package is resubmitted
+automatically. System errors fail immediately and preserve `native_status`.
+Malformed system replies fail with `EPROTO`, separately from
+`pkg_stream_lost` source failures. A 15-minute inactivity deadline follows
+progress rather than total installation duration.
+
+Cancellation stops the current installation; cancelling a patch or DLC does
+not uninstall its base game. Sleep cancels the current installation and any
+remaining queue items. The interrupted installation must be restarted; a new
+browser stream receives a new token. Closing the browser disconnects its stream,
+whereas local-file and queued installations survive browser closure.
 
 Package list and queue entries also include `sdk_version`, an unsigned packed
 SDK value (for example `0x07508000` displays as `SDK 7.50`), or zero if unavailable.
-PS5 values come from `param.json.sdkVersion` (the high 32 bits of the standard
-64-bit hex string). PS4 values come from `param.sfo`'s `PUBTOOLINFO.sdk_ver`.
-Only these metadata fields are used; a zero/missing value remains unknown and
-never prevents installation. Minimum firmware requirements are separate fields.
+A zero or missing value remains unknown and never prevents installation.
+Minimum firmware requirements are separate fields.

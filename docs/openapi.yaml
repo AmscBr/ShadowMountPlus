@@ -121,6 +121,52 @@ paths:
         "501":
           $ref: "#/components/responses/NotImplemented"
 
+  /api/v1/storage/eject:
+    options:
+      operationId: preflightStorageEject
+      summary: CORS preflight
+      tags: [Storage]
+      responses:
+        "204":
+          $ref: "#/components/responses/Preflight"
+    post:
+      operationId: ejectUsbStorage
+      summary: Safely unmount external USB storage through ShellCore
+      description: Uses the storage job queue; completed means the kernel mount is gone. Keep the drive connected if completion is unconfirmed. Never automatically retried.
+      tags: [Storage]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path, source, mount_id]
+              additionalProperties: false
+              properties:
+                path:
+                  type: string
+                  pattern: '^/mnt/(usb[0-7]|ext0)$'
+                source:
+                  type: string
+                  minLength: 1
+                  maxLength: 1023
+                  description: Exact source from the storage listing; stale mounts are rejected.
+                mount_id:
+                  type: string
+                  pattern: '^[0-9a-fA-F]{16}$'
+                  description: Opaque filesystem identity echoed unchanged from the same storage listing.
+      responses:
+        "202":
+          $ref: "#/components/responses/StorageJobAccepted"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Busy"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /api/v1/storage:
     options:
       operationId: preflightStorage
@@ -1942,8 +1988,8 @@ components:
           type: array
           items:
             type: string
-            enum: [web_ui, storage_space, list_images, list_games, game_info, game_data_sizes, pkg_install, pkg_browser_stream, smb2_smb3, game_icon, mount_game, unmount_game, uninstall_game, uninstall_game_content, install_game_source, move_game_source, copy_game_source, delete_game_source, unpack_game_image, storage_job_status, storage_job_cancel, list_manual_sources, add_manual_source, remove_manual_source, manage_settings, read_debug_log, read_kernel_log, rescan]
-          example: [web_ui, storage_space, list_images, list_games, game_info, game_data_sizes, pkg_install, pkg_browser_stream, smb2_smb3, game_icon, mount_game, unmount_game, uninstall_game, uninstall_game_content, install_game_source, move_game_source, copy_game_source, delete_game_source, unpack_game_image, storage_job_status, storage_job_cancel, list_manual_sources, add_manual_source, remove_manual_source, manage_settings, read_debug_log, read_kernel_log, rescan]
+            enum: [web_ui, storage_space, storage_eject, list_images, list_games, game_info, game_data_sizes, pkg_install, pkg_browser_stream, smb2_smb3, game_icon, mount_game, unmount_game, uninstall_game, uninstall_game_content, install_game_source, move_game_source, copy_game_source, delete_game_source, unpack_game_image, storage_job_status, storage_job_cancel, list_manual_sources, add_manual_source, remove_manual_source, manage_settings, read_debug_log, read_kernel_log, rescan]
+          example: [web_ui, storage_space, storage_eject, list_images, list_games, game_info, game_data_sizes, pkg_install, pkg_browser_stream, smb2_smb3, game_icon, mount_game, unmount_game, uninstall_game, uninstall_game_content, install_game_source, move_game_source, copy_game_source, delete_game_source, unpack_game_image, storage_job_status, storage_job_cancel, list_manual_sources, add_manual_source, remove_manual_source, manage_settings, read_debug_log, read_kernel_log, rescan]
 
     StorageMount:
       type: object
@@ -1975,6 +2021,13 @@ components:
           minimum: 0
         read_only:
           type: boolean
+        mount_id:
+          type: string
+          pattern: '^[0-9a-f]{16}$'
+          description: Present for ejectable mounts; echo unchanged in the eject request.
+        ejectable:
+          type: boolean
+          description: External USB mount accepted by the safe-unmount endpoint.
 
     StorageSpaceResponse:
       type: object
@@ -2053,6 +2106,10 @@ components:
           minimum: 0
         read_only:
           type: boolean
+        ejectable:
+          $ref: "#/components/schemas/StorageMount/properties/ejectable"
+        mount_id:
+          $ref: "#/components/schemas/StorageMount/properties/mount_id"
 
     Image:
       type: object
@@ -2389,7 +2446,7 @@ components:
           minimum: 0
         operation:
           type: string
-          enum: ["", move, copy, delete, unpack, install]
+          enum: ["", move, copy, delete, unpack, install, eject]
         state:
           type: string
           enum: [idle, preparing, measuring, transferring, deleting, finalizing, installing, completed, failed, cancelled]
@@ -2413,14 +2470,14 @@ components:
         package_kind: {type: string, enum: [unknown, base, patch, dlc]}
         source_type:
           type: string
-          enum: ["", folder, image, pkg, stream, backport]
+          enum: ["", folder, image, pkg, stream, backport, usb]
         source:
           type: string
         runtime_source:
           type: string
         destination:
           type: string
-          description: Empty for delete jobs.
+          description: Empty for delete and eject jobs.
         delete_source:
           type: boolean
           description: True only for unpack jobs that will remove the image after successful extraction.
@@ -2465,6 +2522,12 @@ components:
           description: English error text; localized clients should use result_error_reason when available.
         result_error_reason:
           $ref: "#/components/schemas/OperationErrorReason"
+        blocking_source:
+          type: string
+          description: One blocking USB dependency's image path or mount source; empty when unavailable.
+        blocking_target:
+          type: string
+          description: Blocking mount target; empty for an attached image or when unavailable.
         scan_queued:
           type: boolean
 
@@ -2615,7 +2678,7 @@ components:
     OperationErrorReason:
       type: string
       description: Stable reason code for localized operation errors; empty for generic errno failures.
-      enum: ["", rest_mode, game_active, install_pending, runtime_prepared, scanner_busy, runtime_busy, title_unmount_busy, image_unmount_busy, unpack_mounted, storage_busy, storage_unavailable, pkg_invalid, pkg_base_missing, pkg_stream_lost, pkg_source_changed, pkg_already_installed, pkg_queued, pkg_queue_full]
+      enum: ["", rest_mode, game_active, install_pending, runtime_prepared, scanner_busy, runtime_busy, title_unmount_busy, image_unmount_busy, unpack_mounted, storage_busy, storage_unavailable, usb_disk_busy, usb_mount_busy, usb_partition_busy, usb_image_busy, usb_mount_changed, usb_eject_unconfirmed, usb_eject_failed, pkg_invalid, pkg_base_missing, pkg_stream_lost, pkg_source_changed, pkg_already_installed, pkg_queued, pkg_queue_full]
 
     PackageListing:
       type: object

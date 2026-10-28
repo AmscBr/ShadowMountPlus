@@ -41,6 +41,7 @@
 #include "sm_title_state.h"
 #include "sm_smb.h"
 #include "sm_vfs.h"
+#include "sm_usb.h"
 
 #ifndef SHADOWMOUNT_VERSION
 #define SHADOWMOUNT_VERSION "unknown"
@@ -100,6 +101,7 @@ typedef enum {
   GAME_STORAGE_DELETE,
   GAME_STORAGE_UNPACK,
   GAME_STORAGE_INSTALL,
+  GAME_STORAGE_EJECT,
 } game_storage_operation_t;
 
 typedef enum {
@@ -116,6 +118,11 @@ typedef enum {
 } storage_job_state_t;
 
 typedef struct {
+  char source[MAX_PATH];
+  char target[MAX_PATH];
+} usb_eject_blocker_t;
+
+typedef struct {
   pthread_mutex_t mutex;
   pthread_cond_t cond;
   bool accepting;
@@ -128,6 +135,7 @@ typedef struct {
   char source_type[16];
   char source[MAX_PATH];
   char runtime_source[MAX_PATH];
+  uint64_t usb_mount_id;
   char destination[MAX_PATH];
   bool delete_source;
   uint64_t total_bytes;
@@ -141,6 +149,7 @@ typedef struct {
   size_t affected_titles;
   int result_status;
   char result_error_reason[32];
+  usb_eject_blocker_t usb_blocker;
   bool scan_queued;
   char title_name[MAX_TITLE_NAME];
   int32_t native_status;
@@ -178,6 +187,7 @@ typedef struct {
   size_t affected_titles;
   int result_status;
   char result_error_reason[32];
+  usb_eject_blocker_t usb_blocker;
   bool scan_queued;
   char title_name[MAX_TITLE_NAME];
   int32_t native_status;
@@ -204,6 +214,7 @@ static bool storage_job_is_active(storage_job_state_t state) {
          state == STORAGE_JOB_TRANSFERRING ||
          state == STORAGE_JOB_DELETING || state == STORAGE_JOB_FINALIZING || state == STORAGE_JOB_INSTALLING;
 }
+static void handle_storage_eject(struct MHD_Connection *connection, struct json_object *request);
 static void handle_file_listing(struct MHD_Connection *connection, struct json_object *request, bool packages);
 static void handle_backport_operation(struct MHD_Connection *connection, struct json_object *request,
                                       game_storage_operation_t operation);
@@ -683,6 +694,7 @@ static void handle_version(struct MHD_Connection *fd) {
       !add_json_string(response, "shadowmount_version", SHADOWMOUNT_VERSION) ||
       !append_json_string(capabilities, "web_ui") ||
       !append_json_string(capabilities, "storage_space") ||
+      !append_json_string(capabilities, "storage_eject") ||
       !append_json_string(capabilities, "list_images") ||
       !append_json_string(capabilities, "list_games") ||
       !append_json_string(capabilities, "installed_pkg_games") ||
@@ -771,6 +783,11 @@ static bool add_filesystem_capacity(struct json_object *item,
 }
 
 static struct json_object *filesystem_to_json(const struct statfs *mount) {
+  bool ejectable = sm_usb_mount_path(mount->f_mntonname);
+  char mount_id[17];
+  if (ejectable)
+    snprintf(mount_id, sizeof(mount_id), "%016llx",
+               (unsigned long long)sm_usb_filesystem_id(mount));
   struct json_object *item = json_object_new_object();
   if (!item)
     return NULL;
@@ -781,7 +798,9 @@ static struct json_object *filesystem_to_json(const struct statfs *mount) {
                               (uint64_t)mount->f_blocks,
                               mount->f_bfree > 0 ? (uint64_t)mount->f_bfree : 0,
                               mount->f_bavail > 0 ? (uint64_t)mount->f_bavail : 0) ||
-      !add_json_bool(item, "read_only", (mount->f_flags & MNT_RDONLY) != 0)) {
+      !add_json_bool(item, "read_only", (mount->f_flags & MNT_RDONLY) != 0) ||
+      !add_json_bool(item, "ejectable", ejectable) ||
+      (ejectable && !add_json_string(item, "mount_id", mount_id))) {
     json_object_put(item);
     return NULL;
   }
@@ -1026,6 +1045,7 @@ typedef struct {
   const char *source_type;
   const char *image_type;
   bool image_backed;
+  uint64_t usb_mount_id;
 } game_source_info_t;
 
 static int resolve_browser_delete_source(const char *path, game_source_info_t *source);
@@ -2063,6 +2083,7 @@ static int operation_http_status(int status) {
   case EROFS:
     return 403;
   case EBUSY:
+  case ESTALE:
   case EEXIST:
   case EALREADY:
   case ECANCELED:
@@ -2158,6 +2179,13 @@ static const char *operation_error_message(int status, const char *reason) {
       {"unpack_mounted", "image runtime is already mounted or prepared; unmount it before unpacking"},
       {"storage_busy", "a storage operation is already running; wait for it to finish"},
       {"storage_unavailable", "storage service is stopping or unavailable"},
+      {"usb_disk_busy", "the drive has other mounted partitions, game links or attached images; unmount them first"},
+      {"usb_mount_busy", "a dependent mount uses this drive; unmount its game or application and retry"},
+      {"usb_partition_busy", "another partition of this drive is mounted; unmount that partition and retry"},
+      {"usb_image_busy", "an attached image uses this drive; unmount its game and retry"},
+      {"usb_mount_changed", "the drive changed or was disconnected; refresh storage before trying again"},
+      {"usb_eject_unconfirmed", "unmount completion was not confirmed; keep the drive connected and refresh storage"},
+      {"usb_eject_failed", "the system could not safely unmount this drive"},
       {"pkg_invalid", "invalid or unsupported PKG"},
       {"pkg_base_missing", "install the base game before this patch or DLC"},
       {"pkg_stream_lost", "the browser streaming source stopped responding"},
@@ -3084,6 +3112,8 @@ static void dispatch_request(struct MHD_Connection *connection,
     handle_version(connection);
   } else if (strcmp(route, SM_API_ROUTE_STORAGE) == 0) {
     handle_storage(connection, json);
+  } else if (strcmp(route, SM_API_ROUTE_STORAGE_EJECT) == 0) {
+    handle_storage_eject(connection, json);
   } else if (strcmp(route, SM_API_ROUTE_IMAGES) == 0) {
     handle_images(connection);
   } else if (strcmp(route, SM_API_ROUTE_GAMES) == 0) {
@@ -3170,6 +3200,8 @@ static const char *game_storage_operation_name(
     return "unpack";
   case GAME_STORAGE_INSTALL:
     return "install";
+  case GAME_STORAGE_EJECT:
+    return "eject";
   }
   return "unknown";
 }
@@ -3489,6 +3521,7 @@ static void copy_storage_job_snapshot_locked(
   snapshot->result_status = g_storage_job.result_status;
   (void)strlcpy(snapshot->result_error_reason, g_storage_job.result_error_reason,
                 sizeof(snapshot->result_error_reason));
+  snapshot->usb_blocker = g_storage_job.usb_blocker;
   snapshot->scan_queued = g_storage_job.scan_queued;
   strlcpy(snapshot->title_name, g_storage_job.title_name, sizeof(snapshot->title_name));
   snapshot->native_status = g_storage_job.native_status;
@@ -3616,6 +3649,8 @@ static bool add_storage_job_fields(struct json_object *response,
                                                        snapshot->result_error_reason)) &&
          add_json_string(response, "result_error_reason",
                          snapshot->result_error_reason) &&
+         add_json_string(response, "blocking_source", snapshot->usb_blocker.source) &&
+         add_json_string(response, "blocking_target", snapshot->usb_blocker.target) &&
          add_json_bool(response, "scan_queued", snapshot->scan_queued);
 }
 
@@ -3787,6 +3822,186 @@ static bool read_install_source_info(const char *path, const struct stat *st,
   return true;
 }
 
+// Compare whole da units, not da1 against da10 or partition text prefixes.
+static size_t usb_disk_source_length(const char *source) {
+  if (strncmp(source, "/dev/da", 7) || !isdigit((unsigned char)source[7]))
+    return 0;
+  size_t size = 8;
+  while (isdigit((unsigned char)source[size]))
+    ++size;
+  return source[size] == '\0' || source[size] == 'p' || source[size] == 's'
+             ? size : 0;
+}
+
+static bool usb_shadowmount_title_mount(const struct statfs *mount) {
+  static const char prefix[] = "/system_ex/app/";
+  const char *target = mount->f_mntonname;
+  size_t prefix_size = sizeof(prefix) - 1;
+  if (strcmp(mount->f_fstypename, "nullfs") ||
+      strncmp(target, prefix, prefix_size) ||
+      !is_supported_game_title_id(target + prefix_size))
+    return false;
+  // Protect layers owned by ShadowMount using its persisted title registry.
+  // AutoMounter/LncService own the application and child sandbox registries;
+  // their USB mappings must reach the native eject request without guessing
+  // ownership from NPXS/CUSA/PPSA names or sandbox directory layouts.
+  char source[MAX_PATH];
+  return read_mount_link(target + prefix_size, source, sizeof(source));
+}
+
+static int check_usb_eject_mount(const char *path, const char *source,
+                                  uint64_t mount_id, bool check_dependencies,
+                                  usb_eject_blocker_t *blocker) {
+  if (blocker)
+    memset(blocker, 0, sizeof(*blocker));
+  if (!check_dependencies)
+    return sm_usb_check_mount(path, source, mount_id);
+  struct statfs *mounts = NULL;
+  int count = sm_mount_table_snapshot(&mounts);
+  if (count < 0)
+    return errno ? errno : EIO;
+  bool found = false;
+  int status = 0;
+  size_t disk_size = usb_disk_source_length(source);
+  for (int i = 0; i < count; ++i) {
+    const struct statfs *mount = &mounts[i];
+    if (!strcmp(mount->f_mntonname, path)) {
+      found = true;
+      if (!sm_usb_mount_matches(mount, path, source, mount_id))
+        status = ESTALE;
+      break;
+    }
+  }
+  if (!found)
+    status = ENOENT;
+  for (int i = 0; i < count && !status; ++i) {
+    const struct statfs *mount = &mounts[i];
+    if (!strcmp(mount->f_mntonname, path))
+      continue;
+    if ((path_matches_root_or_child(mount->f_mntfromname, path) &&
+         usb_shadowmount_title_mount(mount)) ||
+        (disk_size && usb_disk_source_length(mount->f_mntfromname) == disk_size &&
+         !strncmp(mount->f_mntfromname, source, disk_size))) {
+      status = EBUSY;
+      if (blocker) {
+        strlcpy(blocker->source, mount->f_mntfromname, sizeof(blocker->source));
+        strlcpy(blocker->target, mount->f_mntonname, sizeof(blocker->target));
+      }
+    }
+  }
+  free(mounts);
+  if (status)
+    return status;
+  return 0;
+}
+
+static const char *usb_eject_block_reason(void) {
+  const char *reason = runtime_mutation_block_reason();
+  if (reason)
+    return reason;
+  if (sm_game_lifecycle_has_active_game())
+    return "game_active";
+  if (sm_shellcore_service_has_prepared_mount())
+    return "runtime_prepared";
+  return NULL;
+}
+
+static const char *usb_mount_error_reason(int status,
+                                            const usb_eject_blocker_t *blocker) {
+  if (status == EBUSY) {
+    if (!blocker || !blocker->source[0])
+      return "usb_disk_busy";
+    return usb_disk_source_length(blocker->source)
+               ? "usb_partition_busy" : "usb_mount_busy";
+  }
+  if (status == ESTALE || status == ENOENT)
+    return "usb_mount_changed";
+  return NULL;
+}
+
+static void run_usb_eject_job(uint64_t job_id, const char *path,
+                               const char *source, uint64_t mount_id) {
+  void *ctx = (void *)(uintptr_t)job_id;
+  int status = 0;
+  const char *error = NULL;
+  usb_eject_blocker_t blocker = {0};
+  bool scanner = false, shellcore = false, paused = false;
+  if (storage_job_cancelled(ctx))
+    status = ECANCELED;
+  else if (!(scanner = sm_scanner_try_begin_external_mutation())) {
+    status = EBUSY;
+    error = "scanner_busy";
+  } else if (!(shellcore = sm_shellcore_try_begin_external_mutation())) {
+    status = EBUSY;
+    error = "runtime_busy";
+  }
+  if (!status) {
+    error = usb_eject_block_reason();
+    if (error)
+      status = EBUSY;
+  }
+  if (!status) {
+    status = check_usb_eject_mount(path, source, mount_id, true, &blocker);
+    error = usb_mount_error_reason(status, &blocker);
+  }
+  if (!status && image_cache_find_active_source_under(path, blocker.source,
+                                                       sizeof(blocker.source))) {
+    status = EBUSY;
+    error = "usb_image_busy";
+  }
+  if (!status && !begin_storage_job_finalizing(ctx))
+    status = ECANCELED;
+  if (!status && !(paused = sm_scanner_suspend_usb_for_eject())) {
+    status = EBUSY;
+    error = "scanner_busy";
+  }
+  if (!status && (should_stop_requested() || runtime_sleep_mode_active())) {
+    status = ECANCELED;
+  }
+  if (!status && (error = usb_eject_block_reason()) != NULL)
+    status = EBUSY;
+  if (!status) {
+    // Recheck after the watcher handshake, before resolving a live device ID.
+    status = check_usb_eject_mount(path, source, mount_id, true, &blocker);
+    error = usb_mount_error_reason(status, &blocker);
+  }
+  if (!status) {
+    int32_t native_status = 0;
+    status = sm_usb_request_eject(path, source, mount_id, &native_status);
+    if (status)
+      error = status == ESTALE || status == ENOENT
+                  ? "usb_mount_changed" : "usb_eject_failed";
+    // A successful request can enqueue an extended-storage operation. Only
+    // publish completed after the kernel mount has actually disappeared.
+    for (unsigned i = 0; !status && i < 50; ++i) {
+      int mounted = check_usb_eject_mount(path, source, mount_id, false, NULL);
+      if (mounted == ENOENT)
+        break;
+      if (mounted || i == 49 || sleep_with_stop_check(100000)) {
+        status = mounted ? mounted : ETIMEDOUT;
+        error = "usb_eject_unconfirmed";
+      }
+    }
+  }
+  if (paused)
+    sm_scanner_resume_usb_after_eject();
+  if (shellcore)
+    sm_shellcore_end_external_mutation();
+  if (scanner)
+    sm_scanner_end_external_mutation();
+  log_debug("  [API] USB eject path=%s status=%d reason=%s", path, status,
+            status ? operation_error_message(status, error) : "complete");
+  if (status && blocker.source[0]) {
+    log_debug("  [API] USB eject blocked by source=%s target=%s",
+              blocker.source, blocker.target);
+    pthread_mutex_lock(&g_storage_job.mutex);
+    if (g_storage_job.id == job_id)
+      g_storage_job.usb_blocker = blocker;
+    pthread_mutex_unlock(&g_storage_job.mutex);
+  }
+  finish_storage_job(job_id, status, false, error);
+}
+
 static void *storage_job_thread_main(void *arg) {
   uint64_t job_id = (uint64_t)(uintptr_t)arg;
   char title_id[MAX_TITLE_ID];
@@ -3797,6 +4012,7 @@ static void *storage_job_thread_main(void *arg) {
   bool backport;
   bool browser_delete;
   game_storage_operation_t operation;
+  uint64_t usb_mount_id;
 
   pthread_mutex_lock(&g_storage_job.mutex);
   (void)strlcpy(title_id, g_storage_job.title_id, sizeof(title_id));
@@ -3807,9 +4023,15 @@ static void *storage_job_thread_main(void *arg) {
                 sizeof(destination));
   delete_source = g_storage_job.delete_source;
   operation = g_storage_job.operation;
+  usb_mount_id = g_storage_job.usb_mount_id;
   backport = strcmp(g_storage_job.source_type, "backport") == 0;
   browser_delete = operation == GAME_STORAGE_DELETE && !title_id[0];
   pthread_mutex_unlock(&g_storage_job.mutex);
+
+  if (operation == GAME_STORAGE_EJECT) {
+    run_usb_eject_job(job_id, source, runtime_source, usb_mount_id);
+    return NULL;
+  }
 
   uint64_t total_bytes = 0;
   uint64_t total_files = 0;
@@ -4078,6 +4300,8 @@ static int launch_storage_job(const char *title_id,
   g_storage_job.pkg_speed = g_storage_job.pkg_sample_us = 0;
   g_storage_job.pkg_current_kind = PKG_KIND_UNKNOWN;
   g_storage_job.operation = operation;
+  g_storage_job.usb_mount_id = operation == GAME_STORAGE_EJECT
+                                  ? source_info->usb_mount_id : 0;
   g_storage_job.state = STORAGE_JOB_PREPARING;
   (void)strlcpy(g_storage_job.title_id, title_id,
                 sizeof(g_storage_job.title_id));
@@ -4102,6 +4326,7 @@ static int launch_storage_job(const char *title_id,
   g_storage_job.affected_titles = 0;
   g_storage_job.result_status = 0;
   g_storage_job.result_error_reason[0] = '\0';
+  memset(&g_storage_job.usb_blocker, 0, sizeof(g_storage_job.usb_blocker));
   g_storage_job.scan_queued = false;
   copy_storage_job_snapshot_locked(accepted_out);
   pthread_mutex_unlock(&g_storage_job.mutex);
@@ -4122,6 +4347,40 @@ static int launch_storage_job(const char *title_id,
     return rc;
   }
   return 0;
+}
+
+static void handle_storage_eject(struct MHD_Connection *connection,
+                                  struct json_object *request) {
+  game_source_info_t source = {0};
+  char mount_id[17];
+  if (!smb_request_string(request, "path", source.physical_path,
+                           sizeof(source.physical_path), true) ||
+      !sm_usb_mount_path(source.physical_path) ||
+      !smb_request_string(request, "source", source.runtime_path,
+                           sizeof(source.runtime_path), true) ||
+      !source.runtime_path[0] ||
+      !smb_request_string(request, "mount_id", mount_id, sizeof(mount_id), true) ||
+      strlen(mount_id) != 16 || strspn(mount_id, "0123456789abcdefABCDEF") != 16) {
+    send_error_response(connection, 400, EINVAL, "invalid USB mount");
+    return;
+  }
+  source.usb_mount_id = strtoull(mount_id, NULL, 16);
+  int status = check_usb_eject_mount(source.physical_path, source.runtime_path,
+                                     source.usb_mount_id, false, NULL);
+  if (status) {
+    send_operation_error_response(connection, status, usb_mount_error_reason(status, NULL));
+    return;
+  }
+  source.source_type = "usb";
+  storage_job_snapshot_t accepted;
+  const char *error = NULL;
+  status = launch_storage_job("", &source, "", GAME_STORAGE_EJECT, false,
+                               &accepted, &error);
+  if (status) {
+    send_operation_error_response(connection, status, error);
+    return;
+  }
+  send_storage_job_response(connection, 202, &accepted);
 }
 
 static int start_storage_job(const char *title_id,
@@ -5218,6 +5477,7 @@ static void handle_package_install(struct MHD_Connection *connection, struct jso
   g_storage_job.result_status = g_storage_job.native_status = 0;
   g_storage_job.pkg_speed = g_storage_job.pkg_sample_us = 0;
   g_storage_job.result_error_reason[0] = 0;
+  memset(&g_storage_job.usb_blocker, 0, sizeof(g_storage_job.usb_blocker));
   g_storage_job.scan_queued = false;
   strlcpy(g_storage_job.title_id, info.title_id, sizeof(g_storage_job.title_id));
   strlcpy(g_storage_job.title_name, streaming ? source : info.title_name, sizeof(g_storage_job.title_name));
