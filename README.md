@@ -19,9 +19,11 @@
  If you want to support this project, you can donate
  - USDT (TRC-20):  **`TKaUGEwMm9KBXzEoiaaKYBX2yCHAKASW3p`**
  - USDT (ERC-20):  **`0x313dD245dBA957A5560618eA882d08e66aaFb430`**
+ - USDT (BEP20):   **`0x313dD245dBA957A5560618eA882d08e66aaFb430`**
  - USDC (Solana):  **`5kv7j2RbUGaSP1kU1cZWj9jHH7d6rfvxmK6YXTYbH4um`**
-
-
+ - BTC (Bitcoin):  **`bc1q58czpsrhz783hs8878tzlt4gatrjall9ulqduu`**
+ - Card payments:  **`https://boosty.to/drkamor/donate`**
+ 
 
 ## Current image support
 
