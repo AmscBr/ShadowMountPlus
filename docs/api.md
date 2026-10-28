@@ -125,7 +125,7 @@ which can reflect the connected user's quota. Errors affect only that request.
 The default `{}` storage listing does not contact SMB servers.
 
 `POST /api/v1/smb` accepts `action=list|save|remove|check` (default `list`).
-`save` and `check` accept `name`, `path`, `username`, `password`, `active` and
+`save` and `check` accept `name`, `path`, `username`, `password`, `active`, `read_only` and
 optional `previous_name`. `name` is a unique alias of at most 63 UTF-8 bytes;
 slashes, control characters and `: @ ? # %` are forbidden. `path` is an actual
 `smb://server/share[/subdirectory]` address, optionally with `server:port`.
@@ -134,9 +134,11 @@ active by default. `previous_name` selects a saved connection for editing or
 checking; omitted fields retain their saved values except `name` and `path`,
 which remain required. An omitted password preserves it; `"password":""`
 explicitly clears it. `remove` requires only `name`.
+`read_only` defaults to `false`; when enabled, all mutations through that alias
+are rejected with `EROFS`. Browsing, copying from SMB and PKG streaming remain available.
 
 Successful responses contain `status=0`, `dialect` (zero except after `check`),
-and `connections`: objects containing `name`, `path`, `username`, `active` and
+and `connections`: objects containing `name`, `path`, `username`, `active`, `read_only` and
 `password_set`. Passwords are never returned. `check` tests the submitted
 settings without saving, including an inactive connection, and reports the
 negotiated SMB2/SMB3 dialect (for example 0x0210 or 0x0311). It verifies directory

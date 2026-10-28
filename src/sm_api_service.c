@@ -838,6 +838,7 @@ static bool append_smb_paths(struct json_object *items, bool destinations) {
     if(!item || !add_json_string(item,"path",path) || !add_json_string(item,"filesystem","smb") ||
         !add_json_string(item,"source",connections[i].path) ||
         !add_json_string(item,"name",connections[i].name) || !add_json_bool(item,"remote",true) ||
+        !add_json_bool(item,"read_only",connections[i].read_only) ||
         json_object_array_add(items,item)) {
       if (item) json_object_put(item);
       ok = false;
@@ -2473,6 +2474,10 @@ static void handle_smb(struct MHD_Connection *connection, struct json_object *re
         if(!json_object_is_type(value,json_type_boolean)) status=EINVAL;
         else c.active=json_object_get_boolean(value);
       }
+      if(!status && json_object_object_get_ex(request,"read_only",&value)) {
+        if(!json_object_is_type(value,json_type_boolean)) status=EINVAL;
+        else c.read_only=json_object_get_boolean(value);
+      }
       if(!status) status=sm_smb_validate(&c);
     }
     if(!status && !strcmp(action,"check")) status=sm_smb_check(&c,&dialect);
@@ -2498,6 +2503,7 @@ static void handle_smb(struct MHD_Connection *connection, struct json_object *re
     if(!item || !add_json_string(item,"name",connections[i].name) ||
         !add_json_string(item,"path",connections[i].path) || !add_json_string(item,"username",connections[i].username) ||
         !add_json_bool(item,"active",connections[i].active) ||
+        !add_json_bool(item,"read_only",connections[i].read_only) ||
         !add_json_bool(item,"password_set",connections[i].password[0] != 0) || json_object_array_add(items,item)) {
       if (item) json_object_put(item);
       goto oom;
@@ -3241,6 +3247,11 @@ static bool destination_is_managed(const char *destination) {
 
 static int resolve_storage_destination_dir(const char *requested_dir,
                                             char resolved_dir[MAX_PATH]) {
+  if (sm_smb_path(requested_dir)) {
+    sm_smb_address_t address;
+    if (sm_smb_parse_address(requested_dir, &address)) return errno;
+    if (address.read_only) return EROFS;
+  }
   if (!realpath(requested_dir, resolved_dir)) {
     if (errno != ENOENT ||
         strcmp(requested_dir, "/mnt/ext1/homebrew") != 0)

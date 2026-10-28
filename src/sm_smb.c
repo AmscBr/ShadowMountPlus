@@ -55,6 +55,7 @@ static bool safe_components(const char *path) {
 
 static int base_address(const sm_smb_connection_t *c, sm_smb_address_t *a) {
   memset(a, 0, sizeof(*a));
+  a->read_only = c->read_only;
   if (!sm_smb_path(c->path) || !safe_components(c->path + 6)) return EINVAL;
   const char *server = c->path + 6, *share = strchr(server, '/');
   if (!share || share == server || !share[1]) return EINVAL;
@@ -160,6 +161,11 @@ static void load_connections(void) {
             json_object_is_type(active, json_type_boolean);
     if (!valid) break;
     c.active = json_object_get_boolean(active);
+    struct json_object *read_only;
+    if (json_object_object_get_ex(item, "read_only", &read_only)) {
+      if (!json_object_is_type(read_only, json_type_boolean)) { valid = false; break; }
+      c.read_only = json_object_get_boolean(read_only);
+    }
     if (sm_smb_validate(&c)) {
       valid = false;
       break;
@@ -209,11 +215,12 @@ static int write_connections(const sm_smb_connection_t *items, size_t count) {
       json_object_put(array);
       return ENOMEM;
     }
-    const char *keys[] = {"name", "path", "username", "password", "active"};
+    const char *keys[] = {"name", "path", "username", "password", "active", "read_only"};
     const char *values[] = {items[i].name, items[i].path, items[i].username, items[i].password};
-    for (size_t j = 0; j < 5; ++j) {
+    for (size_t j = 0; j < 6; ++j) {
       struct json_object *value =
-          j == 4 ? json_object_new_boolean(items[i].active) : json_object_new_string(values[j]);
+          j >= 4 ? json_object_new_boolean(j == 4 ? items[i].active : items[i].read_only)
+                 : json_object_new_string(values[j]);
       if (!value || json_object_object_add(o, keys[j], value)) {
         if (value) json_object_put(value);
         json_object_put(o);
